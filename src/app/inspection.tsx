@@ -1,5 +1,7 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActionSheetIOS, Platform, TextInput } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { useState } from 'react';
 
 const photoAreas = [
   'Front',
@@ -14,6 +16,59 @@ const photoAreas = [
 export default function InspectionScreen() {
   const params = useLocalSearchParams();
   const nickname = params.nickname as string;
+  const [photos, setPhotos] = useState<Record<string, string[]>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+
+  const addPhoto = async (area: string, fromCamera: boolean) => {
+    const permission = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Please allow access.');
+      return;
+    }
+
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({
+          quality: 1,
+          allowsEditing: false,
+        })
+      : await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 1,
+          allowsMultipleSelection: false,
+        });
+
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+      setPhotos((prev) => ({
+        ...prev,
+        [area]: [...(prev[area] || []), uri],
+      }));
+    }
+  };
+
+  const handleAreaPress = (area: string) => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Take Photo', 'Choose from Library'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) addPhoto(area, true);
+          if (buttonIndex === 2) addPhoto(area, false);
+        }
+      );
+    } else {
+      Alert.alert(area, 'Add photo', [
+        { text: 'Take Photo', onPress: () => addPhoto(area, true) },
+        { text: 'Choose from Library', onPress: () => addPhoto(area, false) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -22,10 +77,29 @@ export default function InspectionScreen() {
 
       <Text style={styles.section}>Photo Areas</Text>
       {photoAreas.map((area) => (
-        <TouchableOpacity key={area} style={styles.areaButton}>
-          <Text style={styles.areaText}>{area}</Text>
-          <Text style={styles.areaHint}>Tap to add photos</Text>
-        </TouchableOpacity>
+        <View key={area} style={styles.areaContainer}>
+          <TouchableOpacity style={styles.areaButton} onPress={() => handleAreaPress(area)}>
+            <Text style={styles.areaText}>{area}</Text>
+            <Text style={styles.areaHint}>
+              {photos[area]?.length ? `${photos[area].length} photo(s)` : 'Tap to add photos'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.thumbnailRow}>
+            {photos[area]?.map((uri, index) => (
+              <Image key={index} source={{ uri }} style={styles.thumbnail} />
+            ))}
+          </View>
+
+          <TextInput
+            style={styles.notesInput}
+            placeholder={`Notes for ${area}...`}
+            placeholderTextColor="#6b7280"
+            value={notes[area] || ''}
+            onChangeText={(text) => setNotes((prev) => ({ ...prev, [area]: text }))}
+            multiline
+          />
+        </View>
       ))}
 
       <TouchableOpacity style={styles.videoButton}>
@@ -60,11 +134,13 @@ const styles = StyleSheet.create({
     color: '#e5e7eb',
     marginBottom: 12,
   },
+  areaContainer: {
+    marginBottom: 20,
+  },
   areaButton: {
     backgroundColor: '#374151',
     padding: 16,
     borderRadius: 10,
-    marginBottom: 10,
   },
   areaText: {
     color: '#fff',
@@ -76,12 +152,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
+  thumbnailRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+  },
+  thumbnail: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  notesInput: {
+    backgroundColor: '#1f2937',
+    color: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
   videoButton: {
     backgroundColor: '#f59e0b',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 10,
   },
   videoButtonText: {
     color: '#111827',
