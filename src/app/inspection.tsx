@@ -18,6 +18,7 @@ export default function InspectionScreen() {
   const nickname = params.nickname as string;
   const [photos, setPhotos] = useState<Record<string, string[]>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [videoUri, setVideoUri] = useState<string | null>(null);
 
   const addPhoto = async (area: string, fromCamera: boolean) => {
     const permission = fromCamera
@@ -46,6 +47,24 @@ export default function InspectionScreen() {
         ...prev,
         [area]: [...(prev[area] || []), uri],
       }));
+    }
+  };
+
+  const recordVideo = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission needed', 'Please allow camera access.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      quality: 1,
+      videoMaxDuration: 60,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setVideoUri(result.assets[0].uri);
     }
   };
 
@@ -102,8 +121,10 @@ export default function InspectionScreen() {
         </View>
       ))}
 
-      <TouchableOpacity style={styles.videoButton}>
-        <Text style={styles.videoButtonText}>Record Before Video</Text>
+      <TouchableOpacity style={styles.videoButton} onPress={recordVideo}>
+        <Text style={styles.videoButtonText}>
+          {videoUri ? 'Video Recorded ✓' : 'Record Before Video'}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
