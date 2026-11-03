@@ -1,5 +1,6 @@
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 
 export default function VehicleDetailScreen() {
   const params = useLocalSearchParams();
@@ -8,7 +9,7 @@ export default function VehicleDetailScreen() {
   const specs = params.specs as string;
   const vin = params.vin as string;
   const status = params.status as string;
-
+  const router = useRouter();
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.nickname}>{nickname}</Text>
@@ -20,8 +21,27 @@ export default function VehicleDetailScreen() {
         <Text style={styles.statusText}>{status}</Text>
       </View>
 
-      <Text style={styles.sectionTitle}>Quick Actions</Text>
-      <Text style={styles.placeholder}>Check out / inspection coming next</Text>
+      <Text style={styles.sectionTitle}>Actions</Text>
+
+            <TouchableOpacity
+        style={styles.actionButton}
+        onPress={() =>
+          router.push({
+            pathname: '/inspection',
+            params: { nickname },
+          })
+        }
+      >
+        <Text style={styles.actionButtonText}>Check Out — Pre-Rental Inspection</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]}>
+        <Text style={styles.secondaryButtonText}>Mark as In Shop</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]}>
+        <Text style={styles.secondaryButtonText}>Mark as Unavailable</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -72,9 +92,26 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     marginTop: 30,
+    marginBottom: 12,
   },
-  placeholder: {
-    color: '#9ca3af',
-    marginTop: 8,
+  actionButton: {
+    backgroundColor: '#f59e0b',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  actionButtonText: {
+    color: '#111827',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  secondaryButton: {
+    backgroundColor: '#374151',
+  },
+  secondaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
