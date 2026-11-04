@@ -1,6 +1,12 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
+const sampleRentals = [
+  { id: 'r1', date: 'Nov 3, 2026', renter: 'John Smith', status: 'Completed' },
+  { id: 'r2', date: 'Oct 28, 2026', renter: 'Sarah Lee', status: 'Completed' },
+  { id: 'r3', date: 'Oct 15, 2026', renter: 'Mike Johnson', status: 'Completed' },
+];
+
 export default function VehicleDetailScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
@@ -23,44 +29,16 @@ export default function VehicleDetailScreen() {
 
       <Text style={styles.sectionTitle}>Actions</Text>
 
-      {status !== 'On Rent' && (
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() =>
-            router.push({
-              pathname: '/inspection',
-              params: { nickname, id: params.id, type: 'checkout' },
-            })
-          }
-        >
-          <Text style={styles.actionButtonText}>Check Out — Pre-Rental Inspection</Text>
-        </TouchableOpacity>
-      )}
-
-      {status === 'On Rent' && (
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() =>
-            router.push({
-              pathname: '/inspection',
-              params: { nickname, id: params.id, type: 'checkin' },
-            })
-          }
-        >
-          <Text style={styles.actionButtonText}>Check In — Return Inspection</Text>
-        </TouchableOpacity>
-      )}
-
       <TouchableOpacity
-        style={[styles.actionButton, styles.secondaryButton]}
+        style={styles.actionButton}
         onPress={() =>
           router.push({
-            pathname: '/compare',
-            params: { nickname },
+            pathname: '/inspection',
+            params: { nickname, id: params.id, type: 'checkout' },
           })
         }
       >
-        <Text style={styles.secondaryButtonText}>View Side-by-Side Photos</Text>
+        <Text style={styles.actionButtonText}>Check Out</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]}>
@@ -70,6 +48,25 @@ export default function VehicleDetailScreen() {
       <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]}>
         <Text style={styles.secondaryButtonText}>Mark as Unavailable</Text>
       </TouchableOpacity>
+
+      <Text style={styles.sectionTitle}>Previous Rentals</Text>
+
+      {sampleRentals.map((rental) => (
+        <TouchableOpacity
+          key={rental.id}
+          style={styles.rentalCard}
+          onPress={() =>
+            router.push({
+              pathname: '/rental-history',
+              params: { nickname, rentalId: rental.id, date: rental.date, renter: rental.renter },
+            })
+          }
+        >
+          <Text style={styles.rentalDate}>{rental.date}</Text>
+          <Text style={styles.rentalRenter}>{rental.renter}</Text>
+          <Text style={styles.rentalStatus}>{rental.status}</Text>
+        </TouchableOpacity>
+      ))}
     </ScrollView>
   );
 }
@@ -91,15 +88,24 @@ const styles = StyleSheet.create({
   },
   onRentBadge: { backgroundColor: '#f59e0b' },
   statusText: { color: '#fff', fontWeight: '600' },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginTop: 30, marginBottom: 12 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginTop: 28, marginBottom: 12 },
   actionButton: {
     backgroundColor: '#f59e0b',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   actionButtonText: { color: '#111827', fontSize: 16, fontWeight: 'bold' },
   secondaryButton: { backgroundColor: '#374151' },
   secondaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  rentalCard: {
+    backgroundColor: '#1f2937',
+    padding: 16,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  rentalDate: { color: '#f59e0b', fontSize: 16, fontWeight: '600' },
+  rentalRenter: { color: '#fff', fontSize: 15, marginTop: 2 },
+  rentalStatus: { color: '#9ca3af', fontSize: 13, marginTop: 4 },
 });

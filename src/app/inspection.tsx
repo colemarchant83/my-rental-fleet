@@ -17,6 +17,7 @@ export default function InspectionScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const nickname = params.nickname as string;
+  const type = (params.type as string) || 'checkout';
 
   const now = new Date();
   const defaultDate = now.toLocaleDateString();
@@ -46,30 +47,38 @@ export default function InspectionScreen() {
       : await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 1,
-          allowsMultipleSelection: false,
+          allowsMultipleSelection: true,
         });
 
-    if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
+    if (!result.canceled) {
+      const newUris = result.assets.map((a) => a.uri);
       setPhotos((prev) => ({
         ...prev,
-        [area]: [...(prev[area] || []), uri],
+        [area]: [...(prev[area] || []), ...newUris],
       }));
     }
   };
 
-  const recordVideo = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
+  const recordVideo = async (fromCamera: boolean) => {
+    const permission = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow camera access.');
+      Alert.alert('Permission needed', 'Please allow access.');
       return;
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      quality: 1,
-      videoMaxDuration: 60,
-    });
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+          quality: 1,
+          videoMaxDuration: 120,
+        })
+      : await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+          quality: 1,
+        });
 
     if (!result.canceled && result.assets[0]) {
       setVideoUri(result.assets[0].uri);
@@ -94,6 +103,24 @@ export default function InspectionScreen() {
     }
   };
 
+  const handleVideoPress = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: ['Cancel', 'Record Video', 'Choose from Library'], cancelButtonIndex: 0 },
+        (buttonIndex) => {
+          if (buttonIndex === 1) recordVideo(true);
+          if (buttonIndex === 2) recordVideo(false);
+        }
+      );
+    } else {
+      Alert.alert('Video', 'Add video', [
+        { text: 'Record Video', onPress: () => recordVideo(true) },
+        { text: 'Choose from Library', onPress: () => recordVideo(false) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  };
+
   const completeInspection = () => {
     if (!renterName || (!miles && !hours)) {
       Alert.alert('Missing info', 'Please enter the renter name and at least miles or hours.');
@@ -101,63 +128,31 @@ export default function InspectionScreen() {
     }
 
     Alert.alert(
-      'Inspection Complete',
-      `${nickname} checked out to ${renterName}\nMiles: ${miles || '—'}\nHours: ${hours || '—'}\nDate: ${date}\nTime: ${time}`,
+      type === 'checkin' ? 'Check In Complete' : 'Check Out Complete',
+      `${nickname}\nRenter: ${renterName}\nMiles: ${miles || '—'}\nHours: ${hours || '—'}\n${date} ${time}`,
       [{ text: 'OK', onPress: () => router.back() }]
     );
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Pre-Rental Inspection</Text>
+      <Text style={styles.title}>{type === 'checkin' ? 'Return Inspection' : 'Pre-Rental Inspection'}</Text>
       <Text style={styles.subtitle}>{nickname}</Text>
 
       <Text style={styles.label}>Renter Name</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter renter name"
-        placeholderTextColor="#6b7280"
-        value={renterName}
-        onChangeText={setRenterName}
-      />
+      <TextInput style={styles.input} placeholder="Enter renter name" placeholderTextColor="#6b7280" value={renterName} onChangeText={setRenterName} />
 
       <Text style={styles.label}>Miles</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter miles"
-        placeholderTextColor="#6b7280"
-        value={miles}
-        onChangeText={setMiles}
-        keyboardType="numeric"
-      />
+      <TextInput style={styles.input} placeholder="Enter miles" placeholderTextColor="#6b7280" value={miles} onChangeText={setMiles} keyboardType="numeric" />
 
       <Text style={styles.label}>Hours</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter hours"
-        placeholderTextColor="#6b7280"
-        value={hours}
-        onChangeText={setHours}
-        keyboardType="numeric"
-      />
+      <TextInput style={styles.input} placeholder="Enter hours" placeholderTextColor="#6b7280" value={hours} onChangeText={setHours} keyboardType="numeric" />
 
       <Text style={styles.label}>Date</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Date"
-        placeholderTextColor="#6b7280"
-        value={date}
-        onChangeText={setDate}
-      />
+      <TextInput style={styles.input} placeholder="Date" placeholderTextColor="#6b7280" value={date} onChangeText={setDate} />
 
       <Text style={styles.label}>Time</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Time"
-        placeholderTextColor="#6b7280"
-        value={time}
-        onChangeText={setTime}
-      />
+      <TextInput style={styles.input} placeholder="Time" placeholderTextColor="#6b7280" value={time} onChangeText={setTime} />
 
       <Text style={styles.section}>Photo Areas</Text>
       {photoAreas.map((area) => (
@@ -165,7 +160,7 @@ export default function InspectionScreen() {
           <TouchableOpacity style={styles.areaButton} onPress={() => handleAreaPress(area)}>
             <Text style={styles.areaText}>{area}</Text>
             <Text style={styles.areaHint}>
-              {photos[area]?.length ? `${photos[area].length} photo(s)` : 'Tap to add photos'}
+              {photos[area]?.length ? `${photos[area].length} photo(s) added` : 'Tap to add photos'}
             </Text>
           </TouchableOpacity>
 
@@ -186,14 +181,16 @@ export default function InspectionScreen() {
         </View>
       ))}
 
-      <TouchableOpacity style={styles.videoButton} onPress={recordVideo}>
+      <TouchableOpacity style={styles.videoButton} onPress={handleVideoPress}>
         <Text style={styles.videoButtonText}>
-          {videoUri ? 'Video Recorded ✓' : 'Record Before Video'}
+          {videoUri ? 'Video Added ✓' : 'Add Video (Record or Upload)'}
         </Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.completeButton} onPress={completeInspection}>
-        <Text style={styles.completeButtonText}>Complete Inspection</Text>
+        <Text style={styles.completeButtonText}>
+          {type === 'checkin' ? 'Complete Check In' : 'Complete Check Out'}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
