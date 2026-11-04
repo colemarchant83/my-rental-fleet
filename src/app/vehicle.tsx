@@ -15,6 +15,7 @@ export default function VehicleDetailScreen() {
   const specs = params.specs as string;
   const vin = params.vin as string;
   const status = params.status as string;
+  const isOnRent = status === 'On Rent';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -23,23 +24,25 @@ export default function VehicleDetailScreen() {
       <Text style={styles.specs}>{specs}</Text>
       <Text style={styles.vin}>VIN {vin}</Text>
 
-      <View style={[styles.statusBadge, status === 'On Rent' && styles.onRentBadge]}>
+      <View style={[styles.statusBadge, isOnRent && styles.onRentBadge]}>
         <Text style={styles.statusText}>{status}</Text>
       </View>
 
       <Text style={styles.sectionTitle}>Actions</Text>
 
-      <TouchableOpacity
-        style={styles.actionButton}
-        onPress={() =>
-          router.push({
-            pathname: '/inspection',
-            params: { nickname, id: params.id, type: 'checkout' },
-          })
-        }
-      >
-        <Text style={styles.actionButtonText}>Check Out</Text>
-      </TouchableOpacity>
+      {!isOnRent && (
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() =>
+            router.push({
+              pathname: '/inspection',
+              params: { nickname, id: params.id, type: 'checkout' },
+            })
+          }
+        >
+          <Text style={styles.actionButtonText}>Check Out</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]}>
         <Text style={styles.secondaryButtonText}>Mark as In Shop</Text>
@@ -48,6 +51,37 @@ export default function VehicleDetailScreen() {
       <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]}>
         <Text style={styles.secondaryButtonText}>Mark as Unavailable</Text>
       </TouchableOpacity>
+
+      {isOnRent && (
+        <>
+          <Text style={styles.sectionTitle}>Current Rental</Text>
+          <TouchableOpacity
+            style={styles.currentRentalCard}
+            onPress={() =>
+              router.push({
+                pathname: '/rental-history',
+                params: { nickname, date: 'Today', renter: 'Current Renter', current: 'true' },
+              })
+            }
+          >
+            <Text style={styles.currentLabel}>On Rent Now</Text>
+            <Text style={styles.currentRenter}>Current Renter</Text>
+            <Text style={styles.currentDate}>Started today</Text>
+
+            <TouchableOpacity
+              style={styles.checkInButton}
+              onPress={() =>
+                router.push({
+                  pathname: '/inspection',
+                  params: { nickname, id: params.id, type: 'checkin' },
+                })
+              }
+            >
+              <Text style={styles.checkInButtonText}>Check In</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </>
+      )}
 
       <Text style={styles.sectionTitle}>Previous Rentals</Text>
 
@@ -99,6 +133,25 @@ const styles = StyleSheet.create({
   actionButtonText: { color: '#111827', fontSize: 16, fontWeight: 'bold' },
   secondaryButton: { backgroundColor: '#374151' },
   secondaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  currentRentalCard: {
+    backgroundColor: '#1f2937',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  currentLabel: { color: '#f59e0b', fontSize: 14, fontWeight: '600' },
+  currentRenter: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 4 },
+  currentDate: { color: '#9ca3af', fontSize: 14, marginTop: 2 },
+  checkInButton: {
+    backgroundColor: '#10b981',
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  checkInButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   rentalCard: {
     backgroundColor: '#1f2937',
     padding: 16,
