@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActionSheetIOS, Platform, TextInput } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
 
@@ -15,7 +15,18 @@ const photoAreas = [
 
 export default function InspectionScreen() {
   const params = useLocalSearchParams();
+  const router = useRouter();
   const nickname = params.nickname as string;
+
+  const now = new Date();
+  const defaultDate = now.toLocaleDateString();
+  const defaultTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const [renterName, setRenterName] = useState('');
+  const [miles, setMiles] = useState('');
+  const [hours, setHours] = useState('');
+  const [date, setDate] = useState(defaultDate);
+  const [time, setTime] = useState(defaultTime);
   const [photos, setPhotos] = useState<Record<string, string[]>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [videoUri, setVideoUri] = useState<string | null>(null);
@@ -31,10 +42,7 @@ export default function InspectionScreen() {
     }
 
     const result = fromCamera
-      ? await ImagePicker.launchCameraAsync({
-          quality: 1,
-          allowsEditing: false,
-        })
+      ? await ImagePicker.launchCameraAsync({ quality: 1, allowsEditing: false })
       : await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
           quality: 1,
@@ -71,10 +79,7 @@ export default function InspectionScreen() {
   const handleAreaPress = (area: string) => {
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ['Cancel', 'Take Photo', 'Choose from Library'],
-          cancelButtonIndex: 0,
-        },
+        { options: ['Cancel', 'Take Photo', 'Choose from Library'], cancelButtonIndex: 0 },
         (buttonIndex) => {
           if (buttonIndex === 1) addPhoto(area, true);
           if (buttonIndex === 2) addPhoto(area, false);
@@ -89,10 +94,70 @@ export default function InspectionScreen() {
     }
   };
 
+  const completeInspection = () => {
+    if (!renterName || (!miles && !hours)) {
+      Alert.alert('Missing info', 'Please enter the renter name and at least miles or hours.');
+      return;
+    }
+
+    Alert.alert(
+      'Inspection Complete',
+      `${nickname} checked out to ${renterName}\nMiles: ${miles || '—'}\nHours: ${hours || '—'}\nDate: ${date}\nTime: ${time}`,
+      [{ text: 'OK', onPress: () => router.back() }]
+    );
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Pre-Rental Inspection</Text>
       <Text style={styles.subtitle}>{nickname}</Text>
+
+      <Text style={styles.label}>Renter Name</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter renter name"
+        placeholderTextColor="#6b7280"
+        value={renterName}
+        onChangeText={setRenterName}
+      />
+
+      <Text style={styles.label}>Miles</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter miles"
+        placeholderTextColor="#6b7280"
+        value={miles}
+        onChangeText={setMiles}
+        keyboardType="numeric"
+      />
+
+      <Text style={styles.label}>Hours</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter hours"
+        placeholderTextColor="#6b7280"
+        value={hours}
+        onChangeText={setHours}
+        keyboardType="numeric"
+      />
+
+      <Text style={styles.label}>Date</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Date"
+        placeholderTextColor="#6b7280"
+        value={date}
+        onChangeText={setDate}
+      />
+
+      <Text style={styles.label}>Time</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Time"
+        placeholderTextColor="#6b7280"
+        value={time}
+        onChangeText={setTime}
+      />
 
       <Text style={styles.section}>Photo Areas</Text>
       {photoAreas.map((area) => (
@@ -126,65 +191,35 @@ export default function InspectionScreen() {
           {videoUri ? 'Video Recorded ✓' : 'Record Before Video'}
         </Text>
       </TouchableOpacity>
+
+      <TouchableOpacity style={styles.completeButton} onPress={completeInspection}>
+        <Text style={styles.completeButtonText}>Complete Inspection</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#111827',
-  },
-  content: {
-    padding: 20,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: 'bold',
+  container: { flex: 1, backgroundColor: '#111827' },
+  content: { padding: 20, paddingBottom: 40 },
+  title: { fontSize: 26, fontWeight: 'bold', color: '#fff' },
+  subtitle: { fontSize: 16, color: '#f59e0b', marginTop: 4, marginBottom: 16 },
+  label: { fontSize: 16, color: '#e5e7eb', marginBottom: 6, marginTop: 8 },
+  input: {
+    backgroundColor: '#374151',
     color: '#fff',
-  },
-  subtitle: {
+    padding: 14,
+    borderRadius: 10,
     fontSize: 16,
-    color: '#f59e0b',
-    marginTop: 4,
-    marginBottom: 20,
-  },
-  section: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#e5e7eb',
     marginBottom: 12,
   },
-  areaContainer: {
-    marginBottom: 20,
-  },
-  areaButton: {
-    backgroundColor: '#374151',
-    padding: 16,
-    borderRadius: 10,
-  },
-  areaText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  areaHint: {
-    color: '#9ca3af',
-    fontSize: 13,
-    marginTop: 2,
-  },
-  thumbnailRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-  },
-  thumbnail: {
-    width: 80,
-    height: 80,
-    borderRadius: 8,
-    marginRight: 8,
-    marginBottom: 8,
-  },
+  section: { fontSize: 18, fontWeight: '600', color: '#e5e7eb', marginBottom: 12, marginTop: 8 },
+  areaContainer: { marginBottom: 20 },
+  areaButton: { backgroundColor: '#374151', padding: 16, borderRadius: 10 },
+  areaText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  areaHint: { color: '#9ca3af', fontSize: 13, marginTop: 2 },
+  thumbnailRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
+  thumbnail: { width: 80, height: 80, borderRadius: 8, marginRight: 8, marginBottom: 8 },
   notesInput: {
     backgroundColor: '#1f2937',
     color: '#fff',
@@ -201,9 +236,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  videoButtonText: {
-    color: '#111827',
-    fontSize: 16,
-    fontWeight: 'bold',
+  videoButtonText: { color: '#111827', fontSize: 16, fontWeight: 'bold' },
+  completeButton: {
+    backgroundColor: '#10b981',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
   },
+  completeButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });
