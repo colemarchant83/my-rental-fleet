@@ -2,6 +2,9 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, Act
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
+import { doc, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase';
 
 const photoAreas = [
   'Front',
@@ -13,10 +16,19 @@ const photoAreas = [
   'Tires & Wheels',
 ];
 
+async function uploadFile(uri: string, path: string): Promise<string> {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  const storageRef = ref(storage, path);
+  await uploadBytes(storageRef, blob);
+  return getDownloadURL(storageRef);
+}
+
 export default function InspectionScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const nickname = params.nickname as string;
+  const vehicleId = params.id as string;
   const type = (params.type as string) || 'checkout';
 
   const now = new Date();
@@ -31,6 +43,7 @@ export default function InspectionScreen() {
   const [photos, setPhotos] = useState<Record<string, string[]>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const addPhoto = async (area: string, fromCamera: boolean) => {
     const permission = fromCamera
@@ -121,17 +134,62 @@ export default function InspectionScreen() {
     }
   };
 
-  const completeInspection = () => {
+  const completeInspection = async () => {
     if (!renterName || (!miles && !hours)) {
       Alert.alert('Missing info', 'Please enter the renter name and at least miles or hours.');
       return;
     }
 
-    Alert.alert(
-      type === 'checkin' ? 'Check In Complete' : 'Check Out Complete',
-      `${nickname}\nRenter: ${renterName}\nMiles: ${miles || '—'}\nHours: ${hours || '—'}\n${date} ${time}`,
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
+    setSaving(true);
+
+    try {
+      const uploadedPhotos: Record<string, string[]> = {};
+
+      for (const area of Object.keys(photos)) {
+        uploadedPhotos[area] = [];
+        for (let i = 0; i < photos[area].length; i++) {
+          const url = await uploadFile(photos[area][i], `rentals/${vehicleId}/${Date.now()}_${area}_${i}.jpg`);
+          uploadedPhotos[area].push(url);
+        }
+      }
+
+      let videoUrl = '';
+      if (videoUri) {
+        videoUrl = await uploadFile(videoUri, `rentals/${vehicleId}/${Date.now()}_video.mp4`);
+      }
+
+      await addDoc(collection(db, 'rentals'), {
+        vehicleId,
+        nickname,
+        renterName,
+        miles: miles || '',
+        hours: hours || '',
+        date,
+        time,
+        type,
+        notes,
+        photos: uploadedPhotos,
+        videoUri: videoUrl,
+        createdAt: new Date().toISOString(),
+      });
+
+      if (vehicleId) {
+        await updateDoc(doc(db, 'vehicles', vehicleId), {
+          status: type === 'checkin' ? 'Available' : 'On Rent',
+        });
+      }
+
+      Alert.alert(
+        type === 'checkin' ? 'Check In Complete' : 'Check Out Complete',
+        `${nickname} ${type === 'checkin' ? 'checked in' : 'checked out'}`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Could not save. Please try again.');
+      console.error(error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -187,9 +245,9 @@ export default function InspectionScreen() {
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.completeButton} onPress={completeInspection}>
+      <TouchableOpacity style={styles.completeButton} onPress={completeInspection} disabled={saving}>
         <Text style={styles.completeButtonText}>
-          {type === 'checkin' ? 'Complete Check In' : 'Complete Check Out'}
+          {saving ? 'Saving...' : type === 'checkin' ? 'Complete Check In' : 'Complete Check Out'}
         </Text>
       </TouchableOpacity>
     </ScrollView>

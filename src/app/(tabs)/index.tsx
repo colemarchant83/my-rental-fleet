@@ -1,38 +1,69 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-
-// Simple shared list so status can update
-let sharedVehicles = [
-  {
-    id: '1',
-    nickname: "DAD'S 2004 DODGE 3500",
-    yearMakeModel: '2004 Dodge Ram',
-    specs: '5.9L · 6-cyl',
-    vin: '3D7LU38C74G147814',
-    status: 'Available',
-  },
-  {
-    id: '2',
-    nickname: '2026 HIGHLAND U10',
-    yearMakeModel: '2026 Cfmoto UFORCE',
-    specs: '1.0L · 88 hp',
-    vin: 'LCELE1ZJ9TM007395',
-    status: 'Available',
-  },
-];
+import { useState, useEffect } from 'react';
+import { collection, onSnapshot, addDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
 
 export default function RentalLogScreen() {
   const router = useRouter();
-  const [vehicles, setVehicles] = useState(sharedVehicles);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const refresh = () => setVehicles([...sharedVehicles]);
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'vehicles'), (snapshot) => {
+      const list = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setVehicles(list);
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  const addSampleVehicles = async () => {
+    const samples = [
+      {
+        nickname: "DAD'S 2004 DODGE 3500",
+        yearMakeModel: '2004 Dodge Ram',
+        specs: '5.9L · 6-cyl',
+        vin: '3D7LU38C74G147814',
+        status: 'Available',
+      },
+      {
+        nickname: '2026 HIGHLAND U10',
+        yearMakeModel: '2026 Cfmoto UFORCE',
+        specs: '1.0L · 88 hp',
+        vin: 'LCELE1ZJ9TM007395',
+        status: 'Available',
+      },
+    ];
+
+    for (const vehicle of samples) {
+      await addDoc(collection(db, 'vehicles'), vehicle);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#f59e0b" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.header}>My Rental Fleet</Text>
         <Text style={styles.subheader}>Vehicles</Text>
+
+        {vehicles.length === 0 && (
+          <TouchableOpacity style={styles.sampleButton} onPress={addSampleVehicles}>
+            <Text style={styles.sampleButtonText}>Add Sample Vehicles</Text>
+          </TouchableOpacity>
+        )}
 
         {vehicles.map((vehicle) => (
           <TouchableOpacity
@@ -73,9 +104,18 @@ export default function RentalLogScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111827' },
+  center: { flex: 1, backgroundColor: '#111827', justifyContent: 'center', alignItems: 'center' },
   scroll: { padding: 20, paddingBottom: 100 },
   header: { fontSize: 32, fontWeight: 'bold', color: '#fff', marginTop: 10 },
   subheader: { fontSize: 18, color: '#9ca3af', marginTop: 4, marginBottom: 20 },
+  sampleButton: {
+    backgroundColor: '#374151',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  sampleButtonText: { color: '#f59e0b', fontSize: 16, fontWeight: '600' },
   card: {
     backgroundColor: '#374151',
     borderRadius: 12,

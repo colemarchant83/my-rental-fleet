@@ -1,28 +1,56 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-
-const sampleRentals = [
-  { id: 'r1', date: 'Nov 3, 2026', renter: 'John Smith', status: 'Completed' },
-  { id: 'r2', date: 'Oct 28, 2026', renter: 'Sarah Lee', status: 'Completed' },
-  { id: 'r3', date: 'Oct 15, 2026', renter: 'Mike Johnson', status: 'Completed' },
-];
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useState, useCallback } from 'react';
+import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export default function VehicleDetailScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
-  const nickname = params.nickname as string;
-  const yearMakeModel = params.yearMakeModel as string;
-  const specs = params.specs as string;
-  const vin = params.vin as string;
-  const status = params.status as string;
+  const vehicleId = params.id as string;
+  const [vehicle, setVehicle] = useState<any>(params);
+  const [currentRental, setCurrentRental] = useState<any>(null);
+  const [pastRentals, setPastRentals] = useState<any[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!vehicleId) return;
+
+      const unsubVehicle = onSnapshot(doc(db, 'vehicles', vehicleId), (snap) => {
+        if (snap.exists()) {
+          setVehicle({ id: snap.id, ...snap.data() });
+        }
+      });
+
+      const unsubRentals = onSnapshot(
+        query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId)),
+        (snapshot) => {
+          const all = snapshot.docs
+            .map((d) => ({ id: d.id, ...d.data() }))
+            .sort((a: any, b: any) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+          const current = all.find((r: any) => r.type === 'checkout');
+          setCurrentRental(current || null);
+          setPastRentals(all.filter((r: any) => r.id !== current?.id));
+        }
+      );
+
+      return () => {
+        unsubVehicle();
+        unsubRentals();
+      };
+    }, [vehicleId])
+  );
+
+  const status = vehicle.status || 'Available';
   const isOnRent = status === 'On Rent';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.nickname}>{nickname}</Text>
-      <Text style={styles.yearMakeModel}>{yearMakeModel}</Text>
-      <Text style={styles.specs}>{specs}</Text>
-      <Text style={styles.vin}>VIN {vin}</Text>
+      <Text style={styles.nickname}>{vehicle.nickname}</Text>
+      <Text style={styles.yearMakeModel}>{vehicle.yearMakeModel}</Text>
+      <Text style={styles.specs}>{vehicle.specs}</Text>
+      <Text style={styles.vin}>VIN {vehicle.vin}</Text>
 
       <View style={[styles.statusBadge, isOnRent && styles.onRentBadge]}>
         <Text style={styles.statusText}>{status}</Text>
@@ -36,7 +64,7 @@ export default function VehicleDetailScreen() {
           onPress={() =>
             router.push({
               pathname: '/inspection',
-              params: { nickname, id: params.id, type: 'checkout' },
+              params: { nickname: vehicle.nickname, id: vehicleId, type: 'checkout' },
             })
           }
         >
@@ -52,7 +80,7 @@ export default function VehicleDetailScreen() {
         <Text style={styles.secondaryButtonText}>Mark as Unavailable</Text>
       </TouchableOpacity>
 
-      {isOnRent && (
+      {isOnRent && currentRental && (
         <>
           <Text style={styles.sectionTitle}>Current Rental</Text>
           <TouchableOpacity
@@ -60,20 +88,27 @@ export default function VehicleDetailScreen() {
             onPress={() =>
               router.push({
                 pathname: '/rental-history',
-                params: { nickname, date: 'Today', renter: 'Current Renter', current: 'true' },
+                params: {
+                  nickname: vehicle.nickname,
+                  rentalId: currentRental.id,
+                  date: currentRental.date,
+                  renter: currentRental.renterName,
+                  current: 'true',
+                },
               })
             }
           >
             <Text style={styles.currentLabel}>On Rent Now</Text>
-            <Text style={styles.currentRenter}>Current Renter</Text>
-            <Text style={styles.currentDate}>Started today</Text>
+            <Text style={styles.currentRenter}>{currentRental.renterName}</Text>
+            <Text style={styles.currentDate}>{currentRental.date} · {currentRental.time}</Text>
+            <Text style={styles.currentDate}>Miles: {currentRental.miles || '—'} · Hours: {currentRental.hours || '—'}</Text>
 
             <TouchableOpacity
               style={styles.checkInButton}
               onPress={() =>
                 router.push({
                   pathname: '/inspection',
-                  params: { nickname, id: params.id, type: 'checkin' },
+                  params: { nickname: vehicle.nickname, id: vehicleId, type: 'checkin' },
                 })
               }
             >
@@ -85,20 +120,22 @@ export default function VehicleDetailScreen() {
 
       <Text style={styles.sectionTitle}>Previous Rentals</Text>
 
-      {sampleRentals.map((rental) => (
+      {pastRentals.length === 0 && <Text style={styles.empty}>No previous rentals yet.</Text>}
+
+      {pastRentals.map((rental) => (
         <TouchableOpacity
           key={rental.id}
           style={styles.rentalCard}
           onPress={() =>
             router.push({
               pathname: '/rental-history',
-              params: { nickname, rentalId: rental.id, date: rental.date, renter: rental.renter },
+              params: { nickname: vehicle.nickname, rentalId: rental.id, date: rental.date, renter: rental.renterName },
             })
           }
         >
           <Text style={styles.rentalDate}>{rental.date}</Text>
-          <Text style={styles.rentalRenter}>{rental.renter}</Text>
-          <Text style={styles.rentalStatus}>{rental.status}</Text>
+          <Text style={styles.rentalRenter}>{rental.renterName}</Text>
+          <Text style={styles.rentalStatus}>{rental.type === 'checkin' ? 'Checked In' : 'Checked Out'}</Text>
         </TouchableOpacity>
       ))}
     </ScrollView>
@@ -161,4 +198,5 @@ const styles = StyleSheet.create({
   rentalDate: { color: '#f59e0b', fontSize: 16, fontWeight: '600' },
   rentalRenter: { color: '#fff', fontSize: 15, marginTop: 2 },
   rentalStatus: { color: '#9ca3af', fontSize: 13, marginTop: 4 },
+  empty: { color: '#6b7280', fontStyle: 'italic' },
 });
