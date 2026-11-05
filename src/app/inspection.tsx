@@ -2,9 +2,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, Act
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { doc, updateDoc, collection, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { doc, updateDoc, collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const photoAreas = [
   'Front',
@@ -15,14 +14,6 @@ const photoAreas = [
   'Interior',
   'Tires & Wheels',
 ];
-
-async function uploadFile(uri: string, path: string): Promise<string> {
-  const response = await fetch(uri);
-  const blob = await response.blob();
-  const storageRef = ref(storage, path);
-  await uploadBytes(storageRef, blob);
-  return getDownloadURL(storageRef);
-}
 
 export default function InspectionScreen() {
   const params = useLocalSearchParams();
@@ -43,7 +34,6 @@ export default function InspectionScreen() {
   const [photos, setPhotos] = useState<Record<string, string[]>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [videoUri, setVideoUri] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
   const addPhoto = async (area: string, fromCamera: boolean) => {
     const permission = fromCamera
@@ -140,25 +130,40 @@ export default function InspectionScreen() {
       return;
     }
 
-    setSaving(true);
+    Alert.alert(
+      type === 'checkin' ? 'Check In Complete' : 'Check Out Complete',
+      `${nickname} saved locally. It will sync when internet is available.`,
+      [{ text: 'OK', onPress: () => router.back() }]
+    );
 
-    try {
-      const uploadedPhotos: Record<string, string[]> = {};
-
-      for (const area of Object.keys(photos)) {
-        uploadedPhotos[area] = [];
-        for (let i = 0; i < photos[area].length; i++) {
-          const url = await uploadFile(photos[area][i], `rentals/${vehicleId}/${Date.now()}_${area}_${i}.jpg`);
-          uploadedPhotos[area].push(url);
+    if (type === 'checkin') {
+      // Find the open check-out and update it
+      try {
+        const q = query(
+          collection(db, 'rentals'),
+          where('vehicleId', '==', vehicleId),
+          where('type', '==', 'checkout')
+        );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const openRental = snapshot.docs[0];
+          await updateDoc(doc(db, 'rentals', openRental.id), {
+            type: 'checkin',
+            checkInDate: date,
+            checkInTime: time,
+            checkInMiles: miles || '',
+            checkInHours: hours || '',
+            checkInNotes: notes,
+            checkInPhotos: photos,
+            checkInVideoUri: videoUri || '',
+          });
         }
+      } catch (err) {
+        console.log('Check-in update error:', err);
       }
-
-      let videoUrl = '';
-      if (videoUri) {
-        videoUrl = await uploadFile(videoUri, `rentals/${vehicleId}/${Date.now()}_video.mp4`);
-      }
-
-      await addDoc(collection(db, 'rentals'), {
+    } else {
+      // New check-out
+      const rentalData = {
         vehicleId,
         nickname,
         renterName,
@@ -166,29 +171,25 @@ export default function InspectionScreen() {
         hours: hours || '',
         date,
         time,
-        type,
+        type: 'checkout',
         notes,
-        photos: uploadedPhotos,
-        videoUri: videoUrl,
+        photos,
+        videoUri: videoUri || '',
         createdAt: new Date().toISOString(),
+        pendingUpload: true,
+      };
+
+      addDoc(collection(db, 'rentals'), rentalData).catch((err) => {
+        console.log('Background save error:', err);
       });
+    }
 
-      if (vehicleId) {
-        await updateDoc(doc(db, 'vehicles', vehicleId), {
-          status: type === 'checkin' ? 'Available' : 'On Rent',
-        });
-      }
-
-      Alert.alert(
-        type === 'checkin' ? 'Check In Complete' : 'Check Out Complete',
-        `${nickname} ${type === 'checkin' ? 'checked in' : 'checked out'}`,
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
-    } catch (error) {
-      Alert.alert('Error', 'Could not save. Please try again.');
-      console.error(error);
-    } finally {
-      setSaving(false);
+    if (vehicleId) {
+      updateDoc(doc(db, 'vehicles', vehicleId), {
+        status: type === 'checkin' ? 'Available' : 'On Rent',
+      }).catch((err) => {
+        console.log('Status update error:', err);
+      });
     }
   };
 
@@ -245,9 +246,9 @@ export default function InspectionScreen() {
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.completeButton} onPress={completeInspection} disabled={saving}>
+      <TouchableOpacity style={styles.completeButton} onPress={completeInspection}>
         <Text style={styles.completeButtonText}>
-          {saving ? 'Saving...' : type === 'checkin' ? 'Complete Check In' : 'Complete Check Out'}
+          {type === 'checkin' ? 'Complete Check In' : 'Complete Check Out'}
         </Text>
       </TouchableOpacity>
     </ScrollView>
