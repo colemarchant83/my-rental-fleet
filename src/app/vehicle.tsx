@@ -1,276 +1,124 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActionSheetIOS, Platform, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
-import { doc, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { doc, onSnapshot, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 
-const photoAreas = [
-  'Front',
-  'Driver’s Side',
-  'Rear',
-  'Passenger Side',
-  'Windshield',
-  'Interior',
-  'Tires & Wheels',
-];
-
-export default function InspectionScreen() {
-  const params = useLocalSearchParams();
+export default function VehicleScreen() {
+  const { id } = useLocalSearchParams();
   const router = useRouter();
-  const nickname = params.nickname as string;
-  const vehicleId = params.id as string;
-  const type = (params.type as string) || 'checkout';
+  const vehicleId = id as string;
 
-  const now = new Date();
-  const defaultDate = now.toLocaleDateString();
-  const defaultTime = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const [vehicle, setVehicle] = useState<any>(null);
+  const [rentals, setRentals] = useState<any[]>([]);
 
-  const [renterName, setRenterName] = useState('');
-  const [miles, setMiles] = useState('');
-  const [hours, setHours] = useState('');
-  const [date, setDate] = useState(defaultDate);
-  const [time, setTime] = useState(defaultTime);
-  const [photos, setPhotos] = useState<Record<string, string[]>>({});
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [videoUri, setVideoUri] = useState<string | null>(null);
+  useEffect(() => {
+    if (!vehicleId) return;
 
-  const addPhoto = async (area: string, fromCamera: boolean) => {
-    const permission = fromCamera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow access.');
-      return;
-    }
-
-    const result = fromCamera
-      ? await ImagePicker.launchCameraAsync({ quality: 1, allowsEditing: false })
-      : await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-          quality: 1,
-          allowsMultipleSelection: true,
-        });
-
-    if (!result.canceled) {
-      const newUris = result.assets.map((a) => a.uri);
-      setPhotos((prev) => ({
-        ...prev,
-        [area]: [...(prev[area] || []), ...newUris],
-      }));
-    }
-  };
-
-  const recordVideo = async (fromCamera: boolean) => {
-    const permission = fromCamera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow access.');
-      return;
-    }
-
-    const result = fromCamera
-      ? await ImagePicker.launchCameraAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-          quality: 1,
-          videoMaxDuration: 120,
-        })
-      : await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-          quality: 1,
-        });
-
-    if (!result.canceled && result.assets[0]) {
-      setVideoUri(result.assets[0].uri);
-    }
-  };
-
-  const handleAreaPress = (area: string) => {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ['Cancel', 'Take Photo', 'Choose from Library'], cancelButtonIndex: 0 },
-        (buttonIndex) => {
-          if (buttonIndex === 1) addPhoto(area, true);
-          if (buttonIndex === 2) addPhoto(area, false);
-        }
-      );
-    } else {
-      Alert.alert(area, 'Add photo', [
-        { text: 'Take Photo', onPress: () => addPhoto(area, true) },
-        { text: 'Choose from Library', onPress: () => addPhoto(area, false) },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-    }
-  };
-
-  const handleVideoPress = () => {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ['Cancel', 'Record Video', 'Choose from Library'], cancelButtonIndex: 0 },
-        (buttonIndex) => {
-          if (buttonIndex === 1) recordVideo(true);
-          if (buttonIndex === 2) recordVideo(false);
-        }
-      );
-    } else {
-      Alert.alert('Video', 'Add video', [
-        { text: 'Record Video', onPress: () => recordVideo(true) },
-        { text: 'Choose from Library', onPress: () => recordVideo(false) },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-    }
-  };
-
-  const completeInspection = () => {
-    if (!renterName || (!miles && !hours)) {
-      Alert.alert('Missing info', 'Please enter the renter name and at least miles or hours.');
-      return;
-    }
-
-    Alert.alert(
-      type === 'checkin' ? 'Check In Complete' : 'Check Out Complete',
-      `${nickname} saved locally. It will sync when internet is available.`,
-      [{ text: 'OK', onPress: () => router.back() }]
-    );
-
-    const rentalData = {
-      vehicleId,
-      nickname,
-      renterName,
-      miles: miles || '',
-      hours: hours || '',
-      date,
-      time,
-      type,
-      notes,
-      photos,
-      videoUri: videoUri || '',
-      createdAt: new Date().toISOString(),
-      pendingUpload: true,
-    };
-
-    addDoc(collection(db, 'rentals'), rentalData).catch((err) => {
-      console.log('Background save error (will retry):', err);
+    const unsubVehicle = onSnapshot(doc(db, 'vehicles', vehicleId), (snap) => {
+      if (snap.exists()) {
+        setVehicle({ id: snap.id, ...snap.data() });
+      }
     });
 
-    if (vehicleId) {
-      updateDoc(doc(db, 'vehicles', vehicleId), {
-        status: type === 'checkin' ? 'Available' : 'On Rent',
-      }).catch((err) => {
-        console.log('Status update error (will retry):', err);
-      });
-    }
-  };
+    const loadRentals = async () => {
+      try {
+        const q = query(
+          collection(db, 'rentals'),
+          where('vehicleId', '==', vehicleId),
+          orderBy('createdAt', 'desc')
+        );
+        const snap = await getDocs(q);
+        setRentals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (e) {
+        console.log('Rental load error:', e);
+      }
+    };
+    loadRentals();
+
+    return () => unsubVehicle();
+  }, [vehicleId]);
+
+  if (!vehicle) return <View style={styles.container}><Text style={styles.loading}>Loading...</Text></View>;
+
+  const statusColor = vehicle.status === 'On Rent' ? '#ef4444' : vehicle.status === 'In Shop' ? '#f59e0b' : '#10b981';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{type === 'checkin' ? 'Return Inspection' : 'Pre-Rental Inspection'}</Text>
-      <Text style={styles.subtitle}>{nickname}</Text>
+      <Text style={styles.title}>{vehicle.nickname || `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`}</Text>
+      <Text style={styles.sub}>{vehicle.year} {vehicle.make} {vehicle.model}</Text>
+      <Text style={styles.vin}>VIN {vehicle.vin}</Text>
 
-      <Text style={styles.label}>Renter Name</Text>
-      <TextInput style={styles.input} placeholder="Enter renter name" placeholderTextColor="#6b7280" value={renterName} onChangeText={setRenterName} />
+      <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+        <Text style={styles.statusText}>{vehicle.status || 'Available'}</Text>
+      </View>
 
-      <Text style={styles.label}>Miles</Text>
-      <TextInput style={styles.input} placeholder="Enter miles" placeholderTextColor="#6b7280" value={miles} onChangeText={setMiles} keyboardType="numeric" />
+      <Text style={styles.section}>Actions</Text>
 
-      <Text style={styles.label}>Hours</Text>
-      <TextInput style={styles.input} placeholder="Enter hours" placeholderTextColor="#6b7280" value={hours} onChangeText={setHours} keyboardType="numeric" />
+      {vehicle.status !== 'On Rent' && (
+        <TouchableOpacity
+          style={styles.checkoutBtn}
+          onPress={() => router.push({ pathname: '/inspection', params: { id: vehicleId, nickname: vehicle.nickname, type: 'checkout' } })}
+        >
+          <Text style={styles.btnText}>Check Out</Text>
+        </TouchableOpacity>
+      )}
 
-      <Text style={styles.label}>Date</Text>
-      <TextInput style={styles.input} placeholder="Date" placeholderTextColor="#6b7280" value={date} onChangeText={setDate} />
+      {vehicle.status === 'On Rent' && (
+        <TouchableOpacity
+          style={styles.checkinBtn}
+          onPress={() => router.push({ pathname: '/inspection', params: { id: vehicleId, nickname: vehicle.nickname, type: 'checkin' } })}
+        >
+          <Text style={styles.btnText}>Check In</Text>
+        </TouchableOpacity>
+      )}
 
-      <Text style={styles.label}>Time</Text>
-      <TextInput style={styles.input} placeholder="Time" placeholderTextColor="#6b7280" value={time} onChangeText={setTime} />
+      <TouchableOpacity style={styles.secondaryBtn}>
+        <Text style={styles.secondaryText}>Mark as In Shop</Text>
+      </TouchableOpacity>
 
-      <Text style={styles.section}>Photo Areas</Text>
-      {photoAreas.map((area) => (
-        <View key={area} style={styles.areaContainer}>
-          <TouchableOpacity style={styles.areaButton} onPress={() => handleAreaPress(area)}>
-            <Text style={styles.areaText}>{area}</Text>
-            <Text style={styles.areaHint}>
-              {photos[area]?.length ? `${photos[area].length} photo(s) added` : 'Tap to add photos'}
-            </Text>
+      <TouchableOpacity style={styles.secondaryBtn}>
+        <Text style={styles.secondaryText}>Mark as Unavailable</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.section}>Previous Rentals</Text>
+      {rentals.length === 0 ? (
+        <Text style={styles.empty}>No previous rentals yet.</Text>
+      ) : (
+        rentals.map((r) => (
+          <TouchableOpacity
+            key={r.id}
+            style={styles.rentalCard}
+            onPress={() => router.push({ pathname: '/rental-history', params: { id: r.id } })}
+          >
+            <Text style={styles.rentalDate}>{r.date}</Text>
+            <Text style={styles.rentalName}>{r.renterName}</Text>
+            <Text style={styles.rentalType}>{r.type === 'checkout' ? 'Checked Out' : 'Checked In'}</Text>
           </TouchableOpacity>
-
-          <View style={styles.thumbnailRow}>
-            {photos[area]?.map((uri, index) => (
-              <Image key={index} source={{ uri }} style={styles.thumbnail} />
-            ))}
-          </View>
-
-          <TextInput
-            style={styles.notesInput}
-            placeholder={`Notes for ${area}...`}
-            placeholderTextColor="#6b7280"
-            value={notes[area] || ''}
-            onChangeText={(text) => setNotes((prev) => ({ ...prev, [area]: text }))}
-            multiline
-          />
-        </View>
-      ))}
-
-      <TouchableOpacity style={styles.videoButton} onPress={handleVideoPress}>
-        <Text style={styles.videoButtonText}>
-          {videoUri ? 'Video Added ✓' : 'Add Video (Record or Upload)'}
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.completeButton} onPress={completeInspection}>
-        <Text style={styles.completeButtonText}>
-          {type === 'checkin' ? 'Complete Check In' : 'Complete Check Out'}
-        </Text>
-      </TouchableOpacity>
+        ))
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111827' },
-  content: { padding: 20, paddingBottom: 40 },
+  content: { padding: 20 },
+  loading: { color: '#fff', textAlign: 'center', marginTop: 40 },
   title: { fontSize: 26, fontWeight: 'bold', color: '#fff' },
-  subtitle: { fontSize: 16, color: '#f59e0b', marginTop: 4, marginBottom: 16 },
-  label: { fontSize: 16, color: '#e5e7eb', marginBottom: 6, marginTop: 8 },
-  input: {
-    backgroundColor: '#374151',
-    color: '#fff',
-    padding: 14,
-    borderRadius: 10,
-    fontSize: 16,
-    marginBottom: 12,
-  },
-  section: { fontSize: 18, fontWeight: '600', color: '#e5e7eb', marginBottom: 12, marginTop: 8 },
-  areaContainer: { marginBottom: 20 },
-  areaButton: { backgroundColor: '#374151', padding: 16, borderRadius: 10 },
-  areaText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  areaHint: { color: '#9ca3af', fontSize: 13, marginTop: 2 },
-  thumbnailRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
-  thumbnail: { width: 80, height: 80, borderRadius: 8, marginRight: 8, marginBottom: 8 },
-  notesInput: {
-    backgroundColor: '#1f2937',
-    color: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 8,
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
-  videoButton: {
-    backgroundColor: '#f59e0b',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  videoButtonText: { color: '#111827', fontSize: 16, fontWeight: 'bold' },
-  completeButton: {
-    backgroundColor: '#10b981',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  completeButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  sub: { color: '#9ca3af', fontSize: 16, marginTop: 4 },
+  vin: { color: '#6b7280', fontSize: 14, marginTop: 4, marginBottom: 16 },
+  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 24 },
+  statusText: { color: '#fff', fontWeight: 'bold' },
+  section: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginTop: 8, marginBottom: 12 },
+  checkoutBtn: { backgroundColor: '#f59e0b', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
+  checkinBtn: { backgroundColor: '#10b981', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
+  btnText: { color: '#111827', fontSize: 16, fontWeight: 'bold' },
+  secondaryBtn: { backgroundColor: '#374151', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
+  secondaryText: { color: '#fff', fontSize: 16 },
+  empty: { color: '#6b7280', fontStyle: 'italic' },
+  rentalCard: { backgroundColor: '#1f2937', padding: 16, borderRadius: 12, marginBottom: 10 },
+  rentalDate: { color: '#f59e0b', fontWeight: 'bold' },
+  rentalName: { color: '#fff', fontSize: 16, marginTop: 4 },
+  rentalType: { color: '#9ca3af', marginTop: 4 },
 });

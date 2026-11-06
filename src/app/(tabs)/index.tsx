@@ -26,6 +26,10 @@ export default function VehicleListScreen() {
     });
   };
 
+  const openVehicle = (item: any) => {
+    router.push(`/vehicle?id=${item.id}&nickname=${encodeURIComponent(item.nickname || '')}&yearMakeModel=${encodeURIComponent(item.yearMakeModel || '')}&specs=${encodeURIComponent(item.specs || '')}&vin=${encodeURIComponent(item.vin || '')}&status=${encodeURIComponent(item.status || 'Available')}`);
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>My Rental Fleet</Text>
@@ -39,22 +43,7 @@ export default function VehicleListScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() =>
-              router.push({
-                pathname: '/vehicle',
-                params: {
-                  id: item.id,
-                  nickname: item.nickname,
-                  yearMakeModel: item.yearMakeModel,
-                  specs: item.specs,
-                  vin: item.vin,
-                  status: item.status,
-                },
-              })
-            }
-          >
+          <TouchableOpacity style={styles.card} onPress={() => openVehicle(item)}>
             <Text style={styles.nickname}>{item.nickname}</Text>
             <Text style={styles.yearMakeModel}>{item.yearMakeModel}</Text>
             <Text style={styles.specs}>{item.specs}</Text>
