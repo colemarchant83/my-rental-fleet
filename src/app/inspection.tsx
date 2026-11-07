@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Image, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { collection, addDoc, query, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
@@ -20,19 +20,39 @@ export default function Inspection() {
   const [hours, setHours] = useState('');
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<Record<string, string[]>>({});
+  const [statusMsg, setStatusMsg] = useState('');
 
   const takePhoto = async (area: string) => {
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      allowsEditing: false,
-    });
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: false,
+      });
 
-    if (!result.canceled && result.assets[0]) {
-      setPhotos(prev => ({
-        ...prev,
-        [area]: [...(prev[area] || []), result.assets[0].uri],
-      }));
+      if (!result.canceled && result.assets[0]) {
+        setPhotos(prev => ({
+          ...prev,
+          [area]: [...(prev[area] || []), result.assets[0].uri],
+        }));
+      }
+    } catch (e) {
+      // On web the camera picker can fail; fall back to library
+      try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+          allowsEditing: false,
+        });
+        if (!result.canceled && result.assets[0]) {
+          setPhotos(prev => ({
+            ...prev,
+            [area]: [...(prev[area] || []), result.assets[0].uri],
+          }));
+        }
+      } catch (err) {
+        setStatusMsg('Photo picker not available on this device');
+      }
     }
   };
 
@@ -41,21 +61,30 @@ export default function Inspection() {
     for (const [area, uris] of Object.entries(photos)) {
       uploaded[area] = [];
       for (const uri of uris) {
-        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
-        const key = `rentals/${vehicleId}/${filename}`;
-        const url = await uploadFile(uri, key, 'image/jpeg');
-        uploaded[area].push(url);
+        try {
+          const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+          const key = `rentals/${vehicleId}/${filename}`;
+          const url = await uploadFile(uri, key, 'image/jpeg');
+          uploaded[area].push(url);
+        } catch (e) {
+          console.warn('Photo upload skipped:', e);
+          // Keep the local URI as a fallback so the record still saves
+          uploaded[area].push(uri);
+        }
       }
     }
     return uploaded;
   };
 
   const complete = async () => {
+    setStatusMsg('Saving...');
     if (!vehicleId) {
+      setStatusMsg('Missing vehicle ID');
       Alert.alert('Error', 'Missing vehicle ID');
       return;
     }
     if (!renterName.trim()) {
+      setStatusMsg('Please enter the renter name');
       Alert.alert('Required', 'Please enter the renter name');
       return;
     }
@@ -87,6 +116,7 @@ export default function Inspection() {
         );
         const snap = await getDocs(q);
         if (snap.empty) {
+          setStatusMsg('No open rental found');
           Alert.alert('Error', 'No open rental found');
           return;
         }
@@ -105,17 +135,21 @@ export default function Inspection() {
         await updateDoc(doc(db, 'vehicles', vehicleId), { status: 'Available' });
       }
 
+      setStatusMsg(isCheckout ? 'Checked out' : 'Checked in');
       Alert.alert('Success', isCheckout ? 'Checked out' : 'Checked in');
       router.back();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      Alert.alert('Error', 'Something went wrong');
+      setStatusMsg('Error: ' + (e?.message || 'Something went wrong'));
+      Alert.alert('Error', e?.message || 'Something went wrong');
     }
   };
 
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>{isCheckout ? 'Check Out' : 'Check In'}</Text>
+
+      {statusMsg ? <Text style={styles.status}>{statusMsg}</Text> : null}
 
       <Text style={styles.label}>Renter Name</Text>
       <TextInput style={styles.input} value={renterName} onChangeText={setRenterName} placeholder="Enter renter name" placeholderTextColor="#64748b" />
@@ -134,7 +168,7 @@ export default function Inspection() {
         <View key={area} style={styles.areaContainer}>
           <Text style={styles.areaTitle}>{area}</Text>
           <TouchableOpacity style={styles.photoBtn} onPress={() => takePhoto(area)}>
-            <Text style={styles.photoBtnText}>Take Photo</Text>
+            <Text style={styles.photoBtnText}>{Platform.OS === 'web' ? 'Add Photo' : 'Take Photo'}</Text>
           </TouchableOpacity>
           <View style={styles.thumbRow}>
             {(photos[area] || []).map((uri, i) => (
@@ -154,6 +188,7 @@ export default function Inspection() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a', padding: 16 },
   title: { fontSize: 22, fontWeight: '700', color: '#f8fafc', marginBottom: 20 },
+  status: { color: '#fbbf24', marginBottom: 12, fontSize: 14 },
   label: { color: '#cbd5e1', marginBottom: 6, marginTop: 12 },
   input: { backgroundColor: '#1e293b', color: '#f8fafc', padding: 14, borderRadius: 10, fontSize: 16 },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: '#f8fafc', marginTop: 24, marginBottom: 12 },
