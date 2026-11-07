@@ -1,8 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 
-// Expo-compatible R2 upload.
-// Uses the legacy FileSystem API to avoid deprecation warnings.
-// Direct PUT works when the bucket allows it; later we can switch to signed URLs.
+// Expo-compatible R2 upload using FileSystem.uploadAsync.
+// Avoids the React Native Blob / ArrayBuffer limitation.
 
 const ENDPOINT = process.env.EXPO_PUBLIC_R2_ENDPOINT;
 const BUCKET = process.env.EXPO_PUBLIC_R2_BUCKET;
@@ -12,26 +11,18 @@ export async function uploadFile(localUri: string, key: string, contentType: str
     throw new Error('R2 environment variables missing. Check your .env file.');
   }
 
-  const base64 = await FileSystem.readAsStringAsync(localUri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-
-  const binary = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const blob = new Blob([binary], { type: contentType });
-
   const url = `${ENDPOINT.replace(/\/$/, '')}/${BUCKET}/${key}`;
 
-  const response = await fetch(url, {
-    method: 'PUT',
+  const result = await FileSystem.uploadAsync(url, localUri, {
+    httpMethod: 'PUT',
+    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
     headers: {
       'Content-Type': contentType,
     },
-    body: blob,
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`R2 upload failed (${response.status}): ${text}`);
+  if (result.status !== 200 && result.status !== 201) {
+    throw new Error(`R2 upload failed (${result.status}): ${result.body}`);
   }
 
   return url;
