@@ -20,7 +20,7 @@ export default function Inspection() {
   const [hours, setHours] = useState('');
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<Record<string, string[]>>({});
-  const [statusMsg, setStatusMsg] = useState('');
+  const [statusMsg, setStatusMsg] = useState('Ready');
 
   const takePhoto = async (area: string) => {
     try {
@@ -37,7 +37,6 @@ export default function Inspection() {
         }));
       }
     } catch (e) {
-      // On web the camera picker can fail; fall back to library
       try {
         const result = await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -51,7 +50,7 @@ export default function Inspection() {
           }));
         }
       } catch (err) {
-        setStatusMsg('Photo picker not available on this device');
+        setStatusMsg('Photo picker not available');
       }
     }
   };
@@ -68,7 +67,6 @@ export default function Inspection() {
           uploaded[area].push(url);
         } catch (e) {
           console.warn('Photo upload skipped:', e);
-          // Keep the local URI as a fallback so the record still saves
           uploaded[area].push(uri);
         }
       }
@@ -77,15 +75,13 @@ export default function Inspection() {
   };
 
   const complete = async () => {
-    setStatusMsg('Saving...');
+    setStatusMsg('Button pressed — saving...');
     if (!vehicleId) {
-      setStatusMsg('Missing vehicle ID');
-      Alert.alert('Error', 'Missing vehicle ID');
+      setStatusMsg('Error: Missing vehicle ID');
       return;
     }
     if (!renterName.trim()) {
       setStatusMsg('Please enter the renter name');
-      Alert.alert('Required', 'Please enter the renter name');
       return;
     }
 
@@ -108,7 +104,9 @@ export default function Inspection() {
         });
 
         await updateDoc(doc(db, 'vehicles', vehicleId), { status: 'On Rent' });
+        setStatusMsg('Checked out successfully');
       } else {
+        // Check-in path
         const q = query(
           collection(db, 'rentals'),
           where('vehicleId', '==', vehicleId),
@@ -116,8 +114,7 @@ export default function Inspection() {
         );
         const snap = await getDocs(q);
         if (snap.empty) {
-          setStatusMsg('No open rental found');
-          Alert.alert('Error', 'No open rental found');
+          setStatusMsg('No open rental found for this vehicle');
           return;
         }
         const openRental = snap.docs[0];
@@ -133,15 +130,13 @@ export default function Inspection() {
         });
 
         await updateDoc(doc(db, 'vehicles', vehicleId), { status: 'Available' });
+        setStatusMsg('Checked in successfully');
       }
 
-      setStatusMsg(isCheckout ? 'Checked out' : 'Checked in');
-      Alert.alert('Success', isCheckout ? 'Checked out' : 'Checked in');
-      router.back();
+      setTimeout(() => router.back(), 800);
     } catch (e: any) {
       console.error(e);
       setStatusMsg('Error: ' + (e?.message || 'Something went wrong'));
-      Alert.alert('Error', e?.message || 'Something went wrong');
     }
   };
 
@@ -149,7 +144,7 @@ export default function Inspection() {
     <ScrollView style={styles.container}>
       <Text style={styles.title}>{isCheckout ? 'Check Out' : 'Check In'}</Text>
 
-      {statusMsg ? <Text style={styles.status}>{statusMsg}</Text> : null}
+      <Text style={styles.status}>{statusMsg}</Text>
 
       <Text style={styles.label}>Renter Name</Text>
       <TextInput style={styles.input} value={renterName} onChangeText={setRenterName} placeholder="Enter renter name" placeholderTextColor="#64748b" />
@@ -187,8 +182,8 @@ export default function Inspection() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a', padding: 16 },
-  title: { fontSize: 22, fontWeight: '700', color: '#f8fafc', marginBottom: 20 },
-  status: { color: '#fbbf24', marginBottom: 12, fontSize: 14 },
+  title: { fontSize: 22, fontWeight: '700', color: '#f8fafc', marginBottom: 12 },
+  status: { color: '#fbbf24', marginBottom: 16, fontSize: 15, fontWeight: '600' },
   label: { color: '#cbd5e1', marginBottom: 6, marginTop: 12 },
   input: { backgroundColor: '#1e293b', color: '#f8fafc', padding: 14, borderRadius: 10, fontSize: 16 },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: '#f8fafc', marginTop: 24, marginBottom: 12 },
