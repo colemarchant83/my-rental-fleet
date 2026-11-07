@@ -106,28 +106,41 @@ export default function Inspection() {
         await updateDoc(doc(db, 'vehicles', vehicleId), { status: 'On Rent' });
         setStatusMsg('Checked out successfully');
       } else {
-        // Check-in path
+        // Check-in path — find open rental or create a completed one
         const q = query(
           collection(db, 'rentals'),
           where('vehicleId', '==', vehicleId),
           where('status', '==', 'Checked Out')
         );
         const snap = await getDocs(q);
-        if (snap.empty) {
-          setStatusMsg('No open rental found for this vehicle');
-          return;
-        }
-        const openRental = snap.docs[0];
 
-        await updateDoc(openRental.ref, {
-          checkinMiles: miles,
-          checkinHours: hours,
-          checkinDate: new Date().toLocaleDateString(),
-          checkinTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          checkinNotes: notes,
-          photos: { ...(openRental.data().photos || {}), ...uploadedPhotos },
-          status: 'Checked In',
-        });
+        if (!snap.empty) {
+          const openRental = snap.docs[0];
+          await updateDoc(openRental.ref, {
+            checkinMiles: miles,
+            checkinHours: hours,
+            checkinDate: new Date().toLocaleDateString(),
+            checkinTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            checkinNotes: notes,
+            photos: { ...(openRental.data().photos || {}), ...uploadedPhotos },
+            status: 'Checked In',
+          });
+        } else {
+          // No open rental found — create a completed history record anyway
+          await addDoc(collection(db, 'rentals'), {
+            vehicleId,
+            renterName: renterName.trim(),
+            checkinMiles: miles,
+            checkinHours: hours,
+            checkinDate: new Date().toLocaleDateString(),
+            checkinTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            checkinNotes: notes,
+            photos: uploadedPhotos,
+            notes: { general: notes },
+            createdAt: serverTimestamp(),
+            status: 'Checked In',
+          });
+        }
 
         await updateDoc(doc(db, 'vehicles', vehicleId), { status: 'Available' });
         setStatusMsg('Checked in successfully');
