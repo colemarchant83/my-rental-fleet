@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert,
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { collection, addDoc, query, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
+import { uploadFile } from '../r2';
 
 const PHOTO_AREAS = ['Front', 'Driver Side', 'Rear', 'Passenger Side', 'Windshield', 'Interior', 'Tires & Wheels'];
 
@@ -41,12 +41,9 @@ export default function Inspection() {
     for (const [area, uris] of Object.entries(photos)) {
       uploaded[area] = [];
       for (const uri of uris) {
-        const response = await fetch(uri);
-        const blob = await response.blob();
         const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
-        const storageRef = ref(storage, `rentals/${vehicleId}/${filename}`);
-        await uploadBytes(storageRef, blob);
-        const url = await getDownloadURL(storageRef);
+        const key = `rentals/${vehicleId}/${filename}`;
+        const url = await uploadFile(uri, key, 'image/jpeg');
         uploaded[area].push(url);
       }
     }
