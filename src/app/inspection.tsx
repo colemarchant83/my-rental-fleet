@@ -1,200 +1,171 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, TextInput } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
-import { doc, updateDoc, collection, addDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { collection, addDoc, query, where, getDocs, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase';
 
-const photoAreas = [
-  'Front',
-  'Driver\'s Side',
-  'Rear',
-  'Passenger Side',
-  'Windshield',
-  'Interior',
-  'Tires & Wheels',
-];
+const PHOTO_AREAS = ['Front', 'Driver Side', 'Rear', 'Passenger Side', 'Windshield', 'Interior', 'Tires & Wheels'];
 
-export default function InspectionScreen() {
+export default function Inspection() {
   const params = useLocalSearchParams();
+  const vehicleId = params.vehicleId as string | undefined;
+  const type = params.type as string | undefined;
   const router = useRouter();
-  const nickname = params.nickname as string;
-  const vehicleId = params.id as string;
-  const type = (params.type as string) || 'checkout';
+  const isCheckout = type === 'checkout';
 
-  const now = new Date();
   const [renterName, setRenterName] = useState('');
   const [miles, setMiles] = useState('');
   const [hours, setHours] = useState('');
-  const [date, setDate] = useState(now.toLocaleDateString());
-  const [time, setTime] = useState(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<Record<string, string[]>>({});
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [videos, setVideos] = useState<string[]>([]);
 
-  const pickPhotos = async (area: string) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow photo access.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
+  const takePhoto = async (area: string) => {
+    const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
       quality: 0.8,
+      allowsEditing: false,
     });
-    if (!result.canceled) {
-      const newUris = result.assets.map((a) => a.uri);
-      setPhotos((prev) => ({ ...prev, [area]: [...(prev[area] || []), ...newUris] }));
-    }
-  };
 
-  const pickVideo = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow media access.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      allowsMultipleSelection: false,
-      quality: 0.8,
-    });
     if (!result.canceled && result.assets[0]) {
-      setVideos((prev) => [...prev, result.assets[0].uri]);
+      setPhotos(prev => ({
+        ...prev,
+        [area]: [...(prev[area] || []), result.assets[0].uri],
+      }));
     }
   };
 
-  const completeInspection = async () => {
+  const uploadPhotos = async () => {
+    const uploaded: Record<string, string[]> = {};
+    for (const [area, uris] of Object.entries(photos)) {
+      uploaded[area] = [];
+      for (const uri of uris) {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+        const storageRef = ref(storage, `rentals/${vehicleId}/${filename}`);
+        await uploadBytes(storageRef, blob);
+        const url = await getDownloadURL(storageRef);
+        uploaded[area].push(url);
+      }
+    }
+    return uploaded;
+  };
+
+  const complete = async () => {
     if (!vehicleId) {
-      Alert.alert('Error', 'No vehicle ID. Go back and try again.');
+      Alert.alert('Error', 'Missing vehicle ID');
       return;
     }
-
-    const rentalData: any = {
-      vehicleId,
-      type,
-      renterName: renterName || 'Unknown',
-      miles: miles || '',
-      hours: hours || '',
-      date,
-      time,
-      photos,
-      notes,
-      videos,
-      createdAt: new Date().toISOString(),
-    };
+    if (!renterName.trim()) {
+      Alert.alert('Required', 'Please enter the renter name');
+      return;
+    }
 
     try {
-      await addDoc(collection(db, 'rentals'), rentalData);
+      const uploadedPhotos = Object.keys(photos).length > 0 ? await uploadPhotos() : {};
 
-      const newStatus = type === 'checkout' ? 'On Rent' : 'Available';
-      await updateDoc(doc(db, 'vehicles', vehicleId), { status: newStatus });
+      if (isCheckout) {
+        await addDoc(collection(db, 'rentals'), {
+          vehicleId,
+          renterName: renterName.trim(),
+          checkoutMiles: miles,
+          checkoutHours: hours,
+          checkoutDate: new Date().toLocaleDateString(),
+          checkoutTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          checkoutNotes: notes,
+          photos: uploadedPhotos,
+          notes: { general: notes },
+          createdAt: serverTimestamp(),
+          status: 'Checked Out',
+        });
 
-      Alert.alert('Success', `${type === 'checkout' ? 'Check Out' : 'Check In'} complete.\nStatus set to ${newStatus}.`);
-      
-      router.replace('/(tabs)');
-    } catch (error: any) {
-      console.log('FULL ERROR:', error);
-      Alert.alert(
-        'Save Failed',
-        `Could not save.\n\n${error.message || error}\n\nCheck your internet and Firebase rules.`
-      );
+        await updateDoc(doc(db, 'vehicles', vehicleId), { status: 'On Rent' });
+      } else {
+        const q = query(
+          collection(db, 'rentals'),
+          where('vehicleId', '==', vehicleId),
+          where('status', '==', 'Checked Out')
+        );
+        const snap = await getDocs(q);
+        if (snap.empty) {
+          Alert.alert('Error', 'No open rental found');
+          return;
+        }
+        const openRental = snap.docs[0];
+
+        await updateDoc(openRental.ref, {
+          checkinMiles: miles,
+          checkinHours: hours,
+          checkinDate: new Date().toLocaleDateString(),
+          checkinTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          checkinNotes: notes,
+          photos: { ...(openRental.data().photos || {}), ...uploadedPhotos },
+          status: 'Checked In',
+        });
+
+        await updateDoc(doc(db, 'vehicles', vehicleId), { status: 'Available' });
+      }
+
+      Alert.alert('Success', isCheckout ? 'Checked out' : 'Checked in');
+      router.back();
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Something went wrong');
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{type === 'checkout' ? 'Check Out' : 'Check In'} – {nickname || 'Vehicle'}</Text>
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>{isCheckout ? 'Check Out' : 'Check In'}</Text>
 
       <Text style={styles.label}>Renter Name</Text>
-      <TextInput style={styles.input} placeholder="Enter renter name" placeholderTextColor="#6b7280" value={renterName} onChangeText={setRenterName} />
+      <TextInput style={styles.input} value={renterName} onChangeText={setRenterName} placeholder="Enter renter name" placeholderTextColor="#64748b" />
 
       <Text style={styles.label}>Miles</Text>
-      <TextInput style={styles.input} placeholder="Enter miles" placeholderTextColor="#6b7280" keyboardType="numeric" value={miles} onChangeText={setMiles} />
+      <TextInput style={styles.input} value={miles} onChangeText={setMiles} keyboardType="numeric" placeholder="Enter miles" placeholderTextColor="#64748b" />
 
       <Text style={styles.label}>Hours</Text>
-      <TextInput style={styles.input} placeholder="Enter hours" placeholderTextColor="#6b7280" keyboardType="numeric" value={hours} onChangeText={setHours} />
+      <TextInput style={styles.input} value={hours} onChangeText={setHours} keyboardType="numeric" placeholder="Enter hours" placeholderTextColor="#64748b" />
 
-      <Text style={styles.label}>Date</Text>
-      <TextInput style={styles.input} value={date} onChangeText={setDate} />
+      <Text style={styles.label}>Notes</Text>
+      <TextInput style={[styles.input, { height: 80 }]} value={notes} onChangeText={setNotes} multiline placeholder="Notes..." placeholderTextColor="#64748b" />
 
-      <Text style={styles.label}>Time</Text>
-      <TextInput style={styles.input} value={time} onChangeText={setTime} />
-
-      <Text style={styles.sectionTitle}>Photo Areas</Text>
-
-      {photoAreas.map((area) => (
-        <View key={area} style={styles.areaBlock}>
-          <TouchableOpacity style={styles.areaCard} onPress={() => pickPhotos(area)}>
-            <Text style={styles.areaName}>{area}</Text>
-            <Text style={styles.areaHint}>
-              {photos[area]?.length ? `${photos[area].length} photo(s)` : 'Tap to add photos'}
-            </Text>
-            {photos[area]?.length > 0 && (
-              <View style={styles.thumbRow}>
-                {photos[area].map((uri, i) => (
-                  <Image key={i} source={{ uri }} style={styles.thumb} />
-                ))}
-              </View>
-            )}
+      <Text style={styles.sectionTitle}>Photos</Text>
+      {PHOTO_AREAS.map(area => (
+        <View key={area} style={styles.areaContainer}>
+          <Text style={styles.areaTitle}>{area}</Text>
+          <TouchableOpacity style={styles.photoBtn} onPress={() => takePhoto(area)}>
+            <Text style={styles.photoBtnText}>Take Photo</Text>
           </TouchableOpacity>
-
-          <TextInput
-            style={styles.notesInput}
-            placeholder={`Notes for ${area}...`}
-            placeholderTextColor="#6b7280"
-            value={notes[area] || ''}
-            onChangeText={(text) => setNotes((prev) => ({ ...prev, [area]: text }))}
-            multiline
-          />
+          <View style={styles.thumbRow}>
+            {(photos[area] || []).map((uri, i) => (
+              <Image key={i} source={{ uri }} style={styles.thumb} />
+            ))}
+          </View>
         </View>
       ))}
 
-      <TouchableOpacity style={styles.videoButton} onPress={pickVideo}>
-        <Text style={styles.videoButtonText}>Add Video (Record or Upload)</Text>
-      </TouchableOpacity>
-      {videos.length > 0 && <Text style={styles.videoCount}>{videos.length} video(s) added</Text>}
-
-      <TouchableOpacity style={styles.completeButton} onPress={completeInspection}>
-        <Text style={styles.completeButtonText}>Complete {type === 'checkout' ? 'Check Out' : 'Check In'}</Text>
+      <TouchableOpacity style={styles.completeBtn} onPress={complete}>
+        <Text style={styles.completeText}>Complete {isCheckout ? 'Check Out' : 'Check In'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111827' },
-  content: { padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginBottom: 20 },
-  label: { color: '#9ca3af', fontSize: 15, marginBottom: 6, marginTop: 12 },
-  input: { backgroundColor: '#1f2937', color: '#fff', padding: 14, borderRadius: 10, fontSize: 16 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginTop: 24, marginBottom: 12 },
-  areaBlock: { marginBottom: 16 },
-  areaCard: { backgroundColor: '#1f2937', padding: 16, borderRadius: 12 },
-  areaName: { color: '#fff', fontSize: 17, fontWeight: '600' },
-  areaHint: { color: '#9ca3af', fontSize: 14, marginTop: 4 },
-  thumbRow: { flexDirection: 'row', marginTop: 10, gap: 8 },
-  thumb: { width: 60, height: 60, borderRadius: 8 },
-  notesInput: {
-    backgroundColor: '#1f2937',
-    color: '#fff',
-    padding: 12,
-    borderRadius: 10,
-    marginTop: 8,
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
-  videoButton: { backgroundColor: '#f59e0b', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  videoButtonText: { color: '#111827', fontSize: 16, fontWeight: 'bold' },
-  videoCount: { color: '#9ca3af', marginTop: 8, textAlign: 'center' },
-  completeButton: {
-    backgroundColor: '#10b981',
-    padding: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 40,
-  },
-  completeButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  container: { flex: 1, backgroundColor: '#0f172a', padding: 16 },
+  title: { fontSize: 22, fontWeight: '700', color: '#f8fafc', marginBottom: 20 },
+  label: { color: '#cbd5e1', marginBottom: 6, marginTop: 12 },
+  input: { backgroundColor: '#1e293b', color: '#f8fafc', padding: 14, borderRadius: 10, fontSize: 16 },
+  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#f8fafc', marginTop: 24, marginBottom: 12 },
+  areaContainer: { marginBottom: 16 },
+  areaTitle: { color: '#cbd5e1', marginBottom: 8 },
+  photoBtn: { backgroundColor: '#334155', padding: 12, borderRadius: 8, alignItems: 'center' },
+  photoBtnText: { color: '#f8fafc' },
+  thumbRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
+  thumb: { width: 70, height: 70, borderRadius: 6, marginRight: 6, marginBottom: 6 },
+  completeBtn: { backgroundColor: '#16a34a', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 30, marginBottom: 40 },
+  completeText: { color: 'white', fontWeight: '700', fontSize: 16 },
 });

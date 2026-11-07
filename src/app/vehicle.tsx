@@ -1,124 +1,153 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { doc, onSnapshot, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { doc, getDoc, collection, query, where, orderBy, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
-export default function VehicleScreen() {
+export default function VehicleDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const vehicleId = id as string;
-
   const [vehicle, setVehicle] = useState<any>(null);
   const [rentals, setRentals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!vehicleId) return;
+    if (!id) return;
 
-    const unsubVehicle = onSnapshot(doc(db, 'vehicles', vehicleId), (snap) => {
+    // Real-time listener for the vehicle document
+    const vehicleRef = doc(db, 'vehicles', id as string);
+    const unsubVehicle = onSnapshot(vehicleRef, (snap) => {
       if (snap.exists()) {
         setVehicle({ id: snap.id, ...snap.data() });
       }
     });
 
-    const loadRentals = async () => {
-      try {
-        const q = query(
-          collection(db, 'rentals'),
-          where('vehicleId', '==', vehicleId),
-          orderBy('createdAt', 'desc')
-        );
-        const snap = await getDocs(q);
-        setRentals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (e) {
-        console.log('Rental load error:', e);
-      }
+    // Real-time listener for rentals of this vehicle
+    const rentalsQuery = query(
+      collection(db, 'rentals'),
+      where('vehicleId', '==', id),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsubRentals = onSnapshot(rentalsQuery, (snapshot) => {
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setRentals(list);
+      setLoading(false);
+    }, (error) => {
+      console.log('Rentals listener error:', error);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubVehicle();
+      unsubRentals();
     };
-    loadRentals();
+  }, [id]);
 
-    return () => unsubVehicle();
-  }, [vehicleId]);
+  const changeStatus = async (newStatus: string) => {
+    if (!id) return;
+    try {
+      await updateDoc(doc(db, 'vehicles', id as string), { status: newStatus });
+    } catch (e) {
+      Alert.alert('Error', 'Could not update status');
+    }
+  };
 
-  if (!vehicle) return <View style={styles.container}><Text style={styles.loading}>Loading...</Text></View>;
+  const openInspection = (type: 'checkout' | 'checkin') => {
+    router.push({
+      pathname: '/inspection',
+      params: { vehicleId: id, type }
+    });
+  };
 
-  const statusColor = vehicle.status === 'On Rent' ? '#ef4444' : vehicle.status === 'In Shop' ? '#f59e0b' : '#10b981';
+  const openRental = (rentalId: string) => {
+    router.push({
+      pathname: '/rental-history',
+      params: { id: rentalId }
+    });
+  };
+
+  if (loading || !vehicle) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.loading}>Loading...</Text>
+      </View>
+    );
+  }
+
+  const isOnRent = vehicle.status === 'On Rent';
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{vehicle.nickname || `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`}</Text>
-      <Text style={styles.sub}>{vehicle.year} {vehicle.make} {vehicle.model}</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>{vehicle.nickname || vehicle.year + ' ' + vehicle.make + ' ' + vehicle.model}</Text>
       <Text style={styles.vin}>VIN {vehicle.vin}</Text>
 
-      <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+      <View style={[styles.statusBadge, isOnRent ? styles.onRent : styles.available]}>
         <Text style={styles.statusText}>{vehicle.status || 'Available'}</Text>
       </View>
 
-      <Text style={styles.section}>Actions</Text>
+      <Text style={styles.sectionTitle}>Actions</Text>
 
-      {vehicle.status !== 'On Rent' && (
-        <TouchableOpacity
-          style={styles.checkoutBtn}
-          onPress={() => router.push({ pathname: '/inspection', params: { id: vehicleId, nickname: vehicle.nickname, type: 'checkout' } })}
-        >
+      {isOnRent ? (
+        <TouchableOpacity style={styles.checkInBtn} onPress={() => openInspection('checkin')}>
+          <Text style={styles.btnText}>Check In</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity style={styles.checkOutBtn} onPress={() => openInspection('checkout')}>
           <Text style={styles.btnText}>Check Out</Text>
         </TouchableOpacity>
       )}
 
-      {vehicle.status === 'On Rent' && (
-        <TouchableOpacity
-          style={styles.checkinBtn}
-          onPress={() => router.push({ pathname: '/inspection', params: { id: vehicleId, nickname: vehicle.nickname, type: 'checkin' } })}
-        >
-          <Text style={styles.btnText}>Check In</Text>
-        </TouchableOpacity>
-      )}
-
-      <TouchableOpacity style={styles.secondaryBtn}>
+      <TouchableOpacity style={styles.secondaryBtn} onPress={() => changeStatus('In Shop')}>
         <Text style={styles.secondaryText}>Mark as In Shop</Text>
       </TouchableOpacity>
-
-      <TouchableOpacity style={styles.secondaryBtn}>
+      <TouchableOpacity style={styles.secondaryBtn} onPress={() => changeStatus('Unavailable')}>
         <Text style={styles.secondaryText}>Mark as Unavailable</Text>
       </TouchableOpacity>
 
-      <Text style={styles.section}>Previous Rentals</Text>
+      <Text style={styles.sectionTitle}>Previous Rentals</Text>
+
       {rentals.length === 0 ? (
         <Text style={styles.empty}>No previous rentals yet.</Text>
       ) : (
-        rentals.map((r) => (
-          <TouchableOpacity
-            key={r.id}
-            style={styles.rentalCard}
-            onPress={() => router.push({ pathname: '/rental-history', params: { id: r.id } })}
-          >
-            <Text style={styles.rentalDate}>{r.date}</Text>
-            <Text style={styles.rentalName}>{r.renterName}</Text>
-            <Text style={styles.rentalType}>{r.type === 'checkout' ? 'Checked Out' : 'Checked In'}</Text>
-          </TouchableOpacity>
-        ))
+        <FlatList
+          data={rentals}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity style={styles.rentalCard} onPress={() => openRental(item.id)}>
+              <Text style={styles.rentalDate}>
+                {item.checkoutDate || item.createdAt?.toDate?.().toLocaleDateString() || '—'}
+              </Text>
+              <Text style={styles.renterName}>{item.renterName || 'Unknown'}</Text>
+              <Text style={styles.rentalStatus}>
+                {item.checkinDate ? 'Checked In' : 'Checked Out'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
       )}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111827' },
-  content: { padding: 20 },
-  loading: { color: '#fff', textAlign: 'center', marginTop: 40 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#fff' },
-  sub: { color: '#9ca3af', fontSize: 16, marginTop: 4 },
-  vin: { color: '#6b7280', fontSize: 14, marginTop: 4, marginBottom: 16 },
-  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 24 },
-  statusText: { color: '#fff', fontWeight: 'bold' },
-  section: { fontSize: 20, fontWeight: 'bold', color: '#fff', marginTop: 8, marginBottom: 12 },
-  checkoutBtn: { backgroundColor: '#f59e0b', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
-  checkinBtn: { backgroundColor: '#10b981', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
-  btnText: { color: '#111827', fontSize: 16, fontWeight: 'bold' },
-  secondaryBtn: { backgroundColor: '#374151', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
-  secondaryText: { color: '#fff', fontSize: 16 },
-  empty: { color: '#6b7280', fontStyle: 'italic' },
-  rentalCard: { backgroundColor: '#1f2937', padding: 16, borderRadius: 12, marginBottom: 10 },
-  rentalDate: { color: '#f59e0b', fontWeight: 'bold' },
-  rentalName: { color: '#fff', fontSize: 16, marginTop: 4 },
-  rentalType: { color: '#9ca3af', marginTop: 4 },
+  container: { flex: 1, backgroundColor: '#0f172a', padding: 16 },
+  title: { fontSize: 22, fontWeight: '700', color: '#f8fafc', marginBottom: 4 },
+  vin: { color: '#94a3b8', marginBottom: 12 },
+  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 20 },
+  onRent: { backgroundColor: '#dc2626' },
+  available: { backgroundColor: '#16a34a' },
+  statusText: { color: 'white', fontWeight: '600' },
+  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#f8fafc', marginTop: 16, marginBottom: 10 },
+  checkOutBtn: { backgroundColor: '#f59e0b', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
+  checkInBtn: { backgroundColor: '#16a34a', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
+  btnText: { color: 'white', fontWeight: '700', fontSize: 16 },
+  secondaryBtn: { backgroundColor: '#1e293b', padding: 14, borderRadius: 12, alignItems: 'center', marginBottom: 8 },
+  secondaryText: { color: '#cbd5e1', fontWeight: '600' },
+  rentalCard: { backgroundColor: '#1e293b', padding: 14, borderRadius: 12, marginBottom: 8 },
+  rentalDate: { color: '#f59e0b', fontWeight: '600' },
+  renterName: { color: '#f8fafc', fontSize: 16, marginTop: 2 },
+  rentalStatus: { color: '#94a3b8', marginTop: 2 },
+  empty: { color: '#64748b', fontStyle: 'italic' },
+  loading: { color: '#f8fafc', textAlign: 'center', marginTop: 40 },
 });
