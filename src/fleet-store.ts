@@ -278,9 +278,10 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
   }
   let videoUrl = side.videoUrl;
   let videoUri = side.videoUri;
+  if (videoUri && videoUrl && !(await remoteMediaLoads(videoUrl, 'video'))) videoUrl = undefined;
   if (videoUri && !videoUrl) {
     try {
-      videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, contentTypeFor(videoUri));
+      videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, 'video/mp4');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Upload failed';
       if (/Could not read the saved photo/i.test(message)) videoUri = undefined;

@@ -8,11 +8,15 @@ const SIGNER = (process.env.EXPO_PUBLIC_R2_SIGNER ?? 'https://my-rental-fleet-me
 
 async function fileBody(localUri: string, contentType: string) {
   const stored = await readStoredBlob(localUri).catch(() => null);
-  if (stored) return stored.type ? stored : new Blob([stored], { type: contentType });
+  if (stored) {
+    const type = stored.type && stored.type !== 'application/octet-stream' ? stored.type : contentType;
+    return { body: stored.type ? stored : new Blob([stored], { type }), type };
+  }
   const response = await fetch(localUri).catch(() => null);
   if (!response?.ok) throw new Error('Could not read the saved photo.');
   const blob = await response.blob();
-  return blob.type ? blob : new Blob([blob], { type: contentType });
+  const type = blob.type && blob.type !== 'application/octet-stream' ? blob.type : contentType;
+  return { body: blob.type ? blob : new Blob([blob], { type }), type };
 }
 
 export async function uploadFile(localUri: string, key: string, contentType: string): Promise<string> {
@@ -23,10 +27,11 @@ export async function uploadFile(localUri: string, key: string, contentType: str
   const endpoint = `${SIGNER}/upload?key=${encodeURIComponent(key)}`;
 
   if (Platform.OS === 'web') {
+    const file = await fileBody(localUri, contentType);
     const response = await fetch(endpoint, {
       method: 'PUT',
-      headers: { 'Content-Type': contentType },
-      body: await fileBody(localUri, contentType),
+      headers: { 'Content-Type': file.type },
+      body: file.body,
     });
     if (!response.ok) throw new Error(`Media upload failed (${response.status})`);
     const uploaded = (await response.text()).trim();

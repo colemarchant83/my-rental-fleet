@@ -66,7 +66,20 @@ export default function RentalHistory() {
       {rental.checkout.savedAt ? <Text style={styles.stampLine}>Checkout recorded {formatStamp(rental.checkout.savedAt)}</Text> : null}
       {rental.checkin?.savedAt ? <Text style={styles.stampLine}>Return recorded {formatStamp(rental.checkin.savedAt)}</Text> : null}
       {rental.sync !== 'synced' && !(rental.syncError && /expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError)) ? (
-        <Text style={styles.waiting}>Saved on this phone. {rental.syncError || 'Photos upload when you have service.'}</Text>
+        <Text style={styles.waiting}>Saved on this phone. {rental.syncError || 'Uploading photos and video.'}</Text>
+      ) : null}
+
+      {rental.checkout.videoUri || rental.checkout.videoUrl ? (
+        <View>
+          <Text style={styles.stampLine}>Checkout video · {formatStamp(rental.checkout.videoAddedAt)}</Text>
+          <VideoPreview uri={rental.checkout.videoUri || rental.checkout.videoUrl} />
+        </View>
+      ) : null}
+      {rental.checkin?.videoUri || rental.checkin?.videoUrl ? (
+        <View>
+          <Text style={styles.stampLine}>Return video · {formatStamp(rental.checkin.videoAddedAt)}</Text>
+          <VideoPreview uri={rental.checkin.videoUri || rental.checkin.videoUrl} />
+        </View>
       ) : null}
 
       <View style={styles.stats}>
@@ -105,18 +118,6 @@ export default function RentalHistory() {
         );
       })}
 
-      {rental.checkout.videoUri || rental.checkout.videoUrl ? (
-        <View>
-          <Text style={styles.stampLine}>Checkout video · {formatStamp(rental.checkout.videoAddedAt)}</Text>
-          <VideoPreview uri={rental.checkout.videoUrl || rental.checkout.videoUri} />
-        </View>
-      ) : null}
-      {rental.checkin?.videoUri || rental.checkin?.videoUrl ? (
-        <View>
-          <Text style={styles.stampLine}>Return video · {formatStamp(rental.checkin.videoAddedAt)}</Text>
-          <VideoPreview uri={rental.checkin.videoUrl || rental.checkin.videoUri} />
-        </View>
-      ) : null}
       {rental.checkout.notes ? <Text style={styles.notes}>Checkout notes · {formatStamp(rental.checkout.notesAt)}{'\n'}{rental.checkout.notes}</Text> : null}
       {rental.checkin?.notes ? <Text style={styles.notes}>Return notes · {formatStamp(rental.checkin.notesAt)}{'\n'}{rental.checkin.notes}</Text> : null}
       <Pressable style={styles.delete} onPress={() => setConfirming(true)}>

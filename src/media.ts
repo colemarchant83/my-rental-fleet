@@ -166,8 +166,9 @@ export function remoteMediaLoads(url: string, kind: 'image' | 'video') {
       };
       if (kind === 'video') {
         const video = document.createElement('video');
+        video.crossOrigin = 'anonymous';
         video.preload = 'metadata';
-        video.onloadeddata = () => done(true);
+        video.onloadedmetadata = () => done(true);
         video.onerror = () => done(false);
         video.src = url;
         return;
