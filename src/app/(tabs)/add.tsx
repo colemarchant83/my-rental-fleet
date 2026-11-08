@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { theme } from '../../theme';
 
 export default function AddScreen() {
   const router = useRouter();
@@ -18,7 +19,6 @@ export default function AddScreen() {
       setError('Enter a nickname and VIN');
       return;
     }
-
     setSaving(true);
     setError('');
     try {
@@ -30,112 +30,39 @@ export default function AddScreen() {
         status: 'Available',
         createdAt: serverTimestamp(),
       });
-      router.replace(`/vehicle?id=${ref.id}`);
-    } catch (e: any) {
-      setError(e?.message || 'Could not save vehicle');
+      router.replace({ pathname: '/vehicle', params: { id: ref.id } });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save vehicle');
       setSaving(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Add Vehicle</Text>
-
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <Text style={styles.heading}>Add Vehicle</Text>
       <Text style={styles.label}>Nickname</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="e.g. Dad's truck"
-        placeholderTextColor="#6b7280"
-        value={nickname}
-        onChangeText={setNickname}
-      />
-
+      <TextInput style={styles.input} placeholder="e.g. Dad's truck" placeholderTextColor={theme.muted} value={nickname} onChangeText={setNickname} />
       <Text style={styles.label}>Year, make, model</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="e.g. 2004 Dodge 3500"
-        placeholderTextColor="#6b7280"
-        value={yearMakeModel}
-        onChangeText={setYearMakeModel}
-      />
-
+      <TextInput style={styles.input} placeholder="e.g. 2004 Dodge 3500" placeholderTextColor={theme.muted} value={yearMakeModel} onChangeText={setYearMakeModel} />
       <Text style={styles.label}>Specs</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="e.g. 4x4, diesel"
-        placeholderTextColor="#6b7280"
-        value={specs}
-        onChangeText={setSpecs}
-      />
-
+      <TextInput style={styles.input} placeholder="e.g. 5.9L · 6-cyl" placeholderTextColor={theme.muted} value={specs} onChangeText={setSpecs} />
       <Text style={styles.label}>VIN</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter VIN"
-        placeholderTextColor="#6b7280"
-        value={vin}
-        onChangeText={setVin}
-        autoCapitalize="characters"
-      />
-
+      <TextInput style={styles.input} placeholder="Enter VIN" placeholderTextColor={theme.muted} value={vin} onChangeText={setVin} autoCapitalize="characters" />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <TouchableOpacity style={styles.saveButton} onPress={saveVehicle} disabled={saving}>
-        {saving ? (
-          <ActivityIndicator color="#111827" />
-        ) : (
-          <Text style={styles.saveButtonText}>Save Vehicle</Text>
-        )}
-      </TouchableOpacity>
+      <Pressable style={styles.save} onPress={() => void saveVehicle()} disabled={saving}>
+        {saving ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.saveText}>Save Vehicle</Text>}
+      </Pressable>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#111827',
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 16,
-    color: '#e5e7eb',
-    marginBottom: 6,
-    marginTop: 12,
-  },
-  input: {
-    backgroundColor: '#374151',
-    color: '#fff',
-    padding: 14,
-    borderRadius: 10,
-    fontSize: 16,
-  },
-  error: {
-    color: '#fca5a5',
-    marginTop: 16,
-    fontSize: 15,
-  },
-  saveButton: {
-    backgroundColor: '#f59e0b',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 30,
-    minHeight: 54,
-    justifyContent: 'center',
-  },
-  saveButtonText: {
-    color: '#111827',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  screen: { flex: 1, backgroundColor: theme.bg },
+  content: { padding: 16, paddingBottom: 40 },
+  heading: { fontSize: 32, fontWeight: '800', color: theme.text, marginBottom: 8 },
+  label: { color: theme.text, fontWeight: '600', marginTop: 14, marginBottom: 6 },
+  input: { backgroundColor: theme.input, color: theme.text, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16 },
+  error: { color: theme.danger, marginTop: 12 },
+  save: { backgroundColor: theme.action, borderRadius: 14, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 22 },
+  saveText: { color: theme.ink, fontWeight: '800', fontSize: 17 },
 });

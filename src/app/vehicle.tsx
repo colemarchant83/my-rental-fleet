@@ -1,176 +1,213 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, collection, query, where, onSnapshot, updateDoc } from 'firebase/firestore';
+import * as ImagePicker from 'expo-image-picker';
+import { deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { formatDay, isOutStatus, loadCovers, loadRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { theme } from '../theme';
+
+type Vehicle = {
+  id: string;
+  nickname?: string;
+  yearMakeModel?: string;
+  specs?: string;
+  vin?: string;
+  status?: string;
+  renterName?: string;
+  photoUrl?: string;
+};
 
 export default function VehicleDetail() {
-  const { id } = useLocalSearchParams();
+  const params = useLocalSearchParams<{ id?: string }>();
+  const id = params.id;
   const router = useRouter();
-  const [vehicle, setVehicle] = useState<any>(null);
-  const [rentals, setRentals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [vehicle, setVehicle] = useState<Vehicle | null>(null);
+  const [missing, setMissing] = useState(false);
+  const [rentals, setRentals] = useState<LocalRental[]>([]);
+  const [cover, setCover] = useState<CoverPhoto | undefined>();
+  const [editing, setEditing] = useState(false);
+  const [nickname, setNickname] = useState('');
+  const [showSpecs, setShowSpecs] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    if (!id || Array.isArray(id)) return;
-
-    const vehicleRef = doc(db, 'vehicles', id);
-    const unsubVehicle = onSnapshot(
-      vehicleRef,
-      (snap) => {
-        if (snap.exists()) {
-          setVehicle({ id: snap.id, ...snap.data() });
-          setError('');
-        } else {
-          setVehicle(null);
-          setError('Vehicle not found');
-        }
-        setLoading(false);
-      },
-      (err) => {
-        setError(err.message || 'Could not load vehicle');
-        setLoading(false);
+    if (!id) return;
+    return onSnapshot(doc(db, 'vehicles', id), (snap) => {
+      if (!snap.exists()) {
+        setVehicle(null);
+        setMissing(true);
+        return;
       }
-    );
-
-    const rentalsQuery = query(collection(db, 'rentals'), where('vehicleId', '==', id));
-    const unsubRentals = onSnapshot(
-      rentalsQuery,
-      (snapshot) => {
-        const list = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-        list.sort((a: any, b: any) => {
-          const aTime = a.createdAt?.toMillis?.() ?? 0;
-          const bTime = b.createdAt?.toMillis?.() ?? 0;
-          return bTime - aTime;
-        });
-        setRentals(list);
-      },
-      (err) => {
-        console.log('Rentals listener error:', err);
-      }
-    );
-
-    return () => {
-      unsubVehicle();
-      unsubRentals();
-    };
+      const data = snap.data() as Omit<Vehicle, 'id'>;
+      setVehicle({ id: snap.id, ...data });
+      setNickname(data.nickname || '');
+      setMissing(false);
+    });
   }, [id]);
 
-  const changeStatus = async (newStatus: string) => {
-    if (!id || Array.isArray(id)) return;
+  useEffect(() => {
+    const refresh = () => {
+      void loadRentals().then((all) => setRentals(all.filter((rental) => rental.vehicleId === id)));
+      void loadCovers().then((all) => setCover(all.find((item) => item.vehicleId === id)));
+    };
+    refresh();
+    return subscribeFleet(refresh);
+  }, [id]);
+
+  const open = rentals.find((rental) => rental.status === 'out');
+  const out = !!open || isOutStatus(vehicle?.status);
+  const photo = cover?.localUri || vehicle?.photoUrl;
+
+  const setStatus = async (status: string) => {
+    if (!id) return;
     try {
-      await updateDoc(doc(db, 'vehicles', id), { status: newStatus });
-    } catch (e) {
-      Alert.alert('Error', 'Could not update status');
+      await updateDoc(doc(db, 'vehicles', id), { status });
+    } catch {
+      Alert.alert('Saved locally next time', 'The status could not reach the server. The inspection itself still saves on this phone.');
     }
   };
 
-  const openInspection = (type: 'checkout' | 'checkin') => {
-    router.push({
-      pathname: '/inspection',
-      params: { vehicleId: id, type },
-    });
+  const addCover = async () => {
+    if (!id) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.92 });
+    if (result.canceled || !result.assets[0]) return;
+    await rememberCover(id, result.assets[0].uri);
   };
 
-  const openRental = (rentalId: string) => {
-    router.push({
-      pathname: '/rental-history',
-      params: { id: rentalId },
-    });
+  const saveNickname = async () => {
+    if (!id || !nickname.trim()) return;
+    await updateDoc(doc(db, 'vehicles', id), { nickname: nickname.trim() });
+    setEditing(false);
   };
 
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.loading}>Loading...</Text>
-      </View>
-    );
-  }
+  const remove = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    if (!id) return;
+    await deleteDoc(doc(db, 'vehicles', id));
+    router.back();
+  };
 
   if (!vehicle) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.loading}>{error || 'Vehicle not found'}</Text>
+      <View style={styles.screen}>
+        <Text style={styles.muted}>{missing ? 'Machine not found' : 'Loading...'}</Text>
       </View>
     );
   }
 
-  const isOnRent = vehicle.status === 'On Rent';
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{vehicle.nickname || vehicle.yearMakeModel || 'Vehicle'}</Text>
-      {vehicle.yearMakeModel ? <Text style={styles.subtitle}>{vehicle.yearMakeModel}</Text> : null}
-      <Text style={styles.vin}>VIN {vehicle.vin}</Text>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      {photo ? (
+        <Image source={{ uri: photo }} style={styles.photo} />
+      ) : (
+        <View style={styles.placeholder}>
+          <Text style={styles.muted}>No photo yet — add one so the crew can spot this machine at a glance.</Text>
+        </View>
+      )}
+      <Pressable style={styles.ghost} onPress={() => void addCover()}>
+        <Text style={styles.ghostText}>{photo ? 'Change photo' : 'Add photo'}</Text>
+      </Pressable>
 
-      <View style={[styles.statusBadge, isOnRent ? styles.onRent : styles.available]}>
-        <Text style={styles.statusText}>{vehicle.status || 'Available'}</Text>
+      <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
+      {vehicle.yearMakeModel ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}
+      {vehicle.specs ? <Text style={styles.specs}>{vehicle.specs}</Text> : null}
+      {vehicle.vin ? <Text style={styles.vin}>VIN {vehicle.vin}</Text> : null}
+
+      <View style={[styles.badge, out ? styles.badgeOut : styles.badgeIn]}>
+        <Text style={styles.badgeText}>{out ? 'Out on rent' : vehicle.status === 'In the shop' || vehicle.status === 'In Shop' ? 'In the shop' : 'Available'}</Text>
       </View>
 
-      <Text style={styles.sectionTitle}>Actions</Text>
+      <View style={styles.statusRow}>
+        {['Available', 'Out on rent', 'In the shop'].map((status) => {
+          const current = out ? 'Out on rent' : vehicle.status === 'In the shop' || vehicle.status === 'In Shop' ? 'In the shop' : 'Available';
+          const selected = status === current;
+          return (
+            <Pressable key={status} style={[styles.statusBtn, selected && styles.statusOn]} onPress={() => void setStatus(status)}>
+              <Text style={[styles.statusText, selected && styles.statusTextOn]}>{status}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
-      {isOnRent ? (
-        <TouchableOpacity style={styles.checkInBtn} onPress={() => openInspection('checkin')}>
-          <Text style={styles.btnText}>Check In</Text>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity style={styles.checkOutBtn} onPress={() => openInspection('checkout')}>
-          <Text style={styles.btnText}>Check Out</Text>
-        </TouchableOpacity>
-      )}
+      <View style={styles.pair}>
+        <Pressable style={styles.ghost} onPress={() => setShowSpecs((value) => !value)}><Text style={styles.ghostText}>Specs & recalls</Text></Pressable>
+        <Pressable style={styles.ghost} onPress={() => setEditing((value) => !value)}><Text style={styles.ghostText}>Edit nickname</Text></Pressable>
+      </View>
+      {showSpecs ? <Text style={styles.specs}>{vehicle.specs || 'No specs saved yet.'}</Text> : null}
+      {editing ? (
+        <View>
+          <TextInput style={styles.input} value={nickname} onChangeText={setNickname} />
+          <Pressable style={styles.save} onPress={() => void saveNickname()}><Text style={styles.saveText}>Save nickname</Text></Pressable>
+        </View>
+      ) : null}
 
-      <TouchableOpacity style={styles.secondaryBtn} onPress={() => changeStatus('In Shop')}>
-        <Text style={styles.secondaryText}>Mark as In Shop</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.secondaryBtn} onPress={() => changeStatus('Unavailable')}>
-        <Text style={styles.secondaryText}>Mark as Unavailable</Text>
-      </TouchableOpacity>
+      <Text style={styles.section}>Rentals & inspections</Text>
+      <Pressable
+        style={styles.save}
+        onPress={() => router.push({ pathname: '/inspection', params: { vehicleId: id, type: out ? 'checkin' : 'checkout' } })}
+      >
+        <Text style={styles.saveText}>{out ? 'Start return inspection' : 'Start pre-rental inspection'}</Text>
+      </Pressable>
 
-      <Text style={styles.sectionTitle}>Previous Rentals</Text>
+      {rentals.length === 0 ? <Text style={styles.muted}>No rentals yet.</Text> : rentals.map((rental) => (
+        <Pressable key={rental.localId} style={styles.rental} onPress={() => router.push({ pathname: '/rental-history', params: { localId: rental.localId } })}>
+          <View style={styles.titleRow}>
+            <Text style={styles.renter}>{rental.renterName}</Text>
+            <View style={styles.closed}><Text style={styles.closedText}>{rental.status === 'closed' ? 'Closed' : 'Out'}</Text></View>
+          </View>
+          <Text style={styles.specs}>
+            Out {formatDay(rental.checkout.date)}
+            {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
+          </Text>
+          <Text style={styles.link}>Details</Text>
+          {rental.sync !== 'synced' ? <Text style={styles.waiting}>Saved on this phone. {rental.sync === 'error' ? 'Upload will retry.' : 'Waiting to upload.'}</Text> : null}
+        </Pressable>
+      ))}
 
-      {rentals.length === 0 ? (
-        <Text style={styles.empty}>No previous rentals yet.</Text>
-      ) : (
-        <FlatList
-          data={rentals}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={styles.rentalCard} onPress={() => openRental(item.id)}>
-              <Text style={styles.rentalDate}>
-                {item.checkoutDate || item.createdAt?.toDate?.().toLocaleDateString() || '—'}
-              </Text>
-              <Text style={styles.renterName}>{item.renterName || 'Unknown'}</Text>
-              <Text style={styles.rentalStatus}>
-                {item.checkinDate ? 'Checked In' : 'Checked Out'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        />
-      )}
-    </View>
+      <Pressable onPress={() => void remove()}>
+        <Text style={styles.remove}>{confirmDelete ? 'Tap again to remove from fleet' : 'Remove from fleet'}</Text>
+      </Pressable>
+      {Platform.OS === 'web' ? <View style={{ height: 24 }} /> : null}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 16 },
-  title: { fontSize: 22, fontWeight: '700', color: '#f8fafc', marginBottom: 4 },
-  subtitle: { color: '#e2e8f0', marginBottom: 4 },
-  vin: { color: '#94a3b8', marginBottom: 12 },
-  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 20 },
-  onRent: { backgroundColor: '#dc2626' },
-  available: { backgroundColor: '#16a34a' },
-  statusText: { color: 'white', fontWeight: '600' },
-  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#f8fafc', marginTop: 16, marginBottom: 10 },
-  checkOutBtn: { backgroundColor: '#f59e0b', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
-  checkInBtn: { backgroundColor: '#16a34a', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 },
-  btnText: { color: 'white', fontWeight: '700', fontSize: 16 },
-  secondaryBtn: { backgroundColor: '#1e293b', padding: 14, borderRadius: 12, alignItems: 'center', marginBottom: 8 },
-  secondaryText: { color: '#cbd5e1', fontWeight: '600' },
-  rentalCard: { backgroundColor: '#1e293b', padding: 14, borderRadius: 12, marginBottom: 8 },
-  rentalDate: { color: '#f59e0b', fontWeight: '600' },
-  renterName: { color: '#f8fafc', fontSize: 16, marginTop: 2 },
-  rentalStatus: { color: '#94a3b8', marginTop: 2 },
-  empty: { color: '#64748b', fontStyle: 'italic' },
-  loading: { color: '#f8fafc', textAlign: 'center', marginTop: 40 },
+  screen: { flex: 1, backgroundColor: theme.bg },
+  content: { padding: 16, paddingBottom: 48 },
+  photo: { width: '100%', height: 220, borderRadius: 16, backgroundColor: theme.input },
+  placeholder: { backgroundColor: theme.input, borderRadius: 16, padding: 18 },
+  nickname: { color: theme.accent, fontWeight: '800', marginTop: 14, fontSize: 15 },
+  model: { color: theme.text, fontSize: 28, fontWeight: '800', marginTop: 2 },
+  specs: { color: theme.muted, marginTop: 6, lineHeight: 20 },
+  vin: { alignSelf: 'flex-start', backgroundColor: theme.input, color: theme.text, overflow: 'hidden', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginTop: 8 },
+  muted: { color: theme.muted, marginTop: 12 },
+  badge: { alignSelf: 'flex-start', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 },
+  badgeIn: { backgroundColor: theme.green },
+  badgeOut: { backgroundColor: theme.rent },
+  badgeText: { color: theme.white, fontWeight: '700' },
+  statusRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  statusBtn: { flex: 1, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  statusOn: { backgroundColor: theme.ink, borderColor: theme.ink },
+  statusText: { color: theme.text, fontWeight: '700', fontSize: 12 },
+  statusTextOn: { color: theme.white },
+  pair: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  ghost: { flex: 1, borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 10, backgroundColor: theme.card },
+  ghostText: { color: theme.text, fontWeight: '700' },
+  input: { backgroundColor: theme.input, borderRadius: 12, padding: 14, marginTop: 8, color: theme.text },
+  section: { fontSize: 22, fontWeight: '800', color: theme.text, marginTop: 22 },
+  save: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 12 },
+  saveText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
+  rental: { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 14, marginTop: 10 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  renter: { color: theme.text, fontSize: 18, fontWeight: '800' },
+  closed: { backgroundColor: theme.input, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  closedText: { color: theme.text, fontWeight: '700', fontSize: 12 },
+  link: { color: theme.accent, fontWeight: '700', marginTop: 8, textAlign: 'right' },
+  waiting: { color: theme.rent, marginTop: 6, fontSize: 13 },
+  remove: { color: theme.danger, fontWeight: '700', marginTop: 28 },
 });

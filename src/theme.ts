@@ -1,0 +1,17 @@
+export const theme = {
+  bg: '#f4f1ea',
+  card: '#fffdf8',
+  line: '#e6e0d4',
+  text: '#1c1917',
+  muted: '#6f6a63',
+  accent: '#c45c16',
+  action: '#e8941a',
+  green: '#1f7a3a',
+  greenSoft: '#e7f5ea',
+  rent: '#8a5a2b',
+  rentSoft: '#f4e7d6',
+  ink: '#1f1c19',
+  input: '#f6f3ec',
+  danger: '#b42318',
+  white: '#ffffff',
+};
