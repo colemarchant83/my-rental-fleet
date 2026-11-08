@@ -23,13 +23,16 @@ export default function InspectionScreen() {
   useEffect(() => {
     if (!vehicleId) return;
     void getDoc(doc(db, 'vehicles', vehicleId)).then((snap) => {
-      if (snap.exists()) setNickname(String(snap.data().nickname || ''));
+      if (!snap.exists()) return;
+      const data = snap.data();
+      setNickname(String(data.nickname || ''));
+      if (mode === 'checkin' && data.renterName) setRenterName(String(data.renterName));
     }).catch(() => undefined);
     if (mode === 'checkin') {
       void openRentalFor(vehicleId).then((rental) => {
         if (!rental) return;
         setOpenId(rental.localId);
-        setRenterName(rental.renterName);
+        if (rental.renterName) setRenterName(rental.renterName);
         setCheckoutSide(rental.checkout);
       });
     }
@@ -42,6 +45,10 @@ export default function InspectionScreen() {
     }
     if (!renterName.trim()) {
       setError('Enter the renter name');
+      return;
+    }
+    if (!side.miles.trim() && !side.hours.trim()) {
+      setError('Enter the miles or the engine hours before saving.');
       return;
     }
     setSaving(true);

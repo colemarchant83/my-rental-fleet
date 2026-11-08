@@ -80,7 +80,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
         value={renterName}
         onChangeText={onRenterName}
         editable={!renterLocked}
-        placeholder="Renter Name"
+        placeholder={renterLocked ? 'Renter name from checkout' : 'Renter Name'}
         placeholderTextColor={theme.muted}
       />
 
@@ -111,14 +111,15 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
 
       <View style={styles.row}>
         <View style={styles.col}>
-          <Text style={styles.label}>Odometer miles (optional)</Text>
+          <Text style={styles.label}>Odometer miles</Text>
           <TextInput style={styles.input} value={side.miles} onChangeText={(miles) => patch({ miles })} keyboardType="numeric" placeholder="e.g. 1,240" placeholderTextColor={theme.muted} />
         </View>
         <View style={styles.col}>
-          <Text style={styles.label}>Engine hours (optional)</Text>
+          <Text style={styles.label}>Engine hours</Text>
           <TextInput style={styles.input} value={side.hours} onChangeText={(hours) => patch({ hours })} keyboardType="decimal-pad" placeholder="e.g. 128.5" placeholderTextColor={theme.muted} />
         </View>
       </View>
+      <Text style={styles.help}>Enter miles or hours. One of them is required.</Text>
 
       <Text style={styles.section}>Walk-around checklist</Text>
       {checkout?.notes ? <Text style={styles.compareNote}>Checkout notes: {checkout.notes}</Text> : null}
