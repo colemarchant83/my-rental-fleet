@@ -26,7 +26,6 @@ export default function TabLayout() {
         headerShadowVisible: false,
         headerTitleStyle: { fontWeight: '700' },
         headerRight: () => <RefreshButton />,
-        headerRightContainerStyle: { paddingRight: 8 },
         tabBarIcon: () => null,
         tabBarStyle: {
           backgroundColor: theme.bg,

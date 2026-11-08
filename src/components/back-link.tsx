@@ -21,7 +21,6 @@ export function RefreshButton() {
   return (
     <Pressable
       hitSlop={8}
-      style={{ marginRight: 20 }}
       onPress={() => {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           window.location.reload();
@@ -30,7 +29,7 @@ export function RefreshButton() {
         void syncAll();
       }}
     >
-      <Text style={{ color: theme.accent, fontSize: 16, fontWeight: '700' }}>Refresh</Text>
+      <Text style={{ color: theme.accent, fontSize: 16, fontWeight: '700', paddingRight: 16 }}>Refresh</Text>
     </Pressable>
   );
 }
