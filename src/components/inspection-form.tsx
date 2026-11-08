@@ -4,7 +4,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
 import { ZoomModal } from './zoom-modal';
-import { contentTypeFor } from '../media';
+import { contentTypeFor, readStoredBlob } from '../media';
 import { theme } from '../theme';
 
 const FUEL = ['Not recorded', 'Empty', '1/4 tank', '1/2 tank', '3/4 tank', 'Full'];
@@ -191,7 +191,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
             <View style={styles.photoRow}>
               {record.photos.map((photo) => (
                 <View key={photo.id}>
-                  <Image source={{ uri: photo.localUri }} style={styles.thumb} />
+                  <MediaImage uri={photo.localUri} style={styles.thumb} onOpen={setZoom} />
                   <Pressable onPress={() => patchSpot(spot.id, { photos: record.photos.filter((item) => item.id !== photo.id) })}>
                     <Text style={styles.remove}>Remove</Text>
                   </Pressable>
@@ -306,6 +306,7 @@ function MediaImage({ uri, style, onOpen }: { uri: string; style: StyleProp<Imag
   const [shown, setShown] = useState('');
   useEffect(() => {
     let live = true;
+    let objectUrl = '';
     const load = async () => {
       if (!uri) {
         setShown('');
@@ -313,6 +314,13 @@ function MediaImage({ uri, style, onOpen }: { uri: string; style: StyleProp<Imag
       }
       if (uri.startsWith('http') || uri.startsWith('blob:') || uri.startsWith('data:')) {
         setShown(uri);
+        return;
+      }
+      if (uri.startsWith('idb:')) {
+        const blob = await readStoredBlob(uri).catch(() => null);
+        if (!live || !blob) return;
+        objectUrl = URL.createObjectURL(blob);
+        setShown(objectUrl);
         return;
       }
       try {
@@ -325,6 +333,7 @@ function MediaImage({ uri, style, onOpen }: { uri: string; style: StyleProp<Imag
     void load();
     return () => {
       live = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [uri]);
   if (!shown) return <View style={style} />;
