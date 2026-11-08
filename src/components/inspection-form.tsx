@@ -12,13 +12,14 @@ type Props = {
   renterLocked?: boolean;
   onRenterName: (value: string) => void;
   side: InspectionSide;
+  checkout?: InspectionSide;
   onChange: (side: InspectionSide) => void;
   onSave: () => void;
   saving: boolean;
   error: string;
 };
 
-export function InspectionForm({ mode, renterName, renterLocked, onRenterName, side, onChange, onSave, saving, error }: Props) {
+export function InspectionForm({ mode, renterName, renterLocked, onRenterName, side, checkout, onChange, onSave, saving, error }: Props) {
   const [fuelOpen, setFuelOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [librarySpot, setLibrarySpot] = useState<SpotId | null>(null);
@@ -116,10 +117,50 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       </View>
 
       <Text style={styles.section}>Walk-around checklist</Text>
-      <Text style={styles.help}>Each spot can hold up to 4 photos, so damage can be caught from more than one angle.</Text>
+      {checkout?.notes ? <Text style={styles.compareNote}>Checkout notes: {checkout.notes}</Text> : null}
+      <Text style={styles.help}>{checkout ? 'Checkout stays on the left. Tap the empty spot on the right to add the return photo and note.' : 'Each spot can hold up to 4 photos, so damage can be caught from more than one angle.'}</Text>
 
       {SPOTS.map((spot) => {
         const record = side.spots[spot.id];
+        const earlier = checkout?.spots[spot.id];
+        if (earlier) {
+          const checkoutPhoto = earlier.photos[0]?.localUri || earlier.photos[0]?.remoteUrl;
+          return (
+            <View key={spot.id} style={styles.spot}>
+              <Text style={styles.spotTitle}>{spot.label}</Text>
+              <View style={styles.compare}>
+                <View style={styles.compareCol}>
+                  <Text style={styles.compareLabel}>Checkout</Text>
+                  {checkoutPhoto ? <Image source={{ uri: checkoutPhoto }} style={styles.compareShot} /> : <View style={styles.compareFrame}><Text style={styles.blankText}>No photo</Text></View>}
+                  {earlier.note ? <Text style={styles.compareNote}>{earlier.note}</Text> : null}
+                  <Text style={styles.compareLabel}>{earlier.status === 'issue' ? 'Issue' : earlier.status === 'ok' ? 'OK' : '—'}</Text>
+                </View>
+                <View style={styles.compareCol}>
+                  <Text style={styles.compareLabel}>Return</Text>
+                  <Pressable style={[styles.compareFrame, styles.blank]} onPress={() => choosePhotos(spot.id)}>
+                    {record.photos[0] ? <Image source={{ uri: record.photos[0].localUri }} style={styles.compareShot} /> : <Text style={styles.blankText}>Tap to add return</Text>}
+                  </Pressable>
+                  {record.photos.length > 1 ? <Text style={styles.count}>{record.photos.length} photos</Text> : null}
+                  <TextInput
+                    style={styles.input}
+                    value={record.note}
+                    onChangeText={(note) => patchSpot(spot.id, { note })}
+                    placeholder="Return note"
+                    placeholderTextColor={theme.muted}
+                  />
+                  <View style={styles.choiceRow}>
+                    <Pressable style={[styles.choice, record.status === 'ok' && styles.choiceOk]} onPress={() => patchSpot(spot.id, { status: 'ok' })}>
+                      <Text style={[styles.choiceText, record.status === 'ok' && styles.choiceTextOn]}>✓ OK</Text>
+                    </Pressable>
+                    <Pressable style={[styles.choice, record.status === 'issue' && styles.choiceIssue]} onPress={() => patchSpot(spot.id, { status: 'issue' })}>
+                      <Text style={styles.choiceText}>⚠ Issue</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            </View>
+          );
+        }
         return (
           <View key={spot.id} style={styles.spot}>
             <Text style={styles.spotTitle}>{spot.label}</Text>
@@ -294,6 +335,14 @@ const styles = StyleSheet.create({
   choiceTextOn: { color: theme.white },
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   thumb: { width: 92, height: 92, borderRadius: 10, backgroundColor: theme.input },
+  compare: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  compareCol: { flex: 1 },
+  compareLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', marginBottom: 4 },
+  compareShot: { width: '100%', height: 120, borderRadius: 12, backgroundColor: theme.input },
+  compareFrame: { minHeight: 120, borderRadius: 12, backgroundColor: theme.input, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  blank: { borderWidth: 1, borderStyle: 'dashed', borderColor: theme.accent, backgroundColor: theme.card },
+  blankText: { color: theme.accent, fontWeight: '700', textAlign: 'center', padding: 12 },
+  compareNote: { color: theme.text, fontSize: 13, marginTop: 6, lineHeight: 18 },
   ghost: { borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 10, borderStyle: 'dashed' },
   ghostText: { color: theme.text, fontWeight: '600' },
   count: { color: theme.green, marginTop: 6, fontSize: 13 },

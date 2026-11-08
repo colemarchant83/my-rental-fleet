@@ -16,6 +16,7 @@ export default function InspectionScreen() {
   const [renterName, setRenterName] = useState('');
   const [side, setSide] = useState<InspectionSide>(emptySide());
   const [openId, setOpenId] = useState<string | null>(null);
+  const [checkoutSide, setCheckoutSide] = useState<InspectionSide | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,6 +30,7 @@ export default function InspectionScreen() {
         if (!rental) return;
         setOpenId(rental.localId);
         setRenterName(rental.renterName);
+        setCheckoutSide(rental.checkout);
       });
     }
   }, [vehicleId, mode]);
@@ -74,6 +76,7 @@ export default function InspectionScreen() {
         renterLocked={mode === 'checkin' && !!openId}
         onRenterName={setRenterName}
         side={side}
+        checkout={mode === 'checkin' ? checkoutSide ?? undefined : undefined}
         onChange={setSide}
         onSave={() => void save()}
         saving={saving}
