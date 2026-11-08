@@ -20,6 +20,7 @@ export default function RootLayout() {
         headerShadowVisible: false,
         headerTitleStyle: { fontWeight: '700' },
         headerRight: () => <RefreshButton />,
+        headerRightContainerStyle: { paddingRight: 8 },
         contentStyle: { backgroundColor: theme.bg },
       }}
     >
