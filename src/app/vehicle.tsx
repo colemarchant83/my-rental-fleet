@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc, collection, query, where, orderBy, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, collection, query, where, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function VehicleDetail() {
@@ -10,33 +10,46 @@ export default function VehicleDetail() {
   const [vehicle, setVehicle] = useState<any>(null);
   const [rentals, setRentals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || Array.isArray(id)) return;
 
-    // Real-time listener for the vehicle document
-    const vehicleRef = doc(db, 'vehicles', id as string);
-    const unsubVehicle = onSnapshot(vehicleRef, (snap) => {
-      if (snap.exists()) {
-        setVehicle({ id: snap.id, ...snap.data() });
+    const vehicleRef = doc(db, 'vehicles', id);
+    const unsubVehicle = onSnapshot(
+      vehicleRef,
+      (snap) => {
+        if (snap.exists()) {
+          setVehicle({ id: snap.id, ...snap.data() });
+          setError('');
+        } else {
+          setVehicle(null);
+          setError('Vehicle not found');
+        }
+        setLoading(false);
+      },
+      (err) => {
+        setError(err.message || 'Could not load vehicle');
+        setLoading(false);
       }
-    });
-
-    // Real-time listener for rentals of this vehicle
-    const rentalsQuery = query(
-      collection(db, 'rentals'),
-      where('vehicleId', '==', id),
-      orderBy('createdAt', 'desc')
     );
 
-    const unsubRentals = onSnapshot(rentalsQuery, (snapshot) => {
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setRentals(list);
-      setLoading(false);
-    }, (error) => {
-      console.log('Rentals listener error:', error);
-      setLoading(false);
-    });
+    const rentalsQuery = query(collection(db, 'rentals'), where('vehicleId', '==', id));
+    const unsubRentals = onSnapshot(
+      rentalsQuery,
+      (snapshot) => {
+        const list = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+        list.sort((a: any, b: any) => {
+          const aTime = a.createdAt?.toMillis?.() ?? 0;
+          const bTime = b.createdAt?.toMillis?.() ?? 0;
+          return bTime - aTime;
+        });
+        setRentals(list);
+      },
+      (err) => {
+        console.log('Rentals listener error:', err);
+      }
+    );
 
     return () => {
       unsubVehicle();
@@ -45,9 +58,9 @@ export default function VehicleDetail() {
   }, [id]);
 
   const changeStatus = async (newStatus: string) => {
-    if (!id) return;
+    if (!id || Array.isArray(id)) return;
     try {
-      await updateDoc(doc(db, 'vehicles', id as string), { status: newStatus });
+      await updateDoc(doc(db, 'vehicles', id), { status: newStatus });
     } catch (e) {
       Alert.alert('Error', 'Could not update status');
     }
@@ -56,21 +69,29 @@ export default function VehicleDetail() {
   const openInspection = (type: 'checkout' | 'checkin') => {
     router.push({
       pathname: '/inspection',
-      params: { vehicleId: id, type }
+      params: { vehicleId: id, type },
     });
   };
 
   const openRental = (rentalId: string) => {
     router.push({
       pathname: '/rental-history',
-      params: { id: rentalId }
+      params: { id: rentalId },
     });
   };
 
-  if (loading || !vehicle) {
+  if (loading) {
     return (
       <View style={styles.container}>
         <Text style={styles.loading}>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (!vehicle) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.loading}>{error || 'Vehicle not found'}</Text>
       </View>
     );
   }
@@ -79,7 +100,8 @@ export default function VehicleDetail() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{vehicle.nickname || vehicle.year + ' ' + vehicle.make + ' ' + vehicle.model}</Text>
+      <Text style={styles.title}>{vehicle.nickname || vehicle.yearMakeModel || 'Vehicle'}</Text>
+      {vehicle.yearMakeModel ? <Text style={styles.subtitle}>{vehicle.yearMakeModel}</Text> : null}
       <Text style={styles.vin}>VIN {vehicle.vin}</Text>
 
       <View style={[styles.statusBadge, isOnRent ? styles.onRent : styles.available]}>
@@ -133,6 +155,7 @@ export default function VehicleDetail() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a', padding: 16 },
   title: { fontSize: 22, fontWeight: '700', color: '#f8fafc', marginBottom: 4 },
+  subtitle: { color: '#e2e8f0', marginBottom: 4 },
   vin: { color: '#94a3b8', marginBottom: 12 },
   statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 20 },
   onRent: { backgroundColor: '#dc2626' },
