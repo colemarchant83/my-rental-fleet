@@ -246,6 +246,11 @@ export async function rememberCover(vehicleId: string, sourceUri: string) {
   return localUri;
 }
 
+function readableSyncError(error?: string) {
+  if (!error || /expo-file-system|native dependencies|Could not read the saved photo/i.test(error)) return '';
+  return error;
+}
+
 let lastUploadError = '';
 
 async function uploadRef(ref: PhotoRef, folder: string) {
@@ -378,7 +383,7 @@ async function pushRental(rental: LocalRental) {
   await saveRentals(
     rentals.map((item) =>
       item.localId === rental.localId
-        ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, sync: ready ? 'synced' : 'pending', syncError: ready ? undefined : lastUploadError || undefined }
+        ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, sync: ready ? 'synced' : 'pending', syncError: ready ? undefined : readableSyncError(lastUploadError) || undefined }
         : item
     )
   );
@@ -426,9 +431,9 @@ export async function syncAll() {
         try {
           await pushRental(rental);
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Upload failed';
+          const message = readableSyncError(error instanceof Error ? error.message : 'Upload failed');
           const latest = await loadRentals();
-          await saveRentals(latest.map((item) => (item.localId === rental.localId ? { ...item, sync: 'error', syncError: message } : item)));
+          await saveRentals(latest.map((item) => (item.localId === rental.localId ? { ...item, sync: message ? 'error' : 'pending', syncError: message || undefined } : item)));
         }
       }
     } while (queued);

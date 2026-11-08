@@ -166,7 +166,7 @@ export default function VehicleDetail() {
             {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
           </Text>
           <Text style={styles.link}>Details</Text>
-          {rental.sync !== 'synced' ? <Text style={styles.waiting}>Saved on this phone. {rental.syncError || (rental.sync === 'error' ? 'Upload will retry.' : 'Waiting to upload.')}</Text> : null}
+          {rental.sync !== 'synced' && !(rental.syncError && /expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError)) ? <Text style={styles.waiting}>Saved on this phone. {rental.syncError && !/expo-file-system|native dependencies/i.test(rental.syncError) ? rental.syncError : rental.sync === 'error' ? 'Upload will retry.' : 'Waiting to upload.'}</Text> : null}
         </Pressable>
       ))}
 

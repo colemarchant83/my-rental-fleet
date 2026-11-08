@@ -6,17 +6,10 @@ import { Platform } from 'react-native';
 const SIGNER = (process.env.EXPO_PUBLIC_R2_SIGNER ?? 'https://my-rental-fleet-media.colemarchant.workers.dev').replace(/\/$/, '');
 
 async function fileBody(localUri: string, contentType: string) {
-  try {
-    const response = await fetch(localUri);
-    if (response.ok) return await response.blob();
-  } catch {
-    // The copy is in app storage, not a browser address.
-  }
-  const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: contentType });
+  const response = await fetch(localUri).catch(() => null);
+  if (!response?.ok) throw new Error('Could not read the saved photo.');
+  const blob = await response.blob();
+  return blob.type ? blob : new Blob([blob], { type: contentType });
 }
 
 export async function uploadFile(localUri: string, key: string, contentType: string): Promise<string> {

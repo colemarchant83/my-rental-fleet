@@ -31,7 +31,7 @@ export function useDisplayUri(localUri?: string, remoteUrl?: string) {
     setRemoteFailed(false);
     let live = true;
     const stored = [localUri, remoteUrl].find((uri) => isStoredFile(uri));
-    if (!stored) {
+    if (Platform.OS === 'web' || !stored) {
       setShown('');
       return () => {
         live = false;
