@@ -2,9 +2,12 @@ import * as FileSystem from 'expo-file-system/legacy';
 
 // Expo-compatible R2 upload using FileSystem.uploadAsync.
 // Avoids the React Native Blob / ArrayBuffer limitation.
+// The bucket address is public. Access keys must never live in this file.
 
-const ENDPOINT = process.env.EXPO_PUBLIC_R2_ENDPOINT;
-const BUCKET = process.env.EXPO_PUBLIC_R2_BUCKET;
+const ENDPOINT =
+  process.env.EXPO_PUBLIC_R2_ENDPOINT ??
+  'https://8f479ed6a7e43bbb26474ba9e29b781e.r2.cloudflarestorage.com';
+const BUCKET = process.env.EXPO_PUBLIC_R2_BUCKET ?? 'my-rental-fleet';
 
 export async function uploadFile(localUri: string, key: string, contentType: string): Promise<string> {
   if (!ENDPOINT || !BUCKET) {
