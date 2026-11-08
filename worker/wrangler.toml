@@ -1,0 +1,7 @@
+name = "my-rental-fleet-media"
+main = "src/index.js"
+compatibility_date = "2026-11-08"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "my-rental-fleet"

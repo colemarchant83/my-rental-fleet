@@ -216,12 +216,15 @@ export async function rememberCover(vehicleId: string, sourceUri: string) {
   return localUri;
 }
 
+let lastUploadError = '';
+
 async function uploadRef(ref: PhotoRef, folder: string) {
   if (ref.remoteUrl) return ref;
   try {
     const remoteUrl = await uploadFile(ref.localUri, `${folder}/${ref.id}.jpg`, contentTypeFor(ref.localUri));
     return { ...ref, remoteUrl };
-  } catch {
+  } catch (error) {
+    lastUploadError = error instanceof Error ? error.message : 'Upload failed';
     return ref;
   }
 }
@@ -240,7 +243,8 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
   if (side.videoUri && !videoUrl) {
     try {
       videoUrl = await uploadFile(side.videoUri, `${folder}/walkaround.mp4`, contentTypeFor(side.videoUri));
-    } catch {
+    } catch (error) {
+      lastUploadError = error instanceof Error ? error.message : 'Upload failed';
       videoUrl = undefined;
     }
   }
@@ -309,6 +313,7 @@ async function releaseSide(side: InspectionSide): Promise<InspectionSide> {
 }
 
 async function pushRental(rental: LocalRental) {
+  lastUploadError = '';
   const folder = `rentals/${rental.vehicleId}/${rental.localId}`;
   const checkout = await uploadSide(rental.checkout, `${folder}/out`);
   const checkin = rental.checkin ? await uploadSide(rental.checkin, `${folder}/in`) : undefined;
@@ -343,7 +348,7 @@ async function pushRental(rental: LocalRental) {
   await saveRentals(
     rentals.map((item) =>
       item.localId === rental.localId
-        ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, sync: ready ? 'synced' : 'pending', syncError: undefined }
+        ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, sync: ready ? 'synced' : 'pending', syncError: ready ? undefined : lastUploadError || undefined }
         : item
     )
   );
@@ -403,9 +408,21 @@ export async function syncAll() {
 }
 
 export function watchConnection() {
-  return NetInfo.addEventListener((state) => {
+  const unsub = NetInfo.addEventListener((state) => {
     if (state.isConnected) void syncAll();
   });
+  if (typeof window === 'undefined') return unsub;
+  const online = () => void syncAll();
+  const visible = () => {
+    if (document.visibilityState === 'visible') void syncAll();
+  };
+  window.addEventListener('online', online);
+  document.addEventListener('visibilitychange', visible);
+  return () => {
+    unsub();
+    window.removeEventListener('online', online);
+    document.removeEventListener('visibilitychange', visible);
+  };
 }
 
 export async function keepPhoto(uri: string) {

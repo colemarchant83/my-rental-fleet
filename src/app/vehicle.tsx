@@ -166,7 +166,7 @@ export default function VehicleDetail() {
             {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
           </Text>
           <Text style={styles.link}>Details</Text>
-          {rental.sync !== 'synced' ? <Text style={styles.waiting}>Saved on this phone. {rental.sync === 'error' ? 'Upload will retry.' : 'Waiting to upload.'}</Text> : null}
+          {rental.sync !== 'synced' ? <Text style={styles.waiting}>Saved on this phone. {rental.syncError || (rental.sync === 'error' ? 'Upload will retry.' : 'Waiting to upload.')}</Text> : null}
         </Pressable>
       ))}
 

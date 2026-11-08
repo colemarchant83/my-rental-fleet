@@ -52,7 +52,7 @@ export default function RentalHistory() {
       {rental.checkout.savedAt ? <Text style={styles.stampLine}>Checkout recorded {formatStamp(rental.checkout.savedAt)}</Text> : null}
       {rental.checkin?.savedAt ? <Text style={styles.stampLine}>Return recorded {formatStamp(rental.checkin.savedAt)}</Text> : null}
       {rental.sync !== 'synced' ? (
-        <Text style={styles.waiting}>Saved on this phone{rental.sync === 'error' ? '. Upload will retry when you have service.' : '. Photos upload when you have service.'}</Text>
+        <Text style={styles.waiting}>Saved on this phone. {rental.syncError || 'Photos upload when you have service.'}</Text>
       ) : null}
 
       <View style={styles.stats}>
