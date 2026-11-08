@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
@@ -25,8 +25,18 @@ jobs:
       - name: Export Expo web
         run: npx expo export --platform web --output-dir dist
 
-      - name: List dist contents
-        run: ls -la dist || echo "dist missing"
+      - name: Require an index.html before deploy
+        run: |
+          find dist -name index.html -maxdepth 3
+          if [ -f dist/index.html ]; then
+            exit 0
+          fi
+          if [ -f dist/client/index.html ]; then
+            node -e "const fs=require('fs'); const j=JSON.parse(fs.readFileSync('firebase.json','utf8')); j.hosting.public='dist/client'; fs.writeFileSync('firebase.json', JSON.stringify(j, null, 2) + '\n');"
+            exit 0
+          fi
+          echo 'Export did not create index.html'
+          exit 1
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
