@@ -259,7 +259,9 @@ async function uploadRef(ref: PhotoRef, folder: string) {
     const remoteUrl = await uploadFile(ref.localUri, `${folder}/${ref.id}.jpg`, contentTypeFor(ref.localUri));
     return { ...ref, remoteUrl };
   } catch (error) {
-    lastUploadError = error instanceof Error ? error.message : 'Upload failed';
+    const message = error instanceof Error ? error.message : 'Upload failed';
+    if (/Could not read the saved photo/i.test(message)) return { ...ref, localUri: '' };
+    lastUploadError = message;
     return ref;
   }
 }
@@ -275,15 +277,18 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
     spots[spot.id] = { ...current, photos };
   }
   let videoUrl = side.videoUrl;
-  if (side.videoUri && !videoUrl) {
+  let videoUri = side.videoUri;
+  if (videoUri && !videoUrl) {
     try {
-      videoUrl = await uploadFile(side.videoUri, `${folder}/walkaround.mp4`, contentTypeFor(side.videoUri));
+      videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, contentTypeFor(videoUri));
     } catch (error) {
-      lastUploadError = error instanceof Error ? error.message : 'Upload failed';
+      const message = error instanceof Error ? error.message : 'Upload failed';
+      if (/Could not read the saved photo/i.test(message)) videoUri = undefined;
+      else lastUploadError = message;
       videoUrl = undefined;
     }
   }
-  return { ...side, spots, videoUrl };
+  return { ...side, spots, videoUrl, videoUri };
 }
 
 function sidePayload(side: InspectionSide) {
@@ -321,7 +326,10 @@ function rentalHasStoredFiles(rental: LocalRental) {
 }
 
 function sideSettled(side: InspectionSide) {
-  const photosReady = SPOTS.every((spot) => side.spots[spot.id].photos.every((photo) => photo.remoteUrl && !isStoredFile(photo.localUri)));
+  const photosReady = SPOTS.every((spot) => side.spots[spot.id].photos.every((photo) => {
+    if (!photo.localUri && !photo.remoteUrl) return true;
+    return !!photo.remoteUrl && !isStoredFile(photo.localUri);
+  }));
   return photosReady && !isStoredFile(side.videoUri);
 }
 

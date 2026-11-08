@@ -1,11 +1,14 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+import { readStoredBlob } from './media';
 
 // Uploads go through a Cloudflare Worker. The R2 key never lives in the app.
 
 const SIGNER = (process.env.EXPO_PUBLIC_R2_SIGNER ?? 'https://my-rental-fleet-media.colemarchant.workers.dev').replace(/\/$/, '');
 
 async function fileBody(localUri: string, contentType: string) {
+  const stored = await readStoredBlob(localUri).catch(() => null);
+  if (stored) return stored.type ? stored : new Blob([stored], { type: contentType });
   const response = await fetch(localUri).catch(() => null);
   if (!response?.ok) throw new Error('Could not read the saved photo.');
   const blob = await response.blob();

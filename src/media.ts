@@ -20,7 +20,38 @@ export function contentTypeFor(uri: string) {
 }
 
 export function isStoredFile(uri?: string) {
-  return !!uri && uri.includes('fleet-media/');
+  return !!uri && (uri.includes('fleet-media/') || uri.startsWith('idb:'));
+}
+
+function openMediaDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('fleet-media', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('files');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export async function readStoredBlob(uri?: string): Promise<Blob | null> {
+  if (!uri?.startsWith('idb:') || typeof indexedDB === 'undefined') return null;
+  const db = await openMediaDb();
+  return new Promise((resolve, reject) => {
+    const request = db.transaction('files', 'readonly').objectStore('files').get(uri.slice(4));
+    request.onsuccess = () => resolve((request.result as Blob | undefined) ?? null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function rememberBlob(blob: Blob) {
+  const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const db = await openMediaDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('files', 'readwrite');
+    tx.objectStore('files').put(blob, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  return `idb:${key}`;
 }
 
 export function useDisplayUri(localUri?: string, remoteUrl?: string) {
@@ -31,7 +62,25 @@ export function useDisplayUri(localUri?: string, remoteUrl?: string) {
     setRemoteFailed(false);
     let live = true;
     const stored = [localUri, remoteUrl].find((uri) => isStoredFile(uri));
-    if (Platform.OS === 'web' || !stored) {
+    if (!stored) {
+      setShown('');
+      return () => {
+        live = false;
+      };
+    }
+    if (stored.startsWith('idb:')) {
+      void readStoredBlob(stored)
+        .then((blob) => {
+          if (live && blob) setShown(URL.createObjectURL(blob));
+        })
+        .catch(() => {
+          if (live) setShown('');
+        });
+      return () => {
+        live = false;
+      };
+    }
+    if (Platform.OS === 'web') {
       setShown('');
       return () => {
         live = false;
@@ -67,6 +116,19 @@ function blobToDataUrl(blob: Blob) {
 
 /** Copy a picked photo or video into app storage so it survives a refresh and a lost signal. */
 export async function persistMedia(uri: string, fallbackExt: string) {
+  if (Platform.OS === 'web' && typeof indexedDB !== 'undefined') {
+    try {
+      if (uri.startsWith('data:')) {
+        const response = await fetch(uri);
+        return await rememberBlob(await response.blob());
+      }
+      const response = await fetch(uri);
+      if (!response.ok) return uri;
+      return await rememberBlob(await response.blob());
+    } catch {
+      return uri;
+    }
+  }
   const root = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
   if (!root) return uri;
   const dir = `${root}fleet-media/`;
@@ -90,6 +152,16 @@ export async function persistMedia(uri: string, fallbackExt: string) {
 }
 
 export async function deleteStoredFile(uri?: string) {
+  if (uri?.startsWith('idb:') && typeof indexedDB !== 'undefined') {
+    const db = await openMediaDb();
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction('files', 'readwrite');
+      tx.objectStore('files').delete(uri.slice(4));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+    return;
+  }
   if (!isStoredFile(uri) || !uri) return;
   await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
 }

@@ -152,13 +152,20 @@ function labelStatus(status: string) {
   return '—';
 }
 
-function HistoryPhoto({ photo, style, onOpen }: { photo: StampedPhoto; style: object; onOpen: (uri: string) => void }) {
+function HistoryPhoto({ photo, style, onOpen, empty }: { photo: StampedPhoto; style: object; onOpen: (uri: string) => void; empty: string }) {
   const display = useDisplayUri(photo.localUri, photo.remoteUrl);
-  if (!display.uri) return <View style={style} />;
+  if (!display.uri) {
+    if (!empty) return null;
+    return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
+  }
   return (
-    <Pressable onPress={() => onOpen(display.uri)}>
-      <Image source={{ uri: display.uri }} style={style} resizeMode="cover" onError={display.failRemote} />
-    </Pressable>
+    <View>
+      <Pressable onPress={() => onOpen(display.uri)}>
+        <Image source={{ uri: display.uri }} style={style} resizeMode="cover" onError={display.failRemote} />
+        <Text pointerEvents="none" style={styles.enlarge}>Enlarge</Text>
+      </Pressable>
+      {photo.addedAt ? <Text style={styles.photoStamp}>{formatStamp(photo.addedAt)}</Text> : null}
+    </View>
   );
 }
 
@@ -167,16 +174,13 @@ function PhotoStack({ photos, empty, onOpen }: { photos: StampedPhoto[]; empty: 
     return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
   }
   return (
-    <View style={styles.frame}>
-      <HistoryPhoto photo={photos[0]} style={styles.shot} onOpen={onOpen} />
-      <Text pointerEvents="none" style={styles.enlarge}>Enlarge</Text>
-      {photos[0].addedAt ? <Text style={styles.photoStamp}>{formatStamp(photos[0].addedAt)}</Text> : null}
+    <View style={styles.sideCol}>
+      <HistoryPhoto photo={photos[0]} style={styles.shot} onOpen={onOpen} empty={empty} />
       {photos.length > 1 ? (
         <View style={styles.extraRow}>
           {photos.slice(1).map((photo, index) => (
             <View key={`${photo.localUri ?? ''}-${photo.remoteUrl ?? ''}-${index}`}>
-              <HistoryPhoto photo={photo} style={styles.extra} onOpen={onOpen} />
-              {photo.addedAt ? <Text style={styles.extraStamp}>{formatStamp(photo.addedAt)}</Text> : null}
+              <HistoryPhoto photo={photo} style={styles.extra} onOpen={onOpen} empty="" />
             </View>
           ))}
         </View>
