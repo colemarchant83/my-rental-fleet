@@ -1,16 +1,23 @@
 import { Tabs } from 'expo-router';
 import { Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { RefreshButton } from '../../components/back-link';
 import { theme } from '../../theme';
 
 function PillLabel({ focused, children }: { focused: boolean; children: string }) {
   return (
-    <View style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, minWidth: 86 }}>
-      <Text style={{ color: focused ? theme.white : theme.muted, fontSize: 13, fontWeight: '700', textAlign: 'center' }}>{children}</Text>
+    <View style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 16, paddingHorizontal: 8, paddingVertical: 7 }}>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: focused ? theme.white : theme.muted, fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+        {children}
+      </Text>
     </View>
   );
 }
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  const bottom = Math.max(insets.bottom, 14);
+
   return (
     <Tabs
       screenOptions={{
@@ -18,8 +25,15 @@ export default function TabLayout() {
         headerTintColor: theme.text,
         headerShadowVisible: false,
         headerTitleStyle: { fontWeight: '700' },
+        headerRight: () => <RefreshButton />,
         tabBarIcon: () => null,
-        tabBarStyle: { backgroundColor: theme.bg, borderTopColor: theme.line, height: 78, paddingTop: 8 },
+        tabBarStyle: {
+          backgroundColor: theme.bg,
+          borderTopColor: theme.line,
+          height: 54 + bottom,
+          paddingTop: 6,
+          paddingBottom: bottom,
+        },
         sceneStyle: { backgroundColor: theme.bg },
       }}
     >

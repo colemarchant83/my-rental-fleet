@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
-import { BackLink } from '../components/back-link';
+import { BackLink, RefreshButton } from '../components/back-link';
 import { syncAll, watchConnection } from '../fleet-store';
 import { theme } from '../theme';
 
@@ -19,6 +19,7 @@ export default function RootLayout() {
         headerTintColor: theme.text,
         headerShadowVisible: false,
         headerTitleStyle: { fontWeight: '700' },
+        headerRight: () => <RefreshButton />,
         contentStyle: { backgroundColor: theme.bg },
       }}
     >
