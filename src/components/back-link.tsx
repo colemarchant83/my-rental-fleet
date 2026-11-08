@@ -11,7 +11,7 @@ export function goBack(router: { canGoBack: () => boolean; back: () => void; rep
 export function BackLink() {
   const router = useRouter();
   return (
-    <Pressable onPress={() => goBack(router)} hitSlop={10} style={{ marginLeft: 20 }}>
+    <Pressable onPress={() => goBack(router)} hitSlop={10}>
       <Text style={{ color: theme.accent, fontSize: 16, fontWeight: '700' }}>‹ Back</Text>
     </Pressable>
   );
@@ -21,7 +21,6 @@ export function RefreshButton() {
   return (
     <Pressable
       hitSlop={8}
-      style={{ marginRight: 20 }}
       onPress={() => {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           window.location.reload();
