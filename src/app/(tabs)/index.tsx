@@ -5,6 +5,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { isOutStatus, loadCovers, loadRentals, subscribeFleet, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri } from '../../media';
+import { theme } from '../../theme';
 
 type Vehicle = {
   id: string;

@@ -6,6 +6,7 @@ import { deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { formatDay, formatStamp, isOutStatus, loadCovers, loadRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri } from '../media';
+import { theme } from '../theme';
 
 type Vehicle = {
   id: string;
