@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { isOutStatus, loadCovers, loadRentals, subscribeFleet, type CoverPhoto, type LocalRental } from '../../fleet-store';
-import { theme } from '../../theme';
+import { useDisplayUri } from '../../media';
 
 type Vehicle = {
   id: string;
@@ -61,11 +61,10 @@ export default function VehicleListScreen() {
         const out = !!open || isOutStatus(vehicle.status);
         const renter = open?.renterName || vehicle.renterName;
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
-        const photo = cover?.localUri || cover?.remoteUrl || vehicle.photoUrl;
         const waiting = rentals.some((rental) => rental.vehicleId === vehicle.id && rental.sync !== 'synced');
         return (
           <Pressable key={vehicle.id} style={styles.card} onPress={() => router.push({ pathname: '/vehicle', params: { id: vehicle.id } })}>
-            {photo ? <Image source={{ uri: photo }} style={styles.photo} /> : null}
+            <CoverImage localUri={cover?.localUri} remoteUrl={cover?.remoteUrl || vehicle.photoUrl} />
             <View style={styles.cardBody}>
               <View style={styles.titleRow}>
                 <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
@@ -87,6 +86,12 @@ export default function VehicleListScreen() {
       })}
     </ScrollView>
   );
+}
+
+function CoverImage({ localUri, remoteUrl }: { localUri?: string; remoteUrl?: string }) {
+  const display = useDisplayUri(localUri, remoteUrl);
+  if (!display.uri) return null;
+  return <Image source={{ uri: display.uri }} style={styles.photo} onError={display.failRemote} />;
 }
 
 const styles = StyleSheet.create({

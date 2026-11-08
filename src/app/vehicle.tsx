@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { formatDay, formatStamp, isOutStatus, loadCovers, loadRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
-import { theme } from '../theme';
+import { useDisplayUri } from '../media';
 
 type Vehicle = {
   id: string;
@@ -58,7 +58,7 @@ export default function VehicleDetail() {
 
   const open = rentals.find((rental) => rental.status === 'out');
   const out = !!open || isOutStatus(vehicle?.status);
-  const photo = cover?.localUri || cover?.remoteUrl || vehicle?.photoUrl;
+  const display = useDisplayUri(cover?.localUri, cover?.remoteUrl || vehicle?.photoUrl);
 
   const setStatus = async (status: string) => {
     if (!id) return;
@@ -102,15 +102,15 @@ export default function VehicleDetail() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      {photo ? (
-        <Image source={{ uri: photo }} style={styles.photo} />
+      {display.uri ? (
+        <Image source={{ uri: display.uri }} style={styles.photo} onError={display.failRemote} />
       ) : (
         <View style={styles.placeholder}>
           <Text style={styles.muted}>No photo yet — add one so the crew can spot this machine at a glance.</Text>
         </View>
       )}
       <Pressable style={styles.ghost} onPress={() => void addCover()}>
-        <Text style={styles.ghostText}>{photo ? 'Change photo' : 'Add photo'}</Text>
+        <Text style={styles.ghostText}>{display.uri ? 'Change photo' : 'Add photo'}</Text>
       </Pressable>
       {cover?.addedAt || vehicle.photoAddedAt ? <Text style={styles.specs}>Photo added {formatStamp(cover?.addedAt || vehicle.photoAddedAt)}</Text> : null}
 
