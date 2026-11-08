@@ -3,6 +3,7 @@ import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View, type StyleP
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
+import { ZoomModal } from './zoom-modal';
 import { contentTypeFor } from '../media';
 import { theme } from '../theme';
 
@@ -26,6 +27,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const [dateOpen, setDateOpen] = useState(false);
   const [librarySpot, setLibrarySpot] = useState<SpotId | null>(null);
   const [photoChoice, setPhotoChoice] = useState<SpotId | null>(null);
+  const [zoom, setZoom] = useState<string | null>(null);
   const isOut = mode === 'checkout';
 
   const patch = (partial: Partial<InspectionSide>) => onChange({ ...side, ...partial });
@@ -133,7 +135,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
               <View style={styles.compare}>
                 <View style={styles.compareCol}>
                   <Text style={styles.compareLabel}>From checkout</Text>
-                  {checkoutPhoto ? <MediaImage uri={checkoutPhoto} style={styles.compareShot} /> : <View style={styles.compareFrame}><Text style={styles.blankText}>No checkout photo</Text></View>}
+                  {checkoutPhoto ? <MediaImage uri={checkoutPhoto} style={styles.compareShot} onOpen={setZoom} /> : <View style={styles.compareFrame}><Text style={styles.blankText}>No checkout photo</Text></View>}
                   {earlier.note ? <Text style={styles.compareNote}>{earlier.note}</Text> : null}
                   <Text style={styles.compareLabel}>{earlier.status === 'issue' ? 'Issue' : earlier.status === 'ok' ? 'OK' : '—'}</Text>
                 </View>
@@ -253,6 +255,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
           </View>
         </View>
       </Modal>
+      <ZoomModal uri={zoom} onClose={() => setZoom(null)} />
       <Modal visible={librarySpot !== null} transparent animationType="fade" onRequestClose={() => setLibrarySpot(null)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -286,7 +289,7 @@ function spotPhoto(photo?: { localUri?: string; remoteUrl?: string }) {
   return photo.localUri || '';
 }
 
-function MediaImage({ uri, style }: { uri: string; style: StyleProp<ImageStyle> }) {
+function MediaImage({ uri, style, onOpen }: { uri: string; style: StyleProp<ImageStyle>; onOpen?: (uri: string) => void }) {
   const [shown, setShown] = useState('');
   useEffect(() => {
     let live = true;
@@ -312,7 +315,14 @@ function MediaImage({ uri, style }: { uri: string; style: StyleProp<ImageStyle> 
     };
   }, [uri]);
   if (!shown) return <View style={style} />;
-  return <Image source={{ uri: shown }} style={style} resizeMode="cover" />;
+  const image = <Image source={{ uri: shown }} style={style} resizeMode="cover" />;
+  if (!onOpen) return image;
+  return (
+    <Pressable style={styles.zoomTap} onPress={() => onOpen(shown)}>
+      {image}
+      <Text style={styles.enlarge}>Enlarge</Text>
+    </Pressable>
+  );
 }
 
 function DateSheet({ value, onPick, onClose }: { value: string; onPick: (iso: string) => void; onClose: () => void }) {
@@ -380,6 +390,8 @@ const styles = StyleSheet.create({
   blank: { borderWidth: 1, borderStyle: 'dashed', borderColor: theme.accent, backgroundColor: theme.card },
   blankText: { color: theme.accent, fontWeight: '700', textAlign: 'center', padding: 12 },
   compareNote: { color: theme.text, fontSize: 13, marginTop: 6, lineHeight: 18 },
+  enlarge: { position: 'absolute', right: 6, bottom: 6, color: theme.white, backgroundColor: 'rgba(0,0,0,0.45)', overflow: 'hidden', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, fontSize: 11 },
+  zoomTap: { position: 'relative' },
   ghost: { borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 10, borderStyle: 'dashed' },
   ghostText: { color: theme.text, fontWeight: '600' },
   count: { color: theme.green, marginTop: 6, fontSize: 13 },
