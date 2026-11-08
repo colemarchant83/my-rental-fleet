@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
 import { theme } from '../theme';
@@ -22,6 +22,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const [fuelOpen, setFuelOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [librarySpot, setLibrarySpot] = useState<SpotId | null>(null);
+  const [photoChoice, setPhotoChoice] = useState<SpotId | null>(null);
   const isOut = mode === 'checkout';
 
   const patch = (partial: Partial<InspectionSide>) => onChange({ ...side, ...partial });
@@ -50,15 +51,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
 
   const choosePhotos = (spotId: SpotId) => {
     if (side.spots[spotId].photos.length >= 4) return;
-    if (Platform.OS === 'web') {
-      setLibrarySpot(spotId);
-      return;
-    }
-    Alert.alert('Add photos', 'Up to 4 photos for this spot.', [
-      { text: 'Take Photo', onPress: () => void addPhotos(spotId, true) },
-      { text: 'Photo Library', onPress: () => setLibrarySpot(spotId) },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+    setPhotoChoice(spotId);
   };
 
   const addVideo = async () => {
@@ -187,12 +180,42 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
           {saving ? 'Saving...' : isOut ? 'Save & send out on rent' : 'Save & mark returned'}
         </Text>
       </Pressable>
+      <Modal visible={photoChoice !== null} transparent animationType="fade" onRequestClose={() => setPhotoChoice(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.spotTitle}>Add photos</Text>
+            <Pressable
+              style={styles.save}
+              onPress={() => {
+                const spotId = photoChoice;
+                setPhotoChoice(null);
+                if (spotId) void addPhotos(spotId, true);
+              }}
+            >
+              <Text style={styles.saveText}>Take Photo</Text>
+            </Pressable>
+            <Pressable
+              style={styles.ghost}
+              onPress={() => {
+                const spotId = photoChoice;
+                setPhotoChoice(null);
+                if (spotId) setLibrarySpot(spotId);
+              }}
+            >
+              <Text style={styles.ghostText}>Photo Library or Files</Text>
+            </Pressable>
+            <Pressable style={styles.ghost} onPress={() => setPhotoChoice(null)}>
+              <Text style={styles.ghostText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={librarySpot !== null} transparent animationType="fade" onRequestClose={() => setLibrarySpot(null)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Photo library</Text>
             <Text style={styles.help}>
-              A photo from your library is stamped when you add it to this inspection, not when the camera first took it. Take Photo in the app if you want the time the picture was made.
+              A photo from your library or files is stamped when you add it to this inspection, not when the camera first took it. Take Photo if you want the time the picture was made.
             </Text>
             <Pressable
               style={styles.save}
