@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
@@ -19,11 +19,19 @@ export default function RentalHistory() {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const openedVehicle = useRef('');
 
   useEffect(() => {
     const refresh = async () => {
       if (params.localId) {
-        setRental((await rentalByLocalId(params.localId)) ?? null);
+        const found = await rentalByLocalId(params.localId);
+        if (!found) {
+          if (openedVehicle.current) router.replace({ pathname: '/vehicle', params: { id: openedVehicle.current } });
+          else setRental(null);
+          return;
+        }
+        openedVehicle.current = found.vehicleId;
+        setRental(found);
         return;
       }
       if (!params.id) return;
@@ -38,7 +46,7 @@ export default function RentalHistory() {
     };
     void refresh();
     return subscribeFleet(() => void refresh());
-  }, [params.localId, params.id]);
+  }, [params.localId, params.id, router]);
 
   if (!rental) {
     return <View style={styles.screen}><Text style={styles.muted}>Loading rental...</Text></View>;
@@ -117,7 +125,7 @@ export default function RentalHistory() {
                 setDeleting(true);
                 setDeleteError('');
                 void deleteRental(rental)
-                  .then(() => router.back())
+                  .then(() => router.replace({ pathname: '/vehicle', params: { id: rental.vehicleId } }))
                   .catch((error: unknown) => {
                     setDeleting(false);
                     setDeleteError(error instanceof Error ? error.message : 'Could not delete the stored photo.');
