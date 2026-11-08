@@ -117,21 +117,38 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       </View>
 
       <Text style={styles.section}>Walk-around checklist</Text>
-      {checkout?.notes ? <Text style={styles.compareNote}>Checkout notes: {checkout.notes}</Text> : null}
-      <Text style={styles.help}>{checkout ? 'Checkout stays on the left. Tap the empty spot on the right to add the return photo and note.' : 'Each spot can hold up to 4 photos, so damage can be caught from more than one angle.'}</Text>
+      {checkout ? (
+        <View>
+          <Text style={styles.compareLabel}>From checkout</Text>
+          <View style={styles.checkoutStrip}>
+            {SPOTS.map((spot) => {
+              const photo = spotPhoto(checkout.spots[spot.id].photos[0]);
+              if (!photo && !checkout.spots[spot.id].note) return null;
+              return (
+                <View key={spot.id} style={styles.stripItem}>
+                  {photo ? <Image source={{ uri: photo }} style={styles.stripShot} /> : <View style={styles.stripShot} />}
+                  <Text style={styles.compareLabel}>{spot.label}</Text>
+                </View>
+              );
+            })}
+          </View>
+          {checkout.notes ? <Text style={styles.compareNote}>Checkout notes: {checkout.notes}</Text> : null}
+        </View>
+      ) : null}
+      <Text style={styles.help}>{checkout ? 'The checkout thumbnail stays on the left. Tap the empty spot on the right to add the return.' : 'Each spot can hold up to 4 photos, so damage can be caught from more than one angle.'}</Text>
 
       {SPOTS.map((spot) => {
         const record = side.spots[spot.id];
         const earlier = checkout?.spots[spot.id];
         if (earlier) {
-          const checkoutPhoto = earlier.photos[0]?.localUri || earlier.photos[0]?.remoteUrl;
+          const checkoutPhoto = spotPhoto(earlier.photos[0]);
           return (
             <View key={spot.id} style={styles.spot}>
               <Text style={styles.spotTitle}>{spot.label}</Text>
               <View style={styles.compare}>
                 <View style={styles.compareCol}>
-                  <Text style={styles.compareLabel}>Checkout</Text>
-                  {checkoutPhoto ? <Image source={{ uri: checkoutPhoto }} style={styles.compareShot} /> : <View style={styles.compareFrame}><Text style={styles.blankText}>No photo</Text></View>}
+                  <Text style={styles.compareLabel}>From checkout</Text>
+                  {checkoutPhoto ? <Image source={{ uri: checkoutPhoto }} style={styles.compareShot} /> : <View style={styles.compareFrame}><Text style={styles.blankText}>No checkout photo</Text></View>}
                   {earlier.note ? <Text style={styles.compareNote}>{earlier.note}</Text> : null}
                   <Text style={styles.compareLabel}>{earlier.status === 'issue' ? 'Issue' : earlier.status === 'ok' ? 'OK' : '—'}</Text>
                 </View>
@@ -278,6 +295,11 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   );
 }
 
+function spotPhoto(photo?: { localUri?: string; remoteUrl?: string }) {
+  if (!photo) return '';
+  return photo.localUri || photo.remoteUrl || '';
+}
+
 function DateSheet({ value, onPick, onClose }: { value: string; onPick: (iso: string) => void; onClose: () => void }) {
   const [year, month] = value.split('-').map(Number);
   const [cursor, setCursor] = useState({ year: year || 2026, month: month || 1 });
@@ -335,14 +357,17 @@ const styles = StyleSheet.create({
   choiceTextOn: { color: theme.white },
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   thumb: { width: 92, height: 92, borderRadius: 10, backgroundColor: theme.input },
-  compare: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  compareCol: { flex: 1 },
+  compare: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'flex-start' },
+  compareCol: { flex: 1, minWidth: 0 },
   compareLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', marginBottom: 4 },
-  compareShot: { width: '100%', height: 120, borderRadius: 12, backgroundColor: theme.input },
-  compareFrame: { minHeight: 120, borderRadius: 12, backgroundColor: theme.input, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  compareShot: { width: '100%', height: 150, borderRadius: 12, backgroundColor: theme.input },
+  compareFrame: { width: '100%', minHeight: 150, borderRadius: 12, backgroundColor: theme.input, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   blank: { borderWidth: 1, borderStyle: 'dashed', borderColor: theme.accent, backgroundColor: theme.card },
   blankText: { color: theme.accent, fontWeight: '700', textAlign: 'center', padding: 12 },
   compareNote: { color: theme.text, fontSize: 13, marginTop: 6, lineHeight: 18 },
+  checkoutStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  stripItem: { width: 104 },
+  stripShot: { width: 104, height: 104, borderRadius: 12, backgroundColor: theme.input },
   ghost: { borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 10, borderStyle: 'dashed' },
   ghostText: { color: theme.text, fontWeight: '600' },
   count: { color: theme.green, marginTop: 6, fontSize: 13 },
