@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ZoomModal } from '../components/zoom-modal';
-import { SPOTS, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
+import { SPOTS, deleteRental, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
 import { theme } from '../theme';
 
 type RemotePhoto = string | { url?: string; addedAt?: string };
@@ -12,8 +12,11 @@ type RemoteSpot = { status?: string; note?: string; notedAt?: string; photos?: R
 
 export default function RentalHistory() {
   const params = useLocalSearchParams<{ localId?: string; id?: string }>();
+  const router = useRouter();
   const [rental, setRental] = useState<LocalRental | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const refresh = async () => {
@@ -82,6 +85,32 @@ export default function RentalHistory() {
       {rental.checkin?.videoUri || rental.checkin?.videoUrl ? <Text style={styles.stampLine}>Return video added {formatStamp(rental.checkin.videoAddedAt)}</Text> : null}
       {rental.checkout.notes ? <Text style={styles.notes}>Checkout notes · {formatStamp(rental.checkout.notesAt)}{'\n'}{rental.checkout.notes}</Text> : null}
       {rental.checkin?.notes ? <Text style={styles.notes}>Return notes · {formatStamp(rental.checkin.notesAt)}{'\n'}{rental.checkin.notes}</Text> : null}
+      <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
+        <Text style={styles.deleteText}>Delete this rental</Text>
+      </Pressable>
+      <Modal visible={confirming} transparent animationType="fade" onRequestClose={() => setConfirming(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.spotTitle}>Delete this rental?</Text>
+            <Text style={styles.help}>
+              This removes {rental.renterName || 'this renter'}'s card from {formatDay(rental.checkout.date)}. The photos on this card go with it. This cannot be undone.
+            </Text>
+            <Pressable
+              style={styles.delete}
+              disabled={deleting}
+              onPress={() => {
+                setDeleting(true);
+                void deleteRental(rental).then(() => router.back());
+              }}
+            >
+              <Text style={styles.deleteText}>{deleting ? 'Deleting...' : 'Delete rental'}</Text>
+            </Pressable>
+            <Pressable style={styles.cancel} onPress={() => setConfirming(false)} disabled={deleting}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <ZoomModal uri={zoom} onClose={() => setZoom(null)} />
     </ScrollView>
   );
@@ -214,4 +243,11 @@ const styles = StyleSheet.create({
   photoStamp: { color: theme.muted, fontSize: 10, paddingHorizontal: 6, paddingBottom: 4 },
   extraStamp: { color: theme.muted, fontSize: 8, width: 42 },
   noteLine: { color: theme.text, marginTop: 6, fontSize: 13, lineHeight: 18 },
+  delete: { marginTop: 22, backgroundColor: theme.danger, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  deleteText: { color: theme.white, fontWeight: '800' },
+  cancel: { marginTop: 8, paddingVertical: 10, alignItems: 'center' },
+  cancelText: { color: theme.text, fontWeight: '700' },
+  help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.45)', justifyContent: 'center', padding: 24 },
+  modalCard: { backgroundColor: theme.card, borderRadius: 16, padding: 18 },
 });

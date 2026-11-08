@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import { addDoc, collection, deleteField, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, deleteField, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { contentTypeFor, deleteStoredFile, isStoredFile, persistMedia, remoteMediaLoads } from './media';
 import { uploadFile } from './r2';
@@ -177,6 +177,34 @@ export async function openRentalFor(vehicleId: string) {
 export async function rentalByLocalId(localId: string) {
   const rentals = await loadRentals();
   return rentals.find((rental) => rental.localId === localId);
+}
+
+async function discardSideFiles(side?: InspectionSide) {
+  if (!side) return;
+  for (const spot of SPOTS) {
+    for (const photo of side.spots[spot.id].photos) {
+      await deleteStoredFile(photo.localUri);
+    }
+  }
+  await deleteStoredFile(side.videoUri);
+}
+
+export async function deleteRental(target: LocalRental) {
+  const rentals = await loadRentals();
+  await discardSideFiles(target.checkout);
+  await discardSideFiles(target.checkin);
+  if (target.remoteId) {
+    await deleteDoc(doc(db, 'rentals', target.remoteId)).catch(() => undefined);
+  }
+  const remaining = rentals.filter((rental) => rental.localId !== target.localId);
+  await saveRentals(remaining);
+  const stillOut = remaining.some((rental) => rental.vehicleId === target.vehicleId && rental.status === 'out');
+  if (target.status === 'out' && !stillOut) {
+    await updateDoc(doc(db, 'vehicles', target.vehicleId), {
+      status: 'Available',
+      renterName: deleteField(),
+    }).catch(() => undefined);
+  }
 }
 
 export async function saveCheckout(vehicleId: string, renterName: string, checkout: InspectionSide) {
