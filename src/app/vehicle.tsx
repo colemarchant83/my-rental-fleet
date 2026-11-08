@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { BackLink } from '../components/back-link';
 import { formatDay, formatStamp, isOutStatus, loadCovers, loadRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { theme } from '../theme';
 
@@ -103,7 +102,6 @@ export default function VehicleDetail() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <BackLink />
       {photo ? (
         <Image source={{ uri: photo }} style={styles.photo} />
       ) : (

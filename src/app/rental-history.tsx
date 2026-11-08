@@ -3,7 +3,6 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useLocalSearchParams } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { BackLink } from '../components/back-link';
 import { ZoomModal } from '../components/zoom-modal';
 import { SPOTS, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
 import { theme } from '../theme';
@@ -42,7 +41,6 @@ export default function RentalHistory() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <BackLink />
       <View style={styles.titleRow}>
         <Text style={styles.renter}>{rental.renterName || 'Renter'}</Text>
         <View style={styles.pill}><Text style={styles.pillText}>{rental.status === 'closed' ? 'Closed' : 'Out'}</Text></View>

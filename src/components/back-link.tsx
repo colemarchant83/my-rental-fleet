@@ -29,7 +29,7 @@ export function RefreshButton() {
         void syncAll();
       }}
     >
-      <Text style={{ color: theme.accent, fontSize: 16, fontWeight: '700' }}>Refresh</Text>
+      <Text style={{ color: theme.accent, fontSize: 16, fontWeight: '700', paddingRight: 16 }}>Refresh</Text>
     </Pressable>
   );
 }

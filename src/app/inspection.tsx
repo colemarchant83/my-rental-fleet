@@ -3,7 +3,6 @@ import { ScrollView, StyleSheet, Text } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { BackLink } from '../components/back-link';
 import { InspectionForm, freshInspection } from '../components/inspection-form';
 import { emptySide, openRentalFor, saveCheckin, saveCheckout, type InspectionSide } from '../fleet-store';
 import { theme } from '../theme';
@@ -67,7 +66,6 @@ export default function InspectionScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <BackLink />
       <Text style={styles.heading}>{mode === 'checkout' ? 'Pre-rental inspection' : 'Return inspection'}</Text>
       {nickname ? <Text style={styles.machine}>{nickname}</Text> : null}
       <InspectionForm
