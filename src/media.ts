@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image, Platform } from 'react-native';
 
@@ -20,6 +21,39 @@ export function contentTypeFor(uri: string) {
 
 export function isStoredFile(uri?: string) {
   return !!uri && uri.includes('fleet-media/');
+}
+
+export function useDisplayUri(localUri?: string, remoteUrl?: string) {
+  const [shown, setShown] = useState('');
+  const [remoteFailed, setRemoteFailed] = useState(false);
+
+  useEffect(() => {
+    setRemoteFailed(false);
+    let live = true;
+    const stored = [localUri, remoteUrl].find((uri) => isStoredFile(uri));
+    if (!stored) {
+      setShown('');
+      return () => {
+        live = false;
+      };
+    }
+    void FileSystem.readAsStringAsync(stored, { encoding: FileSystem.EncodingType.Base64 })
+      .then((base64) => {
+        if (live && base64) setShown(`data:${contentTypeFor(stored)};base64,${base64}`);
+      })
+      .catch(() => {
+        if (live) setShown('');
+      });
+    return () => {
+      live = false;
+    };
+  }, [localUri, remoteUrl]);
+
+  const direct = [remoteUrl, localUri].find((uri) => !!uri && (uri.startsWith('http') || uri.startsWith('blob:') || uri.startsWith('data:')));
+  return {
+    uri: !remoteFailed && direct ? direct : shown,
+    failRemote: () => setRemoteFailed(true),
+  };
 }
 
 function blobToDataUrl(blob: Blob) {

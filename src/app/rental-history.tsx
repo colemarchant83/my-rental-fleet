@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ZoomModal } from '../components/zoom-modal';
+import { useDisplayUri } from '../media';
 import { SPOTS, deleteRental, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
 import { theme } from '../theme';
 
@@ -124,12 +125,12 @@ export default function RentalHistory() {
   );
 }
 
-type StampedPhoto = { uri: string; addedAt?: string };
+type StampedPhoto = { localUri?: string; remoteUrl?: string; addedAt?: string };
 
 function photosOf(side: InspectionSide, spotId: (typeof SPOTS)[number]['id']): StampedPhoto[] {
   return side.spots[spotId].photos
-    .map((photo) => ({ uri: photo.localUri || photo.remoteUrl || '', addedAt: photo.addedAt }))
-    .filter((photo) => photo.uri);
+    .map((photo) => ({ localUri: photo.localUri, remoteUrl: photo.remoteUrl, addedAt: photo.addedAt }))
+    .filter((photo) => photo.localUri || photo.remoteUrl);
 }
 
 function labelStatus(status: string) {
@@ -138,24 +139,32 @@ function labelStatus(status: string) {
   return '—';
 }
 
+function HistoryPhoto({ photo, style, onOpen }: { photo: StampedPhoto; style: object; onOpen: (uri: string) => void }) {
+  const display = useDisplayUri(photo.localUri, photo.remoteUrl);
+  if (!display.uri) return <View style={style} />;
+  return (
+    <Pressable onPress={() => onOpen(display.uri)}>
+      <Image source={{ uri: display.uri }} style={style} resizeMode="cover" onError={display.failRemote} />
+    </Pressable>
+  );
+}
+
 function PhotoStack({ photos, empty, onOpen }: { photos: StampedPhoto[]; empty: string; onOpen: (uri: string) => void }) {
   if (!photos.length) {
     return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
   }
   return (
     <View style={styles.frame}>
-      <Pressable onPress={() => onOpen(photos[0].uri)}>
-        <Image source={{ uri: photos[0].uri }} style={styles.shot} />
-        <Text style={styles.enlarge}>Enlarge</Text>
-      </Pressable>
+      <HistoryPhoto photo={photos[0]} style={styles.shot} onOpen={onOpen} />
+      <Text pointerEvents="none" style={styles.enlarge}>Enlarge</Text>
       {photos[0].addedAt ? <Text style={styles.photoStamp}>{formatStamp(photos[0].addedAt)}</Text> : null}
       {photos.length > 1 ? (
         <View style={styles.extraRow}>
-          {photos.slice(1).map((photo) => (
-            <Pressable key={photo.uri} onPress={() => onOpen(photo.uri)}>
-              <Image source={{ uri: photo.uri }} style={styles.extra} />
+          {photos.slice(1).map((photo, index) => (
+            <View key={`${photo.localUri ?? ''}-${photo.remoteUrl ?? ''}-${index}`}>
+              <HistoryPhoto photo={photo} style={styles.extra} onOpen={onOpen} />
               {photo.addedAt ? <Text style={styles.extraStamp}>{formatStamp(photo.addedAt)}</Text> : null}
-            </Pressable>
+            </View>
           ))}
         </View>
       ) : null}
