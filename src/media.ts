@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { Image, Platform } from 'react-native';
 
 function extension(uri: string, fallback: string) {
   const clean = uri.split('?')[0]?.toLowerCase() ?? '';
@@ -15,6 +16,10 @@ export function contentTypeFor(uri: string) {
   if (ext === 'webp') return 'image/webp';
   if (ext === 'mp4' || ext === 'mov') return 'video/mp4';
   return 'image/jpeg';
+}
+
+export function isStoredFile(uri?: string) {
+  return !!uri && uri.includes('fleet-media/');
 }
 
 function blobToDataUrl(blob: Blob) {
@@ -48,4 +53,38 @@ export async function persistMedia(uri: string, fallbackExt: string) {
       return uri;
     }
   }
+}
+
+export async function deleteStoredFile(uri?: string) {
+  if (!isStoredFile(uri) || !uri) return;
+  await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+}
+
+/** True only when the uploaded file can actually be opened. A private link does not count. */
+export function remoteMediaLoads(url: string, kind: 'image' | 'video') {
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), 8000);
+      const done = (ok: boolean) => {
+        clearTimeout(timer);
+        resolve(ok);
+      };
+      if (kind === 'video') {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.onloadeddata = () => done(true);
+        video.onerror = () => done(false);
+        video.src = url;
+        return;
+      }
+      const img = new window.Image();
+      img.onload = () => done(true);
+      img.onerror = () => done(false);
+      img.src = url;
+    });
+  }
+  if (kind === 'image') {
+    return Image.prefetch(url).then((ok) => ok !== false).catch(() => false);
+  }
+  return fetch(url, { method: 'HEAD' }).then((res) => res.ok).catch(() => false);
 }

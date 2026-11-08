@@ -57,7 +57,7 @@ export default function VehicleDetail() {
 
   const open = rentals.find((rental) => rental.status === 'out');
   const out = !!open || isOutStatus(vehicle?.status);
-  const photo = cover?.localUri || vehicle?.photoUrl;
+  const photo = cover?.localUri || cover?.remoteUrl || vehicle?.photoUrl;
 
   const setStatus = async (status: string) => {
     if (!id) return;

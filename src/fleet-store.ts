@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { addDoc, collection, deleteField, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { contentTypeFor, persistMedia } from './media';
+import { contentTypeFor, deleteStoredFile, isStoredFile, persistMedia, remoteMediaLoads } from './media';
 import { uploadFile } from './r2';
 
 export const SPOTS = [
@@ -238,9 +238,38 @@ function sidePayload(side: InspectionSide) {
   };
 }
 
-function photosUploaded(side: InspectionSide) {
-  const photosReady = SPOTS.every((spot) => side.spots[spot.id].photos.every((photo) => photo.remoteUrl));
-  return photosReady && (!side.videoUri || !!side.videoUrl);
+function rentalHasStoredFiles(rental: LocalRental) {
+  const sides = [rental.checkout, rental.checkin].filter((side): side is InspectionSide => !!side);
+  return sides.some(
+    (side) => isStoredFile(side.videoUri) || SPOTS.some((spot) => side.spots[spot.id].photos.some((photo) => isStoredFile(photo.localUri)))
+  );
+}
+
+function sideSettled(side: InspectionSide) {
+  const photosReady = SPOTS.every((spot) => side.spots[spot.id].photos.every((photo) => photo.remoteUrl && !isStoredFile(photo.localUri)));
+  return photosReady && !isStoredFile(side.videoUri);
+}
+
+async function releaseSide(side: InspectionSide): Promise<InspectionSide> {
+  const spots = {} as Record<SpotId, SpotRecord>;
+  for (const spot of SPOTS) {
+    const photos: PhotoRef[] = [];
+    for (const photo of side.spots[spot.id].photos) {
+      if (photo.remoteUrl && isStoredFile(photo.localUri) && (await remoteMediaLoads(photo.remoteUrl, 'image'))) {
+        await deleteStoredFile(photo.localUri);
+        photos.push({ ...photo, localUri: '' });
+        continue;
+      }
+      photos.push(photo);
+    }
+    spots[spot.id] = { ...side.spots[spot.id], photos };
+  }
+  let videoUri = side.videoUri;
+  if (side.videoUrl && isStoredFile(videoUri) && (await remoteMediaLoads(side.videoUrl, 'video'))) {
+    await deleteStoredFile(videoUri);
+    videoUri = undefined;
+  }
+  return { ...side, spots, videoUri };
 }
 
 async function pushRental(rental: LocalRental) {
@@ -271,12 +300,14 @@ async function pushRental(rental: LocalRental) {
     renterName: rental.status === 'closed' ? deleteField() : rental.renterName,
   });
 
-  const ready = photosUploaded(checkout) && (!checkin || photosUploaded(checkin));
+  const storedCheckout = await releaseSide(checkout);
+  const storedCheckin = checkin ? await releaseSide(checkin) : undefined;
+  const ready = sideSettled(storedCheckout) && (!storedCheckin || sideSettled(storedCheckin));
   const rentals = await loadRentals();
   await saveRentals(
     rentals.map((item) =>
       item.localId === rental.localId
-        ? { ...item, checkout, checkin, remoteId, sync: ready ? 'synced' : 'pending', syncError: undefined }
+        ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, sync: ready ? 'synced' : 'pending', syncError: undefined }
         : item
     )
   );
@@ -286,16 +317,18 @@ async function pushCovers() {
   const covers = await loadCovers();
   const next: CoverPhoto[] = [];
   for (const cover of covers) {
-    if (cover.sync === 'synced' && cover.remoteUrl) {
-      next.push(cover);
-      continue;
-    }
     try {
       const remoteUrl = cover.remoteUrl ?? (await uploadFile(cover.localUri, `vehicles/${cover.vehicleId}/cover.jpg`, contentTypeFor(cover.localUri)));
-      await updateDoc(doc(db, 'vehicles', cover.vehicleId), { photoUrl: remoteUrl });
-      next.push({ ...cover, remoteUrl, sync: 'synced' });
+      if (!cover.remoteUrl) {
+        await updateDoc(doc(db, 'vehicles', cover.vehicleId), { photoUrl: remoteUrl });
+      }
+      if (await remoteMediaLoads(remoteUrl, 'image')) {
+        await deleteStoredFile(cover.localUri);
+        continue;
+      }
+      next.push({ ...cover, remoteUrl, sync: 'pending' });
     } catch {
-      next.push({ ...cover, sync: 'error' });
+      next.push({ ...cover, sync: cover.remoteUrl ? 'pending' : 'error' });
     }
   }
   await saveCovers(next);
@@ -318,7 +351,7 @@ export async function syncAll() {
       await pushCovers();
       const rentals = await loadRentals();
       for (const rental of rentals) {
-        if (rental.sync === 'synced') continue;
+        if (rental.sync === 'synced' && !rentalHasStoredFiles(rental)) continue;
         try {
           await pushRental(rental);
         } catch (error) {

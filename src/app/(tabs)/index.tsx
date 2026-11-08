@@ -61,7 +61,7 @@ export default function VehicleListScreen() {
         const out = !!open || isOutStatus(vehicle.status);
         const renter = open?.renterName || vehicle.renterName;
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
-        const photo = cover?.localUri || vehicle.photoUrl;
+        const photo = cover?.localUri || cover?.remoteUrl || vehicle.photoUrl;
         const waiting = rentals.some((rental) => rental.vehicleId === vehicle.id && rental.sync !== 'synced');
         return (
           <Pressable key={vehicle.id} style={styles.card} onPress={() => router.push({ pathname: '/vehicle', params: { id: vehicle.id } })}>
