@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ImageStyle } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
+import { contentTypeFor } from '../media';
 import { theme } from '../theme';
 
 const FUEL = ['Not recorded', 'Empty', '1/4 tank', '1/2 tank', '3/4 tank', 'Full'];
@@ -117,25 +119,8 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       </View>
 
       <Text style={styles.section}>Walk-around checklist</Text>
-      {checkout ? (
-        <View>
-          <Text style={styles.compareLabel}>From checkout</Text>
-          <View style={styles.checkoutStrip}>
-            {SPOTS.map((spot) => {
-              const photo = spotPhoto(checkout.spots[spot.id].photos[0]);
-              if (!photo && !checkout.spots[spot.id].note) return null;
-              return (
-                <View key={spot.id} style={styles.stripItem}>
-                  {photo ? <Image source={{ uri: photo }} style={styles.stripShot} /> : <View style={styles.stripShot} />}
-                  <Text style={styles.compareLabel}>{spot.label}</Text>
-                </View>
-              );
-            })}
-          </View>
-          {checkout.notes ? <Text style={styles.compareNote}>Checkout notes: {checkout.notes}</Text> : null}
-        </View>
-      ) : null}
-      <Text style={styles.help}>{checkout ? 'The checkout thumbnail stays on the left. Tap the empty spot on the right to add the return.' : 'Each spot can hold up to 4 photos, so damage can be caught from more than one angle.'}</Text>
+      {checkout?.notes ? <Text style={styles.compareNote}>Checkout notes: {checkout.notes}</Text> : null}
+      {!checkout ? <Text style={styles.help}>Each spot can hold up to 4 photos, so damage can be caught from more than one angle.</Text> : null}
 
       {SPOTS.map((spot) => {
         const record = side.spots[spot.id];
@@ -148,14 +133,14 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
               <View style={styles.compare}>
                 <View style={styles.compareCol}>
                   <Text style={styles.compareLabel}>From checkout</Text>
-                  {checkoutPhoto ? <Image source={{ uri: checkoutPhoto }} style={styles.compareShot} /> : <View style={styles.compareFrame}><Text style={styles.blankText}>No checkout photo</Text></View>}
+                  {checkoutPhoto ? <MediaImage uri={checkoutPhoto} style={styles.compareShot} /> : <View style={styles.compareFrame}><Text style={styles.blankText}>No checkout photo</Text></View>}
                   {earlier.note ? <Text style={styles.compareNote}>{earlier.note}</Text> : null}
                   <Text style={styles.compareLabel}>{earlier.status === 'issue' ? 'Issue' : earlier.status === 'ok' ? 'OK' : '—'}</Text>
                 </View>
                 <View style={styles.compareCol}>
                   <Text style={styles.compareLabel}>Return</Text>
                   <Pressable style={[styles.compareFrame, styles.blank]} onPress={() => choosePhotos(spot.id)}>
-                    {record.photos[0] ? <Image source={{ uri: record.photos[0].localUri }} style={styles.compareShot} /> : <Text style={styles.blankText}>Tap to add return</Text>}
+                    {record.photos[0] ? <MediaImage uri={record.photos[0].localUri || record.photos[0].remoteUrl || ''} style={styles.compareShot} /> : <Text style={styles.blankText}>Tap to add return</Text>}
                   </Pressable>
                   {record.photos.length > 1 ? <Text style={styles.count}>{record.photos.length} photos</Text> : null}
                   <TextInput
@@ -297,7 +282,37 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
 
 function spotPhoto(photo?: { localUri?: string; remoteUrl?: string }) {
   if (!photo) return '';
-  return photo.localUri || photo.remoteUrl || '';
+  if (photo.remoteUrl) return photo.remoteUrl;
+  return photo.localUri || '';
+}
+
+function MediaImage({ uri, style }: { uri: string; style: StyleProp<ImageStyle> }) {
+  const [shown, setShown] = useState('');
+  useEffect(() => {
+    let live = true;
+    const load = async () => {
+      if (!uri) {
+        setShown('');
+        return;
+      }
+      if (uri.startsWith('http') || uri.startsWith('blob:') || uri.startsWith('data:')) {
+        setShown(uri);
+        return;
+      }
+      try {
+        const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+        if (live) setShown(`data:${contentTypeFor(uri)};base64,${base64}`);
+      } catch {
+        if (live) setShown('');
+      }
+    };
+    void load();
+    return () => {
+      live = false;
+    };
+  }, [uri]);
+  if (!shown) return <View style={style} />;
+  return <Image source={{ uri: shown }} style={style} resizeMode="cover" />;
 }
 
 function DateSheet({ value, onPick, onClose }: { value: string; onPick: (iso: string) => void; onClose: () => void }) {
@@ -365,9 +380,6 @@ const styles = StyleSheet.create({
   blank: { borderWidth: 1, borderStyle: 'dashed', borderColor: theme.accent, backgroundColor: theme.card },
   blankText: { color: theme.accent, fontWeight: '700', textAlign: 'center', padding: 12 },
   compareNote: { color: theme.text, fontSize: 13, marginTop: 6, lineHeight: 18 },
-  checkoutStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  stripItem: { width: 104 },
-  stripShot: { width: 104, height: 104, borderRadius: 12, backgroundColor: theme.input },
   ghost: { borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 10, borderStyle: 'dashed' },
   ghostText: { color: theme.text, fontWeight: '600' },
   count: { color: theme.green, marginTop: 6, fontSize: 13 },
