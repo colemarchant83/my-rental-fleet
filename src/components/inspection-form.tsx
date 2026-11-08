@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ImageStyle } from 'react-native';
+import { createElement, useEffect, useState } from 'react';
+import { Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ImageStyle } from 'react-native';
+import { Video, ResizeMode } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import { SPOTS, emptySide, formatDay, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
+import { SPOTS, emptySide, formatDay, formatStamp, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
 import { ZoomModal } from './zoom-modal';
 import { contentTypeFor, readStoredBlob } from '../media';
 import { theme } from '../theme';
@@ -218,7 +219,8 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       <Pressable style={styles.ghost} onPress={() => void addVideo()}>
         <Text style={styles.ghostText}>{side.videoUri ? 'Replace walk-around video' : 'Add walk-around video'}</Text>
       </Pressable>
-      {side.videoUri ? <Text style={styles.count}>Video saved on this phone</Text> : null}
+      {side.videoUri ? <VideoPreview uri={side.videoUri} /> : null}
+      {side.videoUri && side.videoAddedAt ? <Text style={styles.count}>Recorded {formatStamp(side.videoAddedAt)}</Text> : null}
 
       <Text style={styles.label}>Overall notes (optional)</Text>
       <TextInput
@@ -294,6 +296,56 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       </Modal>
     </View>
   );
+}
+
+export function VideoPreview({ uri }: { uri?: string }) {
+  const [src, setSrc] = useState('');
+  useEffect(() => {
+    let live = true;
+    let objectUrl = '';
+    const load = async () => {
+      if (!uri) {
+        setSrc('');
+        return;
+      }
+      if (uri.startsWith('http') || uri.startsWith('blob:') || uri.startsWith('data:')) {
+        setSrc(uri);
+        return;
+      }
+      if (uri.startsWith('idb:')) {
+        const blob = await readStoredBlob(uri).catch(() => null);
+        if (!live || !blob) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+        return;
+      }
+      setSrc(uri);
+    };
+    void load();
+    return () => {
+      live = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [uri]);
+  if (!src) return <View style={styles.videoFrame} />;
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.videoFrame}>
+        {createElement('video', {
+          src,
+          controls: true,
+          playsInline: true,
+          preload: 'metadata',
+          style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#1c1917' },
+          onLoadedMetadata: (event: Event) => {
+            const el = event.currentTarget as HTMLVideoElement;
+            if (el.currentTime < 0.1) el.currentTime = 0.1;
+          },
+        })}
+      </View>
+    );
+  }
+  return <Video source={{ uri: src }} style={styles.videoFrame} useNativeControls resizeMode={ResizeMode.COVER} />;
 }
 
 function spotPhoto(photo?: { localUri?: string; remoteUrl?: string }) {
@@ -417,6 +469,7 @@ const styles = StyleSheet.create({
   ghost: { borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 10, borderStyle: 'dashed' },
   ghostText: { color: theme.text, fontWeight: '600' },
   count: { color: theme.green, marginTop: 6, fontSize: 13 },
+  videoFrame: { marginTop: 10, height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1c1917' },
   remove: { color: theme.danger, fontSize: 13, marginTop: 4 },
   error: { color: theme.danger, marginTop: 14, fontWeight: '600' },
   save: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 18 },

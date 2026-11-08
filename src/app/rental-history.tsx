@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ZoomModal } from '../components/zoom-modal';
+import { VideoPreview } from '../components/inspection-form';
 import { useDisplayUri } from '../media';
 import { SPOTS, deleteRental, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
 import { theme } from '../theme';
@@ -104,8 +105,18 @@ export default function RentalHistory() {
         );
       })}
 
-      {rental.checkout.videoUri || rental.checkout.videoUrl ? <Text style={styles.stampLine}>Checkout video added {formatStamp(rental.checkout.videoAddedAt)}</Text> : null}
-      {rental.checkin?.videoUri || rental.checkin?.videoUrl ? <Text style={styles.stampLine}>Return video added {formatStamp(rental.checkin.videoAddedAt)}</Text> : null}
+      {rental.checkout.videoUri || rental.checkout.videoUrl ? (
+        <View>
+          <Text style={styles.stampLine}>Checkout video · {formatStamp(rental.checkout.videoAddedAt)}</Text>
+          <VideoPreview uri={rental.checkout.videoUrl || rental.checkout.videoUri} />
+        </View>
+      ) : null}
+      {rental.checkin?.videoUri || rental.checkin?.videoUrl ? (
+        <View>
+          <Text style={styles.stampLine}>Return video · {formatStamp(rental.checkin.videoAddedAt)}</Text>
+          <VideoPreview uri={rental.checkin.videoUrl || rental.checkin.videoUri} />
+        </View>
+      ) : null}
       {rental.checkout.notes ? <Text style={styles.notes}>Checkout notes · {formatStamp(rental.checkout.notesAt)}{'\n'}{rental.checkout.notes}</Text> : null}
       {rental.checkin?.notes ? <Text style={styles.notes}>Return notes · {formatStamp(rental.checkin.notesAt)}{'\n'}{rental.checkin.notes}</Text> : null}
       <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
