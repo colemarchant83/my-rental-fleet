@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -54,19 +54,26 @@ export default function InspectionScreen() {
     setSaving(true);
     setError('');
     try {
+      const openCard = (localId: string) => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.location.assign(`/rental-history?localId=${encodeURIComponent(localId)}`);
+          return;
+        }
+        router.replace({ pathname: '/rental-history', params: { localId } });
+      };
       if (mode === 'checkout') {
         const rental = await saveCheckout(vehicleId, renterName, side);
-        router.replace({ pathname: '/rental-history', params: { localId: rental.localId } });
+        openCard(rental.localId);
         return;
       }
       if (!openId) {
         const created = await saveCheckout(vehicleId, renterName, freshInspection());
         await saveCheckin(created.localId, side);
-        router.replace({ pathname: '/rental-history', params: { localId: created.localId } });
+        openCard(created.localId);
         return;
       }
       await saveCheckin(openId, side);
-      router.replace({ pathname: '/rental-history', params: { localId: openId } });
+      openCard(openId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save');
       setSaving(false);
