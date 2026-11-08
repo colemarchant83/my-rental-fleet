@@ -66,22 +66,35 @@ export default function RentalHistory() {
         <Stat label="Hours out" value={rental.checkout.hours || '—'} />
       </View>
 
-      <Text style={styles.section}>Checkout beside return</Text>
-      {SPOTS.map((spot) => (
+      {SPOTS.map((spot) => {
+        const out = rental.checkout.spots[spot.id];
+        const back = rental.checkin?.spots[spot.id];
+        return (
           <View key={spot.id} style={styles.spot}>
             <Text style={styles.spotTitle}>{spot.label}</Text>
             <View style={styles.compare}>
-              <PhotoStack photos={photosOf(rental.checkout, spot.id)} empty="No photo" onOpen={setZoom} />
-              <PhotoStack photos={rental.checkin ? photosOf(rental.checkin, spot.id) : []} empty={rental.checkin ? 'No photo' : 'Not returned yet'} onOpen={setZoom} />
+              <View style={styles.sideCol}>
+                <Text style={styles.sideLabel}>Check out</Text>
+                <PhotoStack photos={photosOf(rental.checkout, spot.id)} empty="No photo" onOpen={setZoom} />
+                <View style={styles.noteBox}>
+                  <Text style={out.note.trim() ? styles.noteText : styles.noteEmpty}>{out.note.trim() || 'No note'}</Text>
+                  {out.note.trim() && out.notedAt ? <Text style={styles.noteWhen}>{formatStamp(out.notedAt)}</Text> : null}
+                </View>
+                <Text style={styles.state}>{labelStatus(out.status)}</Text>
+              </View>
+              <View style={styles.sideCol}>
+                <Text style={styles.sideLabel}>Check in</Text>
+                <PhotoStack photos={rental.checkin ? photosOf(rental.checkin, spot.id) : []} empty={rental.checkin ? 'No photo' : 'Not returned yet'} onOpen={setZoom} />
+                <View style={styles.noteBox}>
+                  <Text style={back?.note.trim() ? styles.noteText : styles.noteEmpty}>{back?.note.trim() || 'No note'}</Text>
+                  {back?.note.trim() && back.notedAt ? <Text style={styles.noteWhen}>{formatStamp(back.notedAt)}</Text> : null}
+                </View>
+                <Text style={styles.state}>{rental.checkin ? labelStatus(back?.status || '') : '—'}</Text>
+              </View>
             </View>
-            <View style={styles.compare}>
-              <Text style={styles.state}>{labelStatus(rental.checkout.spots[spot.id].status)}</Text>
-              <Text style={styles.state}>{rental.checkin ? labelStatus(rental.checkin.spots[spot.id].status) : '—'}</Text>
-            </View>
-            <NoteLine label="Out" note={rental.checkout.spots[spot.id].note} at={rental.checkout.spots[spot.id].notedAt} />
-            {rental.checkin ? <NoteLine label="Back" note={rental.checkin.spots[spot.id].note} at={rental.checkin.spots[spot.id].notedAt} /> : null}
           </View>
-      ))}
+        );
+      })}
 
       {rental.checkout.videoUri || rental.checkout.videoUrl ? <Text style={styles.stampLine}>Checkout video added {formatStamp(rental.checkout.videoAddedAt)}</Text> : null}
       {rental.checkin?.videoUri || rental.checkin?.videoUrl ? <Text style={styles.stampLine}>Return video added {formatStamp(rental.checkin.videoAddedAt)}</Text> : null}
@@ -248,13 +261,19 @@ const styles = StyleSheet.create({
   spot: { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 12, marginBottom: 12 },
   spotTitle: { fontWeight: '800', color: theme.text, marginBottom: 8 },
   compare: { flexDirection: 'row', gap: 8 },
-  frame: { flex: 1, backgroundColor: theme.input, borderRadius: 12, minHeight: 120, overflow: 'hidden' },
+  sideCol: { flex: 1 },
+  sideLabel: { color: theme.text, fontWeight: '800', fontSize: 13, marginBottom: 6 },
+  noteBox: { marginTop: 6, backgroundColor: theme.bg, borderRadius: 8, padding: 8, minHeight: 44 },
+  noteText: { color: theme.text, fontSize: 13, lineHeight: 18 },
+  noteEmpty: { color: theme.muted, fontSize: 13 },
+  noteWhen: { color: theme.muted, fontSize: 11, marginTop: 4 },
+  frame: { width: '100%', backgroundColor: theme.input, borderRadius: 12, minHeight: 120, overflow: 'hidden' },
   shot: { width: '100%', height: 140 },
   extraRow: { flexDirection: 'row', gap: 4, padding: 4 },
   extra: { width: 42, height: 42, borderRadius: 6 },
   empty: { color: theme.muted, textAlign: 'center', padding: 24 },
   enlarge: { position: 'absolute', right: 6, bottom: 6, color: theme.white, backgroundColor: 'rgba(0,0,0,0.45)', overflow: 'hidden', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, fontSize: 11 },
-  state: { flex: 1, color: theme.green, fontWeight: '700', marginTop: 6 },
+  state: { color: theme.green, fontWeight: '700', marginTop: 6 },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
   stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
   photoStamp: { color: theme.muted, fontSize: 10, paddingHorizontal: 6, paddingBottom: 4 },
