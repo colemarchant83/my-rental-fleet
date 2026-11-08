@@ -11,8 +11,8 @@ export function goBack(router: { canGoBack: () => boolean; back: () => void; rep
 export function BackLink() {
   const router = useRouter();
   return (
-    <Pressable onPress={() => goBack(router)} hitSlop={10} style={{ alignSelf: 'flex-start', paddingVertical: 4, paddingRight: 12 }}>
-      <Text style={{ color: theme.accent, fontSize: 17, fontWeight: '700' }}>‹ Back</Text>
+    <Pressable onPress={() => goBack(router)} hitSlop={10} style={{ marginLeft: 20 }}>
+      <Text style={{ color: theme.accent, fontSize: 16, fontWeight: '700' }}>‹ Back</Text>
     </Pressable>
   );
 }
