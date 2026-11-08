@@ -3,7 +3,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { addDoc, collection, deleteDoc, deleteField, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { contentTypeFor, deleteStoredFile, isStoredFile, persistMedia, remoteMediaLoads } from './media';
-import { uploadFile } from './r2';
+import { uploadFile, deleteStoredObject } from './r2';
 
 export const SPOTS = [
   { id: 'tires', label: 'Tires & wheels' },
@@ -184,9 +184,11 @@ async function discardSideFiles(side?: InspectionSide) {
   for (const spot of SPOTS) {
     for (const photo of side.spots[spot.id].photos) {
       await deleteStoredFile(photo.localUri);
+      await deleteStoredObject(photo.remoteUrl);
     }
   }
   await deleteStoredFile(side.videoUri);
+  await deleteStoredObject(side.videoUrl);
 }
 
 export async function deleteRental(target: LocalRental) {

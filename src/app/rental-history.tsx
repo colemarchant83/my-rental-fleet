@@ -17,6 +17,7 @@ export default function RentalHistory() {
   const [zoom, setZoom] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     const refresh = async () => {
@@ -93,18 +94,25 @@ export default function RentalHistory() {
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Delete this rental?</Text>
             <Text style={styles.help}>
-              This removes {rental.renterName || 'this renter'}'s card from {formatDay(rental.checkout.date)}. The photos on this card go with it. This cannot be undone.
+              This permanently deletes {rental.renterName || 'this renter'}'s rental from {formatDay(rental.checkout.date)}, including the notes and every photo and video stored for this rental. Nothing from this card is kept. This cannot be undone.
             </Text>
             <Pressable
               style={styles.delete}
               disabled={deleting}
               onPress={() => {
                 setDeleting(true);
-                void deleteRental(rental).then(() => router.back());
+                setDeleteError('');
+                void deleteRental(rental)
+                  .then(() => router.back())
+                  .catch((error: unknown) => {
+                    setDeleting(false);
+                    setDeleteError(error instanceof Error ? error.message : 'Could not delete the stored photo.');
+                  });
               }}
             >
               <Text style={styles.deleteText}>{deleting ? 'Deleting...' : 'Delete rental'}</Text>
             </Pressable>
+            {deleteError ? <Text style={styles.deleteError}>{deleteError}</Text> : null}
             <Pressable style={styles.cancel} onPress={() => setConfirming(false)} disabled={deleting}>
               <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
@@ -245,6 +253,7 @@ const styles = StyleSheet.create({
   noteLine: { color: theme.text, marginTop: 6, fontSize: 13, lineHeight: 18 },
   delete: { marginTop: 22, backgroundColor: theme.danger, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   deleteText: { color: theme.white, fontWeight: '800' },
+  deleteError: { color: theme.danger, marginTop: 8, fontWeight: '600' },
   cancel: { marginTop: 8, paddingVertical: 10, alignItems: 'center' },
   cancelText: { color: theme.text, fontWeight: '700' },
   help: { color: theme.muted, marginTop: 8, lineHeight: 20 },

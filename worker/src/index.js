@@ -13,7 +13,7 @@ function cors(origin) {
   const allow = ALLOWED.has(origin) ? origin : 'https://my-rental-fleet.web.app';
   return {
     'Access-Control-Allow-Origin': allow,
-    'Access-Control-Allow-Methods': 'PUT, GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'PUT, GET, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400',
   };
@@ -40,9 +40,13 @@ export default {
       });
     }
 
-    if (request.method === 'GET' && url.pathname.startsWith('/media/')) {
+    if ((request.method === 'GET' || request.method === 'DELETE') && url.pathname.startsWith('/media/')) {
       const key = safeKey(url.pathname.slice('/media/'.length));
       if (!key) return new Response('Bad key', { status: 400, headers: cors(origin) });
+      if (request.method === 'DELETE') {
+        await env.BUCKET.delete(key);
+        return new Response('Deleted', { status: 200, headers: cors(origin) });
+      }
       const object = await env.BUCKET.get(key);
       if (!object) return new Response('Not found', { status: 404, headers: cors(origin) });
       return new Response(object.body, {

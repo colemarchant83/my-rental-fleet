@@ -50,3 +50,11 @@ export async function uploadFile(localUri: string, key: string, contentType: str
   const uploaded = result.body?.trim();
   return uploaded && uploaded.startsWith('http') ? uploaded : `${SIGNER}/media/${key}`;
 }
+
+export async function deleteStoredObject(remoteUrl?: string) {
+  if (!remoteUrl || !SIGNER || !remoteUrl.startsWith(`${SIGNER}/media/`)) return;
+  const response = await fetch(remoteUrl, { method: 'DELETE' });
+  if (!response.ok && response.status !== 404) {
+    throw new Error('Could not delete the stored photo.');
+  }
+}
