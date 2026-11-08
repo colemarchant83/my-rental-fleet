@@ -12,6 +12,10 @@ A customer may be waiting, so the screen has to stay fast. Photos stay sharp as 
 
 If there is no signal, the inspection still saves on the phone, including its photos and video. It uploads when service comes back. The card is not lost.
 
+## Time stamps
+
+Every rental, photo, video, and note is stamped automatically with the date and time it was saved on the phone. The user does not type the time. The stamp stays with the record when it uploads. This is the record if there is a damage dispute between the owner and the renter.
+
 ## Saving a card
 
 Saving a rental card onto the phone or computer includes the written record and all media attached to that rental.

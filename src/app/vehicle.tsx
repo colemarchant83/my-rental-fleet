@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { formatDay, isOutStatus, loadCovers, loadRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, isOutStatus, loadCovers, loadRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { theme } from '../theme';
 
 type Vehicle = {
@@ -16,6 +16,7 @@ type Vehicle = {
   status?: string;
   renterName?: string;
   photoUrl?: string;
+  photoAddedAt?: string;
 };
 
 export default function VehicleDetail() {
@@ -111,6 +112,7 @@ export default function VehicleDetail() {
       <Pressable style={styles.ghost} onPress={() => void addCover()}>
         <Text style={styles.ghostText}>{photo ? 'Change photo' : 'Add photo'}</Text>
       </Pressable>
+      {cover?.addedAt || vehicle.photoAddedAt ? <Text style={styles.specs}>Photo added {formatStamp(cover?.addedAt || vehicle.photoAddedAt)}</Text> : null}
 
       <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
       {vehicle.yearMakeModel ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}

@@ -4,10 +4,11 @@ import { useLocalSearchParams } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ZoomModal } from '../components/zoom-modal';
-import { SPOTS, formatDay, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
+import { SPOTS, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
 import { theme } from '../theme';
 
-type RemoteSpot = { status?: string; note?: string; photos?: string[] };
+type RemotePhoto = string | { url?: string; addedAt?: string };
+type RemoteSpot = { status?: string; note?: string; notedAt?: string; photos?: RemotePhoto[] };
 
 export default function RentalHistory() {
   const params = useLocalSearchParams<{ localId?: string; id?: string }>();
@@ -48,6 +49,8 @@ export default function RentalHistory() {
         Out {formatDay(rental.checkout.date)}
         {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
       </Text>
+      {rental.checkout.savedAt ? <Text style={styles.stampLine}>Checkout recorded {formatStamp(rental.checkout.savedAt)}</Text> : null}
+      {rental.checkin?.savedAt ? <Text style={styles.stampLine}>Return recorded {formatStamp(rental.checkin.savedAt)}</Text> : null}
       {rental.sync !== 'synced' ? (
         <Text style={styles.waiting}>Saved on this phone{rental.sync === 'error' ? '. Upload will retry when you have service.' : '. Photos upload when you have service.'}</Text>
       ) : null}
@@ -59,33 +62,37 @@ export default function RentalHistory() {
       </View>
 
       <Text style={styles.section}>Checkout beside return</Text>
-      {SPOTS.map((spot) => {
-        const left = photosOf(rental.checkout, spot.id);
-        const right = rental.checkin ? photosOf(rental.checkin, spot.id) : [];
-        return (
+      {SPOTS.map((spot) => (
           <View key={spot.id} style={styles.spot}>
             <Text style={styles.spotTitle}>{spot.label}</Text>
             <View style={styles.compare}>
-              <PhotoStack uris={left} empty="No photo" onOpen={setZoom} />
-              <PhotoStack uris={right} empty={rental.checkin ? 'No photo' : 'Not returned yet'} onOpen={setZoom} />
+              <PhotoStack photos={photosOf(rental.checkout, spot.id)} empty="No photo" onOpen={setZoom} />
+              <PhotoStack photos={rental.checkin ? photosOf(rental.checkin, spot.id) : []} empty={rental.checkin ? 'No photo' : 'Not returned yet'} onOpen={setZoom} />
             </View>
             <View style={styles.compare}>
               <Text style={styles.state}>{labelStatus(rental.checkout.spots[spot.id].status)}</Text>
               <Text style={styles.state}>{rental.checkin ? labelStatus(rental.checkin.spots[spot.id].status) : '—'}</Text>
             </View>
+            <NoteLine label="Out" note={rental.checkout.spots[spot.id].note} at={rental.checkout.spots[spot.id].notedAt} />
+            {rental.checkin ? <NoteLine label="Back" note={rental.checkin.spots[spot.id].note} at={rental.checkin.spots[spot.id].notedAt} /> : null}
           </View>
-        );
-      })}
+      ))}
 
-      {rental.checkout.notes ? <Text style={styles.notes}>{rental.checkout.notes}</Text> : null}
-      {rental.checkin?.notes ? <Text style={styles.notes}>{rental.checkin.notes}</Text> : null}
+      {rental.checkout.videoUri || rental.checkout.videoUrl ? <Text style={styles.stampLine}>Checkout video added {formatStamp(rental.checkout.videoAddedAt)}</Text> : null}
+      {rental.checkin?.videoUri || rental.checkin?.videoUrl ? <Text style={styles.stampLine}>Return video added {formatStamp(rental.checkin.videoAddedAt)}</Text> : null}
+      {rental.checkout.notes ? <Text style={styles.notes}>Checkout notes · {formatStamp(rental.checkout.notesAt)}{'\n'}{rental.checkout.notes}</Text> : null}
+      {rental.checkin?.notes ? <Text style={styles.notes}>Return notes · {formatStamp(rental.checkin.notesAt)}{'\n'}{rental.checkin.notes}</Text> : null}
       <ZoomModal uri={zoom} onClose={() => setZoom(null)} />
     </ScrollView>
   );
 }
 
-function photosOf(side: InspectionSide, spotId: (typeof SPOTS)[number]['id']) {
-  return side.spots[spotId].photos.map((photo) => photo.localUri || photo.remoteUrl || '').filter(Boolean);
+type StampedPhoto = { uri: string; addedAt?: string };
+
+function photosOf(side: InspectionSide, spotId: (typeof SPOTS)[number]['id']): StampedPhoto[] {
+  return side.spots[spotId].photos
+    .map((photo) => ({ uri: photo.localUri || photo.remoteUrl || '', addedAt: photo.addedAt }))
+    .filter((photo) => photo.uri);
 }
 
 function labelStatus(status: string) {
@@ -94,27 +101,34 @@ function labelStatus(status: string) {
   return '—';
 }
 
-function PhotoStack({ uris, empty, onOpen }: { uris: string[]; empty: string; onOpen: (uri: string) => void }) {
-  if (!uris.length) {
+function PhotoStack({ photos, empty, onOpen }: { photos: StampedPhoto[]; empty: string; onOpen: (uri: string) => void }) {
+  if (!photos.length) {
     return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
   }
   return (
     <View style={styles.frame}>
-      <Pressable onPress={() => onOpen(uris[0])}>
-        <Image source={{ uri: uris[0] }} style={styles.shot} />
+      <Pressable onPress={() => onOpen(photos[0].uri)}>
+        <Image source={{ uri: photos[0].uri }} style={styles.shot} />
         <Text style={styles.enlarge}>Enlarge</Text>
       </Pressable>
-      {uris.length > 1 ? (
+      {photos[0].addedAt ? <Text style={styles.photoStamp}>{formatStamp(photos[0].addedAt)}</Text> : null}
+      {photos.length > 1 ? (
         <View style={styles.extraRow}>
-          {uris.slice(1).map((uri) => (
-            <Pressable key={uri} onPress={() => onOpen(uri)}>
-              <Image source={{ uri }} style={styles.extra} />
+          {photos.slice(1).map((photo) => (
+            <Pressable key={photo.uri} onPress={() => onOpen(photo.uri)}>
+              <Image source={{ uri: photo.uri }} style={styles.extra} />
+              {photo.addedAt ? <Text style={styles.extraStamp}>{formatStamp(photo.addedAt)}</Text> : null}
             </Pressable>
           ))}
         </View>
       ) : null}
     </View>
   );
+}
+
+function NoteLine({ label, note, at }: { label: string; note: string; at?: string }) {
+  if (!note.trim()) return null;
+  return <Text style={styles.noteLine}>{label}: {note}{at ? ` · ${formatStamp(at)}` : ''}</Text>;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -142,14 +156,19 @@ function fromRemote(remoteId: string, data: Record<string, unknown>): LocalRenta
   };
 }
 
-function sideFrom(raw: { date?: string; fuel?: string; miles?: string; hours?: string; notes?: string; spots?: Record<string, RemoteSpot> }, fallbackDate: string): InspectionSide {
+function sideFrom(raw: { date?: string; fuel?: string; miles?: string; hours?: string; notes?: string; notesAt?: string; savedAt?: string; videoAddedAt?: string; videoUrl?: string; spots?: Record<string, RemoteSpot> }, fallbackDate: string): InspectionSide {
   const spots = {} as InspectionSide['spots'];
   for (const spot of SPOTS) {
     const found = raw.spots?.[spot.id];
     spots[spot.id] = {
       status: found?.status === 'issue' ? 'issue' : found?.status === 'ok' ? 'ok' : '',
       note: found?.note || '',
-      photos: (found?.photos || []).map((url, index) => ({ id: `${spot.id}-${index}`, localUri: url, remoteUrl: url })),
+      notedAt: found?.notedAt,
+      photos: (found?.photos || []).map((photo, index) => {
+        const url = typeof photo === 'string' ? photo : photo.url || '';
+        const addedAt = typeof photo === 'string' ? undefined : photo.addedAt;
+        return { id: `${spot.id}-${index}`, localUri: url, remoteUrl: url, addedAt };
+      }).filter((photo) => photo.remoteUrl),
     };
   }
   return {
@@ -158,6 +177,10 @@ function sideFrom(raw: { date?: string; fuel?: string; miles?: string; hours?: s
     miles: raw.miles || '',
     hours: raw.hours || '',
     notes: raw.notes || '',
+    notesAt: raw.notesAt,
+    savedAt: raw.savedAt,
+    videoUrl: raw.videoUrl,
+    videoAddedAt: raw.videoAddedAt,
     spots,
   };
 }
@@ -187,4 +210,8 @@ const styles = StyleSheet.create({
   enlarge: { position: 'absolute', right: 6, bottom: 6, color: theme.white, backgroundColor: 'rgba(0,0,0,0.45)', overflow: 'hidden', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, fontSize: 11 },
   state: { flex: 1, color: theme.green, fontWeight: '700', marginTop: 6 },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
+  stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
+  photoStamp: { color: theme.muted, fontSize: 10, paddingHorizontal: 6, paddingBottom: 4 },
+  extraStamp: { color: theme.muted, fontSize: 8, width: 42 },
+  noteLine: { color: theme.text, marginTop: 6, fontSize: 13, lineHeight: 18 },
 });

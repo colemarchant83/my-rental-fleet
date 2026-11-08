@@ -63,7 +63,8 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const addVideo = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 1 });
     if (result.canceled || !result.assets[0]) return;
-    patch({ videoUri: await keepVideo(result.assets[0].uri) });
+    const kept = await keepVideo(result.assets[0].uri);
+    patch({ videoUri: kept.uri, videoAddedAt: kept.addedAt });
   };
 
   return (
@@ -74,13 +75,13 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
           : 'Record the machine as it comes back. Checkout photos stay beside these so you can compare them.'}
       </Text>
 
-      <Text style={styles.label}>Renter name</Text>
+      <Text style={styles.label}>Renter Name</Text>
       <TextInput
         style={styles.input}
         value={renterName}
         onChangeText={onRenterName}
         editable={!renterLocked}
-        placeholder="Who's taking it out?"
+        placeholder="Renter Name"
         placeholderTextColor={theme.muted}
       />
 
@@ -179,6 +180,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Text style={styles.help}>The save time is stamped automatically, along with each photo, video, and note.</Text>
       <Pressable style={styles.save} onPress={onSave} disabled={saving}>
         <Text style={styles.saveText}>
           {saving ? 'Saving...' : isOut ? 'Save & send out on rent' : 'Save & mark returned'}

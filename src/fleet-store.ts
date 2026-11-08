@@ -21,11 +21,13 @@ export type PhotoRef = {
   id: string;
   localUri: string;
   remoteUrl?: string;
+  addedAt?: string;
 };
 
 export type SpotRecord = {
   status: 'ok' | 'issue' | '';
   note: string;
+  notedAt?: string;
   photos: PhotoRef[];
 };
 
@@ -35,8 +37,11 @@ export type InspectionSide = {
   miles: string;
   hours: string;
   notes: string;
+  notesAt?: string;
+  savedAt?: string;
   videoUri?: string;
   videoUrl?: string;
+  videoAddedAt?: string;
   spots: Record<SpotId, SpotRecord>;
 };
 
@@ -57,6 +62,7 @@ export type CoverPhoto = {
   vehicleId: string;
   localUri: string;
   remoteUrl?: string;
+  addedAt?: string;
   sync: 'pending' | 'synced' | 'error';
 };
 
@@ -81,6 +87,28 @@ export function todayIso() {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${now.getFullYear()}-${month}-${day}`;
+}
+
+export function formatStamp(iso?: string) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+export function stampNow() {
+  return new Date().toISOString();
+}
+
+/** Stamp the inspection at the moment it is saved. Photo times are already set when each photo was added. */
+export function stampSide(side: InspectionSide): InspectionSide {
+  const savedAt = stampNow();
+  const spots = {} as Record<SpotId, SpotRecord>;
+  for (const spot of SPOTS) {
+    const current = side.spots[spot.id];
+    spots[spot.id] = { ...current, notedAt: current.note.trim() ? savedAt : undefined };
+  }
+  return { ...side, savedAt, notesAt: side.notes.trim() ? savedAt : undefined, spots };
 }
 
 export function formatDay(iso: string) {
@@ -156,7 +184,7 @@ export async function saveCheckout(vehicleId: string, renterName: string, checko
     localId: id(),
     vehicleId,
     renterName: renterName.trim(),
-    checkout,
+    checkout: stampSide(checkout),
     status: 'out',
     sync: 'pending',
     createdAt: Date.now(),
@@ -169,8 +197,9 @@ export async function saveCheckout(vehicleId: string, renterName: string, checko
 
 export async function saveCheckin(localId: string, checkin: InspectionSide) {
   const rentals = await loadRentals();
+  const stamped = stampSide(checkin);
   const next = rentals.map((rental) =>
-    rental.localId === localId ? { ...rental, checkin, status: 'closed' as const, sync: 'pending' as const, syncError: undefined } : rental
+    rental.localId === localId ? { ...rental, checkin: stamped, status: 'closed' as const, sync: 'pending' as const, syncError: undefined } : rental
   );
   await saveRentals(next);
   void syncAll();
@@ -178,9 +207,10 @@ export async function saveCheckin(localId: string, checkin: InspectionSide) {
 }
 
 export async function rememberCover(vehicleId: string, sourceUri: string) {
+  const addedAt = stampNow();
   const localUri = await persistMedia(sourceUri, 'jpg');
   const covers = await loadCovers();
-  const next = [{ vehicleId, localUri, sync: 'pending' as const }, ...covers.filter((cover) => cover.vehicleId !== vehicleId)];
+  const next = [{ vehicleId, localUri, addedAt, sync: 'pending' as const }, ...covers.filter((cover) => cover.vehicleId !== vehicleId)];
   await saveCovers(next);
   void syncAll();
   return localUri;
@@ -224,14 +254,20 @@ function sidePayload(side: InspectionSide) {
     miles: side.miles,
     hours: side.hours,
     notes: side.notes,
+    notesAt: side.notesAt ?? null,
+    savedAt: side.savedAt ?? null,
     videoUrl: side.videoUrl ?? null,
+    videoAddedAt: side.videoAddedAt ?? null,
     spots: Object.fromEntries(
       SPOTS.map((spot) => [
         spot.id,
         {
           status: side.spots[spot.id].status,
           note: side.spots[spot.id].note,
-          photos: side.spots[spot.id].photos.map((photo) => photo.remoteUrl).filter((url): url is string => !!url),
+          notedAt: side.spots[spot.id].notedAt ?? null,
+          photos: side.spots[spot.id].photos
+            .filter((photo) => photo.remoteUrl)
+            .map((photo) => ({ url: photo.remoteUrl, addedAt: photo.addedAt ?? null })),
         },
       ])
     ),
@@ -320,7 +356,7 @@ async function pushCovers() {
     try {
       const remoteUrl = cover.remoteUrl ?? (await uploadFile(cover.localUri, `vehicles/${cover.vehicleId}/cover.jpg`, contentTypeFor(cover.localUri)));
       if (!cover.remoteUrl) {
-        await updateDoc(doc(db, 'vehicles', cover.vehicleId), { photoUrl: remoteUrl });
+        await updateDoc(doc(db, 'vehicles', cover.vehicleId), { photoUrl: remoteUrl, photoAddedAt: cover.addedAt ?? null });
       }
       if (await remoteMediaLoads(remoteUrl, 'image')) {
         await deleteStoredFile(cover.localUri);
@@ -374,9 +410,9 @@ export function watchConnection() {
 
 export async function keepPhoto(uri: string) {
   const localUri = await persistMedia(uri, 'jpg');
-  return { id: id(), localUri } satisfies PhotoRef;
+  return { id: id(), localUri, addedAt: stampNow() } satisfies PhotoRef;
 }
 
 export async function keepVideo(uri: string) {
-  return persistMedia(uri, 'mp4');
+  return { uri: await persistMedia(uri, 'mp4'), addedAt: stampNow() };
 }
