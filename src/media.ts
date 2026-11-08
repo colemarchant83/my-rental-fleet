@@ -116,21 +116,14 @@ function blobToDataUrl(blob: Blob) {
 
 /** Copy a picked photo or video into app storage so it survives a refresh and a lost signal. */
 export async function persistMedia(uri: string, fallbackExt: string) {
-  if (Platform.OS === 'web' && typeof indexedDB !== 'undefined') {
-    try {
-      if (uri.startsWith('data:')) {
-        const response = await fetch(uri);
-        return await rememberBlob(await response.blob());
-      }
-      const response = await fetch(uri);
-      if (!response.ok) return uri;
-      return await rememberBlob(await response.blob());
-    } catch {
-      return uri;
-    }
+  if (Platform.OS === 'web') {
+    if (typeof indexedDB === 'undefined') throw new Error('Could not keep this photo on the device.');
+    const response = await fetch(uri);
+    if (!response.ok) throw new Error('Could not keep this photo on the device.');
+    return await rememberBlob(await response.blob());
   }
   const root = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
-  if (!root) return uri;
+  if (!root) throw new Error('Could not keep this photo on the device.');
   const dir = `${root}fleet-media/`;
   await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => undefined);
   const dest = `${dir}${Date.now()}-${Math.random().toString(36).slice(2)}.${extension(uri, fallbackExt)}`;
@@ -138,16 +131,12 @@ export async function persistMedia(uri: string, fallbackExt: string) {
     await FileSystem.copyAsync({ from: uri, to: dest });
     return dest;
   } catch {
-    try {
-      const response = await fetch(uri);
-      const dataUrl = await blobToDataUrl(await response.blob());
-      const base64 = dataUrl.split(',')[1] ?? '';
-      if (!base64) return uri;
-      await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
-      return dest;
-    } catch {
-      return uri;
-    }
+    const response = await fetch(uri);
+    const dataUrl = await blobToDataUrl(await response.blob());
+    const base64 = dataUrl.split(',')[1] ?? '';
+    if (!base64) throw new Error('Could not keep this photo on the device.');
+    await FileSystem.writeAsStringAsync(dest, base64, { encoding: FileSystem.EncodingType.Base64 });
+    return dest;
   }
 }
 

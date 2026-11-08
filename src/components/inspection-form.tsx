@@ -28,6 +28,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const [librarySpot, setLibrarySpot] = useState<SpotId | null>(null);
   const [photoChoice, setPhotoChoice] = useState<SpotId | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState('');
   const isOut = mode === 'checkout';
 
   const patch = (partial: Partial<InspectionSide>) => onChange({ ...side, ...partial });
@@ -47,11 +48,16 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
     };
     const result = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
     if (result.canceled) return;
-    const saved = [];
-    for (const asset of result.assets.slice(0, room)) {
-      saved.push(await keepPhoto(asset.uri));
+    setPhotoError('');
+    try {
+      const saved = [];
+      for (const asset of result.assets.slice(0, room)) {
+        saved.push(await keepPhoto(asset.uri));
+      }
+      patchSpot(spotId, { photos: [...side.spots[spotId].photos, ...saved].slice(0, 4) });
+    } catch {
+      setPhotoError('This photo could not be saved on the device. Try again.');
     }
-    patchSpot(spotId, { photos: [...side.spots[spotId].photos, ...saved].slice(0, 4) });
   };
 
   const choosePhotos = (spotId: SpotId) => {
@@ -62,8 +68,13 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const addVideo = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 1 });
     if (result.canceled || !result.assets[0]) return;
-    const kept = await keepVideo(result.assets[0].uri);
-    patch({ videoUri: kept.uri, videoAddedAt: kept.addedAt });
+    setPhotoError('');
+    try {
+      const kept = await keepVideo(result.assets[0].uri);
+      patch({ videoUri: kept.uri, videoAddedAt: kept.addedAt });
+    } catch {
+      setPhotoError('This video could not be saved on the device. Try again.');
+    }
   };
 
   return (
@@ -219,6 +230,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
         placeholderTextColor={theme.muted}
       />
 
+      {photoError ? <Text style={styles.error}>{photoError}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Text style={styles.help}>The save time is stamped automatically, along with each photo, video, and note.</Text>
       <Pressable style={styles.save} onPress={onSave} disabled={saving}>
