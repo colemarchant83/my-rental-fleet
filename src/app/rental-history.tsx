@@ -88,10 +88,14 @@ export default function RentalHistory() {
         </View>
       ) : null}
 
-      <View style={styles.stats}>
-        <Stat label="Fuel out" value={rental.checkout.fuel} />
-        <Stat label="Miles out" value={rental.checkout.miles || '—'} />
-        <Stat label="Hours out" value={rental.checkout.hours || '—'} />
+      <View style={styles.readings}>
+        <View style={styles.compare}>
+          <Text style={[styles.sideLabel, styles.readingValue]}>Check out</Text>
+          <Text style={[styles.sideLabel, styles.readingValue]}>Check in</Text>
+        </View>
+        <Reading label="Fuel" out={rental.checkout.fuel} back={rental.checkin?.fuel} returned={!!rental.checkin} />
+        <Reading label="Miles" out={rental.checkout.miles} back={rental.checkin?.miles} returned={!!rental.checkin} />
+        <Reading label="Hours" out={rental.checkout.hours} back={rental.checkin?.hours} returned={!!rental.checkin} />
       </View>
 
       {SPOTS.map((spot) => {
@@ -220,11 +224,15 @@ function NoteLine({ label, note, at }: { label: string; note: string; at?: strin
   return <Text style={styles.noteLine}>{label}: {note}{at ? ` · ${formatStamp(at)}` : ''}</Text>;
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Reading({ label, out, back, returned }: { label: string; out?: string; back?: string; returned: boolean }) {
+  const shown = (value?: string) => (value && value.trim()) || '—';
   return (
-    <View style={styles.stat}>
+    <View style={styles.reading}>
       <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue}>{value}</Text>
+      <View style={styles.compare}>
+        <Text style={styles.readingValue}>{shown(out)}</Text>
+        <Text style={styles.readingValue}>{returned ? shown(back) : '—'}</Text>
+      </View>
     </View>
   );
 }
@@ -283,8 +291,9 @@ const styles = StyleSheet.create({
   pillText: { fontWeight: '700', color: theme.text },
   muted: { color: theme.muted, marginTop: 6 },
   waiting: { color: theme.rent, marginTop: 8 },
-  stats: { flexDirection: 'row', gap: 8, marginTop: 14 },
-  stat: { flex: 1, backgroundColor: theme.card, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: theme.line },
+  readings: { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 12, marginTop: 14, marginBottom: 12 },
+  reading: { marginTop: 8 },
+  readingValue: { flex: 1, color: theme.text, fontWeight: '700', fontSize: 16 },
   statLabel: { color: theme.muted, fontSize: 12 },
   statValue: { color: theme.text, fontWeight: '700', marginTop: 2 },
   section: { fontSize: 20, fontWeight: '800', color: theme.text, marginTop: 20, marginBottom: 8 },
