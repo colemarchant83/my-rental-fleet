@@ -213,8 +213,8 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
 
       <Text style={styles.section}>Walk-around video (optional)</Text>
       <Text style={styles.help}>Record a slow lap in the app. It is saved at 1080p, 30 fps. Videos already on the phone cannot be added.</Text>
-      <Pressable style={styles.ghost} onPress={() => setVideoOpen(true)}>
-        <Text style={styles.ghostText}>{side.videoUri ? 'Replace walk-around video' : 'Record walk-around video'}</Text>
+      <Pressable style={styles.videoBtn} onPress={() => setVideoOpen(true)}>
+        <Text style={styles.videoBtnText}>{side.videoUri ? 'Replace Walk-around Video' : 'Record Walk-around Video'}</Text>
       </Pressable>
       {side.videoUri ? <VideoPreview uri={side.videoUri} /> : null}
       {side.videoUri && side.videoAddedAt ? <Text style={styles.count}>Recorded {formatStamp(side.videoAddedAt)}</Text> : null}
@@ -468,6 +468,8 @@ const styles = StyleSheet.create({
   ghostText: { color: theme.text, fontWeight: '600' },
   count: { color: theme.green, marginTop: 6, fontSize: 13 },
   videoFrame: { marginTop: 10, height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1c1917' },
+  videoBtn: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 12 },
+  videoBtnText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
   remove: { color: theme.danger, fontSize: 13, marginTop: 4 },
   error: { color: theme.danger, marginTop: 14, fontWeight: '600' },
   save: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 18 },
