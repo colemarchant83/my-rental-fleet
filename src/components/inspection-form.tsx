@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, formatStamp, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
 import { ZoomModal } from './zoom-modal';
 import { WalkaroundRecorder } from './walkaround-recorder';
-import { contentTypeFor, isStoredFile, readStoredBlob } from '../media';
+import { contentTypeFor, isStoredFile, mediaByteSize, readStoredBlob } from '../media';
 import { theme } from '../theme';
 
 const FUEL = ['Not recorded', 'Empty', '1/4 tank', '1/2 tank', '3/4 tank', 'Full'];
@@ -73,6 +73,10 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
     const kept = await keepVideo(uri);
     patch({ videoUri: kept.uri, videoAddedAt: kept.addedAt });
     setVideoOpen(false);
+    const bytes = await mediaByteSize(kept.uri);
+    if (bytes > 100 * 1000 * 1000) {
+      setPhotoError('This video is over 100 MB, so it will not be uploaded. Record a shorter one if you want it saved in storage. This copy stays on this phone.');
+    }
   };
 
   return (

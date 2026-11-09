@@ -319,7 +319,7 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
     const bytes = await mediaByteSize(videoUri);
     if (bytes > VIDEO_LIMIT) {
       videoOverLimit = true;
-      lastUploadError = 'This video is over 100 MB, so it was not uploaded. It is still saved on this phone.';
+      lastUploadError = 'This video is over 100 MB, so it will not be uploaded. Record a shorter one if you want it saved in storage. This copy stays on this phone.';
       void noteLargeVideo(bytes, folder);
     } else {
       try {
@@ -336,7 +336,7 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
       }
     }
   } else if (videoOverLimit) {
-    lastUploadError = 'This video is over 100 MB, so it was not uploaded. It is still saved on this phone.';
+    lastUploadError = 'This video is over 100 MB, so it will not be uploaded. Record a shorter one if you want it saved in storage. This copy stays on this phone.';
   }
   return { ...side, spots, videoUrl, videoUri, videoOverLimit };
 }
