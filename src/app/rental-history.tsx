@@ -80,6 +80,14 @@ export default function RentalHistory() {
             : 'Saved on this phone. Photos and video will upload.'}
         </Text>
       ) : null}
+      {rental.status === 'out' ? (
+        <Pressable
+          style={styles.checkin}
+          onPress={() => router.push({ pathname: '/inspection', params: { vehicleId: rental.vehicleId, type: 'checkin' } })}
+        >
+          <Text style={styles.checkinText}>Start return inspection</Text>
+        </Pressable>
+      ) : null}
 
       {rental.checkout.videoUri || rental.checkout.videoUrl ? (
         <View>
@@ -300,6 +308,8 @@ const styles = StyleSheet.create({
   pillText: { fontWeight: '700', color: theme.text },
   muted: { color: theme.muted, marginTop: 6 },
   waiting: { color: theme.rent, marginTop: 8 },
+  checkin: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 14 },
+  checkinText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
   readings: { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 12, marginTop: 14, marginBottom: 12 },
   reading: { marginTop: 8 },
   readingValue: { color: theme.text, fontWeight: '700', fontSize: 16, marginTop: 2 },
