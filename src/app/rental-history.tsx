@@ -126,7 +126,7 @@ export default function RentalHistory() {
                   <Text style={out.note.trim() ? styles.noteText : styles.noteEmpty}>{out.note.trim() || 'No note'}</Text>
                   {out.note.trim() && out.notedAt ? <Text style={styles.noteWhen}>{formatStamp(out.notedAt)}</Text> : null}
                 </View>
-                <Text style={styles.state}>{labelStatus(out.status)}</Text>
+                <Text style={[styles.state, out.status === 'issue' ? styles.issue : out.status === 'ok' ? styles.ok : null]}>{labelStatus(out.status)}</Text>
               </View>
               <View style={styles.sideCol}>
                 <Text style={styles.sideLabel}>Check in</Text>
@@ -135,7 +135,7 @@ export default function RentalHistory() {
                   <Text style={back?.note.trim() ? styles.noteText : styles.noteEmpty}>{back?.note.trim() || 'No note'}</Text>
                   {back?.note.trim() && back.notedAt ? <Text style={styles.noteWhen}>{formatStamp(back.notedAt)}</Text> : null}
                 </View>
-                <Text style={styles.state}>{rental.checkin ? labelStatus(back?.status || '') : '—'}</Text>
+                <Text style={[styles.state, back?.status === 'issue' ? styles.issue : back?.status === 'ok' ? styles.ok : null]}>{rental.checkin ? labelStatus(back?.status || '') : '—'}</Text>
               </View>
             </View>
           </View>
@@ -331,7 +331,9 @@ const styles = StyleSheet.create({
   extra: { width: 42, height: 42, borderRadius: 6 },
   empty: { color: theme.muted, textAlign: 'center', padding: 24 },
   enlarge: { position: 'absolute', right: 6, bottom: 6, color: theme.white, backgroundColor: 'rgba(0,0,0,0.45)', overflow: 'hidden', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, fontSize: 11 },
-  state: { color: theme.green, fontWeight: '700', marginTop: 6 },
+  state: { color: theme.muted, fontWeight: '700', marginTop: 6 },
+  ok: { color: theme.green },
+  issue: { color: '#c47d00' },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
   stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
   photoStamp: { color: theme.muted, fontSize: 10, paddingHorizontal: 6, paddingBottom: 4 },

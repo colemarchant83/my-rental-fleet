@@ -334,7 +334,7 @@ export function VideoPreview({ uri }: { uri?: string }) {
           controls: true,
           playsInline: true,
           preload: 'metadata',
-          style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#1c1917' },
+          style: { width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#1c1917' },
           onLoadedMetadata: (event: Event) => {
             const el = event.currentTarget as HTMLVideoElement;
             if (el.currentTime < 0.1) el.currentTime = 0.1;

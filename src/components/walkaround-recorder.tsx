@@ -55,12 +55,11 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
     if (!session.current || recording) return;
     setError('');
     setSeconds(0);
-    try {
-      session.current.start();
-      setRecording(true);
-    } catch {
+    setRecording(true);
+    void session.current.start().catch(() => {
+      setRecording(false);
       setError('Recording could not start. Try again.');
-    }
+    });
   };
 
   const finish = async () => {
@@ -91,7 +90,6 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
             style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' },
           })}
         </View>
-        <Text style={styles.note}>1080p · 30 fps · recorded in the app</Text>
         {recording || saving ? <Text style={styles.timer}>{formatClock(seconds)}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.controls}>
@@ -117,7 +115,7 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
 
 type WebSession = {
   preview: MediaStream;
-  start: () => void;
+  start: () => Promise<void>;
   finish: () => Promise<string>;
   stop: () => void;
 };
@@ -133,7 +131,7 @@ async function openWebCamera(): Promise<WebSession> {
   if (track) {
     await track.applyConstraints({
       width: { ideal: 1920, max: 1920 },
-      height: { ideal: 1080, max: 1080 },
+      height: { ideal: 1920, max: 1920 },
       frameRate: { ideal: 30, max: 30 },
     }).catch(() => undefined);
   }
@@ -150,12 +148,13 @@ async function openWebCamera(): Promise<WebSession> {
 
   return {
     preview: stream,
-    start: () => {
+    start: async () => {
       chunks = [];
+      const output = await capped.ready;
       const mime = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find((type) => MediaRecorder.isTypeSupported(type));
       const options: MediaRecorderOptions = { videoBitsPerSecond: 8_000_000 };
       if (mime) options.mimeType = mime;
-      recorder = new MediaRecorder(capped.stream, options);
+      recorder = new MediaRecorder(output, options);
       recorder.ondataavailable = (event) => {
         if (event.data.size) chunks.push(event.data);
       };
@@ -185,8 +184,16 @@ function cameraConstraints(): MediaTrackConstraints {
   return {
     facingMode: { ideal: 'environment' },
     width: { ideal: 1920, max: 1920 },
-    height: { ideal: 1080, max: 1080 },
+    height: { ideal: 1920, max: 1920 },
     frameRate: { ideal: 30, max: 30 },
+  };
+}
+
+function fittedSize(width: number, height: number) {
+  const scale = Math.min(1, 1920 / Math.max(width, height));
+  return {
+    width: Math.max(2, Math.round((width * scale) / 2) * 2),
+    height: Math.max(2, Math.round((height * scale) / 2) * 2),
   };
 }
 
@@ -197,37 +204,44 @@ function capAt1080(source: MediaStream) {
   video.playsInline = true;
   void video.play().catch(() => undefined);
   const canvas = document.createElement('canvas');
-  canvas.width = 1920;
-  canvas.height = 1080;
   const context = canvas.getContext('2d');
   let drawing = true;
-  const draw = () => {
-    if (!drawing) return;
-    const width = video.videoWidth;
-    const height = video.videoHeight;
-    if (context && width && height) {
-      const scale = Math.min(1920 / width, 1080 / height);
-      const drawnWidth = width * scale;
-      const drawnHeight = height * scale;
-      context.fillStyle = '#000';
-      context.fillRect(0, 0, 1920, 1080);
-      context.drawImage(video, (1920 - drawnWidth) / 2, (1080 - drawnHeight) / 2, drawnWidth, drawnHeight);
-    }
-    requestAnimationFrame(draw);
-  };
-  draw();
-  const captured = typeof canvas.captureStream === 'function' ? canvas.captureStream(30) : null;
-  if (!captured) {
-    drawing = false;
-    return { stream: source, stop: () => undefined };
-  }
-  const audio = source.getAudioTracks()[0];
-  if (audio) captured.addTrack(audio);
+  let captured: MediaStream | null = null;
+  const ready = new Promise<MediaStream>((resolve) => {
+    const wait = () => {
+      if (!drawing) return;
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (!width || !height) {
+        requestAnimationFrame(wait);
+        return;
+      }
+      const size = fittedSize(width, height);
+      canvas.width = size.width;
+      canvas.height = size.height;
+      captured = typeof canvas.captureStream === 'function' ? canvas.captureStream(30) : null;
+      if (!captured) {
+        drawing = false;
+        resolve(source);
+        return;
+      }
+      const audio = source.getAudioTracks()[0];
+      if (audio) captured.addTrack(audio);
+      const draw = () => {
+        if (!drawing || !context) return;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        requestAnimationFrame(draw);
+      };
+      draw();
+      resolve(captured);
+    };
+    requestAnimationFrame(wait);
+  });
   return {
-    stream: captured,
+    ready,
     stop: () => {
       drawing = false;
-      captured.getTracks().forEach((item) => item.stop());
+      captured?.getTracks().forEach((item) => item.stop());
     },
   };
 }
@@ -275,7 +289,6 @@ function NativeRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={styles.screen}>
         <CameraView ref={camera} style={styles.preview} facing="back" mode="video" videoQuality="1080p" videoBitrate={8_000_000} />
-        <Text style={styles.note}>1080p · 30 fps · recorded in the app</Text>
         {recording ? <Text style={styles.timer}>{formatClock(seconds)}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.controls}>
