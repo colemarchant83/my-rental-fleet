@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -29,7 +29,9 @@ export default function VehicleDetail() {
   const [rentals, setRentals] = useState<LocalRental[]>([]);
   const [cover, setCover] = useState<CoverPhoto | undefined>();
   const [editing, setEditing] = useState(false);
+  const editingRef = useRef(false);
   const [nickname, setNickname] = useState('');
+  const [nicknameError, setNicknameError] = useState('');
   const [showSpecs, setShowSpecs] = useState(false);
   const [facts, setFacts] = useState<VinFacts | null>(null);
   const [factsError, setFactsError] = useState('');
@@ -53,7 +55,7 @@ export default function VehicleDetail() {
       }
       const data = snap.data() as Omit<Vehicle, 'id'>;
       setVehicle({ id: snap.id, ...data });
-      setNickname(data.nickname || '');
+      if (!editingRef.current) setNickname(data.nickname || '');
       setMissing(false);
     }, () => setMissing(true));
   }, [id]);
@@ -128,9 +130,21 @@ export default function VehicleDetail() {
   };
 
   const saveNickname = async () => {
-    if (!id || !nickname.trim()) return;
-    await updateDoc(doc(db, 'vehicles', id), { nickname: nickname.trim() });
-    setEditing(false);
+    const next = nickname.trim();
+    if (!id || !next) {
+      setNicknameError('Enter a nickname.');
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'vehicles', id), { nickname: next });
+      setVehicle((current) => (current ? { ...current, nickname: next } : current));
+      setNickname(next);
+      setNicknameError('');
+      editingRef.current = false;
+      setEditing(false);
+    } catch (err) {
+      setNicknameError(err instanceof Error ? err.message : 'Could not save the nickname.');
+    }
   };
 
   const remove = async () => {
@@ -188,7 +202,18 @@ export default function VehicleDetail() {
 
       <View style={styles.pair}>
         <Pressable style={styles.ghost} onPress={() => setShowSpecs((value) => !value)}><Text style={styles.ghostText}>Specs</Text></Pressable>
-        <Pressable style={styles.ghost} onPress={() => setEditing((value) => !value)}><Text style={styles.ghostText}>Edit nickname</Text></Pressable>
+        <Pressable
+          style={styles.ghost}
+          onPress={() => {
+            const next = !editing;
+            editingRef.current = next;
+            setNicknameError('');
+            if (next) setNickname(vehicle.nickname || '');
+            setEditing(next);
+          }}
+        >
+          <Text style={styles.ghostText} numberOfLines={1} adjustsFontSizeToFit>{editing ? 'Cancel' : 'Edit Nickname'}</Text>
+        </Pressable>
       </View>
       {showSpecs ? (
         <View style={styles.specCard}>
@@ -204,9 +229,18 @@ export default function VehicleDetail() {
         </View>
       ) : null}
       {editing ? (
-        <View>
-          <TextInput style={styles.input} value={nickname} onChangeText={setNickname} />
-          <Pressable style={styles.save} onPress={() => void saveNickname()}><Text style={styles.saveText}>Save nickname</Text></Pressable>
+        <View style={styles.specCard}>
+          <Text style={styles.specLabel}>Nickname</Text>
+          <TextInput
+            style={styles.input}
+            value={nickname}
+            onChangeText={setNickname}
+            placeholder="Nickname"
+            placeholderTextColor={theme.muted}
+            autoFocus
+          />
+          {nicknameError ? <Text style={styles.nicknameError}>{nicknameError}</Text> : null}
+          <Pressable style={styles.save} onPress={() => void saveNickname()}><Text style={styles.saveText}>Save Nickname</Text></Pressable>
         </View>
       ) : null}
 
@@ -270,6 +304,7 @@ const styles = StyleSheet.create({
   photo: { width: '100%', height: 220, borderRadius: 16, backgroundColor: theme.input },
   placeholder: { backgroundColor: theme.input, borderRadius: 16, padding: 18 },
   nickname: { color: theme.accent, fontWeight: '800', marginTop: 14, fontSize: 15 },
+  nicknameError: { color: theme.danger, marginTop: 8 },
   model: { color: theme.text, fontSize: 28, fontWeight: '800', marginTop: 2 },
   specs: { color: theme.muted, marginTop: 6, lineHeight: 20 },
   specCard: { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 14, marginTop: 12 },
