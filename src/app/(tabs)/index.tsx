@@ -3,20 +3,11 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { loadCovers, loadRentals, subscribeFleet, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, saveCachedVehicles, subscribeFleet, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri } from '../../media';
 import { theme } from '../../theme';
 
-type Vehicle = {
-  id: string;
-  nickname?: string;
-  yearMakeModel?: string;
-  specs?: string;
-  vin?: string;
-  status?: string;
-  renterName?: string;
-  photoUrl?: string;
-};
+type Vehicle = CachedVehicle;
 
 export default function VehicleListScreen() {
   const router = useRouter();
@@ -27,24 +18,40 @@ export default function VehicleListScreen() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    let live = true;
+    void loadCachedVehicles().then((saved) => {
+      if (!live || !saved.length) return;
+      setVehicles(saved);
+      setReady(true);
+    });
     const show = (snapshot: { docs: { id: string; data: () => Omit<Vehicle, 'id'> }[] }) => {
-      setVehicles(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+      const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      setVehicles(next);
       setError('');
       setReady(true);
+      void saveCachedVehicles(next);
     };
     void getDocs(collection(db, 'vehicles')).then(show).catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : 'Could not load vehicles');
+      if (!live) return;
       setReady(true);
+      void loadCachedVehicles().then((saved) => {
+        if (!saved.length) setError(err instanceof Error ? err.message : 'Could not load vehicles');
+      });
     });
     const unsub = onSnapshot(
       collection(db, 'vehicles'),
       show,
-      (err) => {
-        setError(err.message || 'Could not load vehicles');
+      () => {
         setReady(true);
+        void loadCachedVehicles().then((saved) => {
+          if (!saved.length) setError('Could not load vehicles');
+        });
       }
     );
-    return unsub;
+    return () => {
+      live = false;
+      unsub();
+    };
   }, []);
 
   useEffect(() => {

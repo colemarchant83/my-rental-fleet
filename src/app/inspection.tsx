@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { InspectionForm } from '../components/inspection-form';
-import { emptySide, openRentalFor, saveCheckin, saveCheckout, type InspectionSide } from '../fleet-store';
+import { emptySide, loadCachedVehicles, openRentalFor, saveCheckin, saveCheckout, type InspectionSide } from '../fleet-store';
 import { theme } from '../theme';
 
 export default function InspectionScreen() {
@@ -22,6 +22,12 @@ export default function InspectionScreen() {
 
   useEffect(() => {
     if (!vehicleId) return;
+    void loadCachedVehicles().then((saved) => {
+      const found = saved.find((item) => item.id === vehicleId);
+      if (!found) return;
+      setNickname(found.nickname || '');
+      if (mode === 'checkin' && found.renterName) setRenterName(found.renterName);
+    });
     void getDoc(doc(db, 'vehicles', vehicleId)).then((snap) => {
       if (!snap.exists()) return;
       const data = snap.data();

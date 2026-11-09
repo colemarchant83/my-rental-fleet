@@ -76,6 +76,28 @@ export type CoverPhoto = {
 
 const RENTALS_KEY = 'fleet.rentals.v1';
 const COVERS_KEY = 'fleet.covers.v1';
+const VEHICLES_KEY = 'fleet.vehicles.v1';
+
+export type CachedVehicle = {
+  id: string;
+  nickname?: string;
+  yearMakeModel?: string;
+  specs?: string;
+  vin?: string;
+  status?: string;
+  renterName?: string;
+  photoUrl?: string;
+  photoAddedAt?: string;
+};
+
+export async function loadCachedVehicles() {
+  return readJson<CachedVehicle[]>(VEHICLES_KEY, []);
+}
+
+export async function saveCachedVehicles(vehicles: CachedVehicle[]) {
+  await AsyncStorage.setItem(VEHICLES_KEY, JSON.stringify(vehicles));
+  emit();
+}
 
 const listeners = new Set<() => void>();
 

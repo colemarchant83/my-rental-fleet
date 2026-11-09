@@ -4,21 +4,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { formatDay, formatStamp, loadCovers, loadRentals, fetchVehicleRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, rememberCover, saveCachedVehicles, subscribeFleet, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri } from '../media';
 import { theme } from '../theme';
 
-type Vehicle = {
-  id: string;
-  nickname?: string;
-  yearMakeModel?: string;
-  specs?: string;
-  vin?: string;
-  status?: string;
-  renterName?: string;
-  photoUrl?: string;
-  photoAddedAt?: string;
-};
+type Vehicle = CachedVehicle;
 
 export default function VehicleDetail() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -47,17 +37,39 @@ export default function VehicleDetail() {
       setMissing(true);
       return;
     }
-    return onSnapshot(doc(db, 'vehicles', id), (snap) => {
+    let live = true;
+    void loadCachedVehicles().then((saved) => {
+      const found = saved.find((item) => item.id === id);
+      if (!live || !found) return;
+      setVehicle(found);
+      if (!editingRef.current) setNickname(found.nickname || '');
+      setMissing(false);
+    });
+    const unsub = onSnapshot(doc(db, 'vehicles', id), (snap) => {
       if (!snap.exists()) {
         setVehicle(null);
         setMissing(true);
         return;
       }
       const data = snap.data() as Omit<Vehicle, 'id'>;
-      setVehicle({ id: snap.id, ...data });
+      const next = { id: snap.id, ...data };
+      setVehicle(next);
       if (!editingRef.current) setNickname(data.nickname || '');
       setMissing(false);
-    }, () => setMissing(true));
+      void loadCachedVehicles().then((saved) => {
+        const rest = saved.filter((item) => item.id !== next.id);
+        return saveCachedVehicles([next, ...rest]);
+      });
+    }, () => {
+      void loadCachedVehicles().then((saved) => {
+        if (!live) return;
+        if (!saved.some((item) => item.id === id)) setMissing(true);
+      });
+    });
+    return () => {
+      live = false;
+      unsub();
+    };
   }, [id]);
 
   useEffect(() => {
