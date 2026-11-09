@@ -90,12 +90,12 @@ export default function RentalHistory() {
 
       <View style={styles.readings}>
         <View style={styles.compare}>
-          <Text style={[styles.sideLabel, styles.readingValue]}>Check out</Text>
-          <Text style={[styles.sideLabel, styles.readingValue]}>Check in</Text>
+          <Text style={[styles.sideLabel, styles.sideCol]}>Check out</Text>
+          <Text style={[styles.sideLabel, styles.sideCol]}>Check in</Text>
         </View>
-        <Reading label="Fuel" out={rental.checkout.fuel} back={rental.checkin?.fuel} returned={!!rental.checkin} />
-        <Reading label="Miles" out={rental.checkout.miles} back={rental.checkin?.miles} returned={!!rental.checkin} />
-        <Reading label="Hours" out={rental.checkout.hours} back={rental.checkin?.hours} returned={!!rental.checkin} />
+        <Reading outLabel="Fuel out" inLabel="Fuel in" out={rental.checkout.fuel} back={rental.checkin?.fuel} returned={!!rental.checkin} />
+        <Reading outLabel="Miles out" inLabel="Miles in" out={rental.checkout.miles} back={rental.checkin?.miles} returned={!!rental.checkin} />
+        <Reading outLabel="Hours out" inLabel="Hours in" out={rental.checkout.hours} back={rental.checkin?.hours} returned={!!rental.checkin} />
       </View>
 
       {SPOTS.map((spot) => {
@@ -224,13 +224,16 @@ function NoteLine({ label, note, at }: { label: string; note: string; at?: strin
   return <Text style={styles.noteLine}>{label}: {note}{at ? ` · ${formatStamp(at)}` : ''}</Text>;
 }
 
-function Reading({ label, out, back, returned }: { label: string; out?: string; back?: string; returned: boolean }) {
+function Reading({ outLabel, inLabel, out, back, returned }: { outLabel: string; inLabel: string; out?: string; back?: string; returned: boolean }) {
   const shown = (value?: string) => (value && value.trim()) || '—';
   return (
-    <View style={styles.reading}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <View style={styles.compare}>
+    <View style={[styles.compare, styles.reading]}>
+      <View style={styles.sideCol}>
+        <Text style={styles.statLabel}>{outLabel}</Text>
         <Text style={styles.readingValue}>{shown(out)}</Text>
+      </View>
+      <View style={styles.sideCol}>
+        <Text style={styles.statLabel}>{inLabel}</Text>
         <Text style={styles.readingValue}>{returned ? shown(back) : '—'}</Text>
       </View>
     </View>
@@ -293,7 +296,7 @@ const styles = StyleSheet.create({
   waiting: { color: theme.rent, marginTop: 8 },
   readings: { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 12, marginTop: 14, marginBottom: 12 },
   reading: { marginTop: 8 },
-  readingValue: { flex: 1, color: theme.text, fontWeight: '700', fontSize: 16 },
+  readingValue: { color: theme.text, fontWeight: '700', fontSize: 16, marginTop: 2 },
   statLabel: { color: theme.muted, fontSize: 12 },
   statValue: { color: theme.text, fontWeight: '700', marginTop: 2 },
   section: { fontSize: 20, fontWeight: '800', color: theme.text, marginTop: 20, marginBottom: 8 },
