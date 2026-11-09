@@ -31,6 +31,9 @@ export default function VehicleDetail() {
   const [editing, setEditing] = useState(false);
   const [nickname, setNickname] = useState('');
   const [showSpecs, setShowSpecs] = useState(false);
+  const [facts, setFacts] = useState<VinFacts | null>(null);
+  const [factsError, setFactsError] = useState('');
+  const [factsLoading, setFactsLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
@@ -59,6 +62,26 @@ export default function VehicleDetail() {
     refresh();
     return subscribeFleet(refresh);
   }, [id]);
+
+  useEffect(() => {
+    if (!showSpecs || !vehicle?.vin || facts) return;
+    let live = true;
+    setFactsLoading(true);
+    setFactsError('');
+    void lookupVin(vehicle.vin)
+      .then((result) => {
+        if (live) setFacts(result);
+      })
+      .catch(() => {
+        if (live) setFactsError('Could not look up specs right now.');
+      })
+      .finally(() => {
+        if (live) setFactsLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [showSpecs, vehicle?.vin, facts]);
 
   const open = rentals.find((rental) => rental.status === 'out');
   const out = !!open;
@@ -146,7 +169,29 @@ export default function VehicleDetail() {
         <Pressable style={styles.ghost} onPress={() => setShowSpecs((value) => !value)}><Text style={styles.ghostText}>Specs & recalls</Text></Pressable>
         <Pressable style={styles.ghost} onPress={() => setEditing((value) => !value)}><Text style={styles.ghostText}>Edit nickname</Text></Pressable>
       </View>
-      {showSpecs ? <Text style={styles.specs}>{vehicle.specs || 'No specs saved yet.'}</Text> : null}
+      {showSpecs ? (
+        <View style={styles.specCard}>
+          {factsLoading ? <Text style={styles.specs}>Looking up this VIN...</Text> : null}
+          {factsError ? <Text style={styles.specs}>{factsError}</Text> : null}
+          {facts?.rows.map((row) => (
+            <View key={row.label} style={styles.specRow}>
+              <Text style={styles.specLabel}>{row.label}</Text>
+              <Text style={styles.specValue}>{row.value}</Text>
+            </View>
+          ))}
+          {facts?.offRoad ? <Text style={styles.specs}>This is an off-road machine, so road-vehicle recalls may not apply.</Text> : null}
+          {facts ? <Text style={styles.section}>Recalls</Text> : null}
+          {facts && facts.recalls.length === 0 ? <Text style={styles.specs}>None found for this year, make, and model.</Text> : null}
+          {facts?.recalls.map((recall) => (
+            <View key={recall.id} style={styles.recall}>
+              <Text style={styles.specValue}>{recall.component}</Text>
+              <Text style={styles.specs}>{recall.summary}</Text>
+              {recall.remedy ? <Text style={styles.specs}>Remedy: {recall.remedy}</Text> : null}
+            </View>
+          ))}
+          {!vehicle.vin && !factsLoading ? <Text style={styles.specs}>{vehicle.specs || 'Add a VIN to look up specs and recalls.'}</Text> : null}
+        </View>
+      ) : null}
       {editing ? (
         <View>
           <TextInput style={styles.input} value={nickname} onChangeText={setNickname} />
@@ -193,6 +238,11 @@ const styles = StyleSheet.create({
   nickname: { color: theme.accent, fontWeight: '800', marginTop: 14, fontSize: 15 },
   model: { color: theme.text, fontSize: 28, fontWeight: '800', marginTop: 2 },
   specs: { color: theme.muted, marginTop: 6, lineHeight: 20 },
+  specCard: { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 14, marginTop: 12 },
+  specRow: { marginTop: 8 },
+  specLabel: { color: theme.muted, fontSize: 12, fontWeight: '700' },
+  specValue: { color: theme.text, fontSize: 15, fontWeight: '700', marginTop: 2 },
+  recall: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.line },
   vin: { alignSelf: 'flex-start', backgroundColor: theme.input, color: theme.text, overflow: 'hidden', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginTop: 8 },
   muted: { color: theme.muted, marginTop: 12 },
   badge: { alignSelf: 'flex-start', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 },
@@ -220,3 +270,61 @@ const styles = StyleSheet.create({
   waiting: { color: theme.rent, marginTop: 6, fontSize: 13 },
   remove: { color: theme.danger, fontWeight: '700', marginTop: 28 },
 });
+
+type VinFacts = {
+  rows: { label: string; value: string }[];
+  recalls: { id: string; component: string; summary: string; remedy: string }[];
+  offRoad: boolean;
+};
+
+function field(row: Record<string, string>, key: string) {
+  return String(row[key] || '').trim();
+}
+
+async function lookupVin(vin: string): Promise<VinFacts> {
+  const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`);
+  if (!response.ok) throw new Error('lookup failed');
+  const data = (await response.json()) as { Results?: Record<string, string>[] };
+  const row = data.Results?.[0] || {};
+  const liters = Number(field(row, 'DisplacementL'));
+  const engineSize = liters
+    ? liters >= 1
+      ? `${Math.round(liters * 10) / 10}L`
+      : `${Math.round(Number(field(row, 'DisplacementCC')) || liters * 1000)} cc`
+    : '';
+  const engine = [engineSize, field(row, 'EngineCylinders') && `${field(row, 'EngineCylinders')}-cyl`, field(row, 'EngineHP') && `${field(row, 'EngineHP')} hp`, field(row, 'FuelTypePrimary'), field(row, 'EngineConfiguration')].filter(Boolean).join(' · ');
+  const transmission = [field(row, 'TransmissionStyle'), field(row, 'TransmissionSpeeds') && `${field(row, 'TransmissionSpeeds')}-speed`].filter(Boolean).join(' · ');
+  const built = [field(row, 'PlantCity'), field(row, 'PlantState'), field(row, 'PlantCountry')].filter(Boolean).join(', ');
+  const rows = [
+    ['Year', field(row, 'ModelYear')],
+    ['Make', field(row, 'Make')],
+    ['Model', [field(row, 'Model'), field(row, 'Series'), field(row, 'Trim')].filter(Boolean).join(' · ')],
+    ['Body', field(row, 'BodyClass')],
+    ['Engine', engine],
+    ['Drive', field(row, 'DriveType')],
+    ['Transmission', transmission],
+    ['Weight class', field(row, 'GVWR')],
+    ['Brakes', field(row, 'BrakeSystemType')],
+    ['Built', built],
+    ['Manufacturer', field(row, 'Manufacturer')],
+  ].filter((item): item is [string, string] => Boolean(item[1])).map(([label, value]) => ({ label, value }));
+
+  const make = field(row, 'Make');
+  const model = field(row, 'Model');
+  const year = field(row, 'ModelYear');
+  let recalls: VinFacts['recalls'] = [];
+  if (make && model && year) {
+    const recallResponse = await fetch(`https://api.nhtsa.gov/recalls/recallsByVehicle?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&modelYear=${year}`);
+    if (recallResponse.ok) {
+      const recallData = (await recallResponse.json()) as { results?: { NHTSACampaignNumber?: string; Component?: string; Summary?: string; Remedy?: string }[] };
+      recalls = (recallData.results || []).slice(0, 12).map((item, index) => ({
+        id: item.NHTSACampaignNumber || String(index),
+        component: item.Component || 'Recall',
+        summary: item.Summary || '',
+        remedy: item.Remedy || '',
+      }));
+    }
+  }
+
+  return { rows, recalls, offRoad: field(row, 'ErrorCode').split(',').includes('10') };
+}
