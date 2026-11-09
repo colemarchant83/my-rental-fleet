@@ -90,7 +90,6 @@ export default function VehicleListScreen() {
                   {out && renter ? <Text style={styles.renter}>{renter}</Text> : null}
                 </View>
               ) : null}
-              {vehicle.specs ? <Text style={styles.specs}>{vehicle.specs}</Text> : null}
               {vehicle.vin ? <Text style={styles.vin}>VIN {vehicle.vin}</Text> : null}
               <Pressable
                 style={styles.action}
@@ -131,7 +130,6 @@ const styles = StyleSheet.create({
   model: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 4, flex: 1 },
   modelRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   renter: { color: theme.text, fontWeight: '700', fontSize: 13, textAlign: 'right', maxWidth: 110, marginTop: 8 },
-  specs: { color: theme.muted, marginTop: 2 },
   vin: { color: theme.muted, marginTop: 2 },
   action: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 12, alignItems: 'center', marginTop: 14 },
   actionText: { color: theme.ink, fontWeight: '800', fontSize: 15, textAlign: 'center' },
