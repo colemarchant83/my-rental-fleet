@@ -92,9 +92,15 @@ export default function VehicleListScreen() {
               ) : null}
               {vehicle.specs ? <Text style={styles.specs}>{vehicle.specs}</Text> : null}
               {vehicle.vin ? <Text style={styles.vin}>VIN {vehicle.vin}</Text> : null}
-              <Text style={styles.link} onPress={() => openInspection(vehicle, out ? 'checkin' : 'checkout')}>
-                {out ? 'Check in — return inspection →' : 'Check out — pre-rental inspection →'}
-              </Text>
+              <Pressable
+                style={styles.action}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  openInspection(vehicle, out ? 'checkin' : 'checkout');
+                }}
+              >
+                <Text style={styles.actionText}>{out ? 'Check in — return inspection' : 'Check out — pre-rental inspection'}</Text>
+              </Pressable>
               {waiting ? <Text style={styles.waiting}>Saved on this phone. Photos and video will upload.</Text> : null}
             </View>
           </Pressable>
@@ -127,7 +133,8 @@ const styles = StyleSheet.create({
   renter: { color: theme.text, fontWeight: '700', fontSize: 13, textAlign: 'right', maxWidth: 110, marginTop: 8 },
   specs: { color: theme.muted, marginTop: 2 },
   vin: { color: theme.muted, marginTop: 2 },
-  link: { color: theme.accent, fontWeight: '700', marginTop: 12 },
+  action: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 12, alignItems: 'center', marginTop: 14 },
+  actionText: { color: theme.ink, fontWeight: '800', fontSize: 15, textAlign: 'center' },
   waiting: { color: theme.rent, marginTop: 8, fontSize: 13 },
   badge: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
   badgeIn: { backgroundColor: theme.green },
