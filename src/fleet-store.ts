@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import { addDoc, collection, deleteDoc, deleteField, doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, deleteField, doc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
 import { contentTypeFor, deleteStoredFile, isStoredFile, persistMedia, remoteMediaLoads } from './media';
 import { uploadFile, deleteStoredObject } from './r2';
@@ -165,6 +165,29 @@ async function saveRentals(rentals: LocalRental[]) {
 
 async function saveCovers(covers: CoverPhoto[]) {
   await writeJson(COVERS_KEY, covers);
+}
+
+const HISTORY_ON_PHONE = 20;
+
+async function prunePhoneRentals(rentals: LocalRental[]) {
+  const keep = new Set<string>();
+  const closedByVehicle = new Map<string, LocalRental[]>();
+  for (const rental of rentals) {
+    if (rental.status === 'out' || rental.sync !== 'synced' || rentalHasStoredFiles(rental)) {
+      keep.add(rental.localId);
+      continue;
+    }
+    const list = closedByVehicle.get(rental.vehicleId) ?? [];
+    list.push(rental);
+    closedByVehicle.set(rental.vehicleId, list);
+  }
+  for (const list of closedByVehicle.values()) {
+    list.sort((a, b) => b.createdAt - a.createdAt);
+    for (const rental of list.slice(0, HISTORY_ON_PHONE)) keep.add(rental.localId);
+  }
+  const next = rentals.filter((rental) => keep.has(rental.localId));
+  if (next.length !== rentals.length) await saveRentals(next);
+  return next;
 }
 
 export async function openRentalFor(vehicleId: string) {
@@ -384,17 +407,16 @@ async function pushRental(rental: LocalRental) {
     renterName: rental.status === 'closed' ? deleteField() : rental.renterName,
   });
 
-  const storedCheckout = await releaseSide(checkout);
-  const storedCheckin = checkin ? await releaseSide(checkin) : undefined;
+  const storedCheckout = rental.status === 'closed' ? await releaseSide(checkout) : checkout;
+  const storedCheckin = rental.status === 'closed' && checkin ? await releaseSide(checkin) : checkin;
   const ready = sideSettled(storedCheckout) && (!storedCheckin || sideSettled(storedCheckin));
   const rentals = await loadRentals();
-  await saveRentals(
-    rentals.map((item) =>
-      item.localId === rental.localId
-        ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, sync: ready ? 'synced' : 'pending', syncError: ready ? undefined : readableSyncError(lastUploadError) || undefined }
-        : item
-    )
+  const next = rentals.map((item) =>
+    item.localId === rental.localId
+      ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, sync: ready ? 'synced' as const : 'pending' as const, syncError: ready ? undefined : readableSyncError(lastUploadError) || undefined }
+      : item
   );
+  await saveRentals(await prunePhoneRentals(next));
 }
 
 async function pushCovers() {
@@ -435,6 +457,7 @@ export async function syncAll() {
       await pushCovers();
       const rentals = await loadRentals();
       for (const rental of rentals) {
+        if (rental.sync === 'synced' && rental.status === 'out') continue;
         if (rental.sync === 'synced' && !rentalHasStoredFiles(rental)) continue;
         try {
           await pushRental(rental);
@@ -444,6 +467,7 @@ export async function syncAll() {
           await saveRentals(latest.map((item) => (item.localId === rental.localId ? { ...item, sync: message ? 'error' : 'pending', syncError: message || undefined } : item)));
         }
       }
+      await prunePhoneRentals(await loadRentals());
     } while (queued);
   } finally {
     syncing = false;
@@ -475,4 +499,71 @@ export async function keepPhoto(uri: string) {
 
 export async function keepVideo(uri: string) {
   return { uri: await persistMedia(uri, 'mp4'), addedAt: stampNow() };
+}
+
+function createdMillis(value: unknown) {
+  if (typeof value === 'number') return value;
+  if (value && typeof value === 'object' && 'toMillis' in value && typeof (value as { toMillis?: unknown }).toMillis === 'function') {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (value && typeof value === 'object' && 'seconds' in value) return Number((value as { seconds: number }).seconds) * 1000;
+  return 0;
+}
+
+function sideFromRemote(raw: Partial<InspectionSide> & { spots?: Record<string, { status?: string; note?: string; notedAt?: string; photos?: (string | { url?: string; addedAt?: string })[] }> }, fallbackDate: string): InspectionSide {
+  const spots = {} as InspectionSide['spots'];
+  for (const spot of SPOTS) {
+    const found = raw.spots?.[spot.id];
+    spots[spot.id] = {
+      status: found?.status === 'issue' ? 'issue' : found?.status === 'ok' ? 'ok' : '',
+      note: found?.note || '',
+      notedAt: found?.notedAt,
+      photos: (found?.photos || []).map((photo, index) => {
+        const url = typeof photo === 'string' ? photo : photo.url || '';
+        const addedAt = typeof photo === 'string' ? undefined : photo.addedAt;
+        return { id: `${spot.id}-${index}`, localUri: '', remoteUrl: url, addedAt };
+      }).filter((photo) => photo.remoteUrl),
+    };
+  }
+  return {
+    date: raw.date || fallbackDate,
+    fuel: raw.fuel || 'Not recorded',
+    miles: raw.miles || '',
+    hours: raw.hours || '',
+    notes: raw.notes || '',
+    notesAt: raw.notesAt,
+    savedAt: raw.savedAt,
+    videoUrl: raw.videoUrl,
+    videoAddedAt: raw.videoAddedAt,
+    spots,
+  };
+}
+
+function rentalFromDoc(remoteId: string, data: Record<string, unknown>): LocalRental {
+  const checkout = (data.checkout ?? {}) as Partial<InspectionSide> & { savedAt?: string; spots?: InspectionSide['spots'] };
+  const checkinRaw = data.checkin as (Partial<InspectionSide> & { spots?: InspectionSide['spots'] }) | null;
+  return {
+    localId: String(data.localId || remoteId),
+    remoteId,
+    vehicleId: String(data.vehicleId || ''),
+    renterName: String(data.renterName || ''),
+    status: data.status === 'Checked In' || checkinRaw ? 'closed' : 'out',
+    sync: 'synced',
+    createdAt: createdMillis(data.createdAt) || Date.parse(String(checkout.savedAt || '')) || 0,
+    checkout: sideFromRemote(checkout, String(data.checkoutDate || '')),
+    checkin: checkinRaw ? sideFromRemote(checkinRaw, String(data.checkinDate || '')) : undefined,
+  };
+}
+
+export async function fetchVehicleRentals(vehicleId: string) {
+  const snap = await getDocs(query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId)));
+  return snap.docs
+    .map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>))
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function fetchRentalByLocalId(localId: string) {
+  const snap = await getDocs(query(collection(db, 'rentals'), where('localId', '==', localId)));
+  const first = snap.docs[0];
+  return first ? rentalFromDoc(first.id, first.data() as Record<string, unknown>) : undefined;
 }

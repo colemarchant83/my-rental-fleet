@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { formatDay, formatStamp, loadCovers, loadRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, loadCovers, loadRentals, fetchVehicleRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri } from '../media';
 import { theme } from '../theme';
 
@@ -36,6 +36,9 @@ export default function VehicleDetail() {
   const [factsLoading, setFactsLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [shownCount, setShownCount] = useState(20);
+  const [older, setOlder] = useState<LocalRental[]>([]);
+  const [olderLoaded, setOlderLoaded] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -66,6 +69,8 @@ export default function VehicleDetail() {
 
   useEffect(() => {
     setShownCount(20);
+    setOlder([]);
+    setOlderLoaded(false);
   }, [id]);
 
   useEffect(() => {
@@ -89,13 +94,17 @@ export default function VehicleDetail() {
   }, [showSpecs, vehicle?.vin, facts]);
 
   const open = rentals.find((rental) => rental.status === 'out');
-  const newestFirst = [...rentals].sort((a, b) => {
+  const localIds = new Set(rentals.map((rental) => rental.localId));
+  const combined = [...rentals, ...older.filter((rental) => !localIds.has(rental.localId))];
+  const newestFirst = combined.sort((a, b) => {
     if (a.status === 'out' && b.status !== 'out') return -1;
     if (b.status === 'out' && a.status !== 'out') return 1;
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
   const visibleRentals = newestFirst.slice(0, shownCount);
   const hiddenRentals = newestFirst.length - visibleRentals.length;
+  const closedOnPhone = rentals.filter((rental) => rental.status === 'closed').length;
+  const showMore = hiddenRentals > 0 || (!olderLoaded && closedOnPhone >= 20);
   const out = !!open;
   const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
   const display = useDisplayUri(cover?.localUri, cover?.remoteUrl || vehicle?.photoUrl);
@@ -223,9 +232,27 @@ export default function VehicleDetail() {
           {rental.sync !== 'synced' ? <Text style={styles.waiting}>{rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError) ? rental.syncError : 'Saved on this phone. Photos and video will upload.'}</Text> : null}
         </Pressable>
       ))}
-      {hiddenRentals > 0 ? (
-        <Pressable style={styles.more} onPress={() => setShownCount((count) => count + 20)}>
-          <Text style={styles.ghostText}>Show {Math.min(20, hiddenRentals)} more</Text>
+      {showMore ? (
+        <Pressable
+          style={styles.more}
+          disabled={loadingOlder}
+          onPress={() => {
+            if (!olderLoaded && id) {
+              setLoadingOlder(true);
+              void fetchVehicleRentals(id)
+                .then((remote) => {
+                  setOlder(remote);
+                  setOlderLoaded(true);
+                  const known = new Set(rentals.map((rental) => rental.localId));
+                  if (remote.some((rental) => !known.has(rental.localId))) setShownCount((count) => count + 20);
+                })
+                .finally(() => setLoadingOlder(false));
+              return;
+            }
+            setShownCount((count) => count + 20);
+          }}
+        >
+          <Text style={styles.ghostText}>{loadingOlder ? 'Loading...' : `Show ${hiddenRentals > 0 ? Math.min(20, hiddenRentals) : 20} more`}</Text>
         </Pressable>
       ) : null}
 

@@ -5,7 +5,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, formatStamp, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
 import { ZoomModal } from './zoom-modal';
-import { contentTypeFor, readStoredBlob } from '../media';
+import { contentTypeFor, isStoredFile, readStoredBlob } from '../media';
 import { theme } from '../theme';
 
 const FUEL = ['Not recorded', 'Empty', '1/4 tank', '1/2 tank', '3/4 tank', 'Full'];
@@ -350,8 +350,8 @@ export function VideoPreview({ uri }: { uri?: string }) {
 
 function spotPhoto(photo?: { localUri?: string; remoteUrl?: string }) {
   if (!photo) return '';
-  if (photo.remoteUrl) return photo.remoteUrl;
-  return photo.localUri || '';
+  if (photo.localUri && isStoredFile(photo.localUri)) return photo.localUri;
+  return photo.remoteUrl || photo.localUri || '';
 }
 
 function MediaImage({ uri, style, onOpen }: { uri: string; style: StyleProp<ImageStyle>; onOpen?: (uri: string) => void }) {

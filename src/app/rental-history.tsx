@@ -6,7 +6,7 @@ import { db } from '../firebase';
 import { ZoomModal } from '../components/zoom-modal';
 import { VideoPreview } from '../components/inspection-form';
 import { useDisplayUri } from '../media';
-import { SPOTS, deleteRental, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
+import { SPOTS, deleteRental, fetchRentalByLocalId, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
 import { theme } from '../theme';
 
 type RemotePhoto = string | { url?: string; addedAt?: string };
@@ -29,6 +29,12 @@ export default function RentalHistory() {
       if (localId) {
         const found = await rentalByLocalId(localId);
         if (!found) {
+          const remote = await fetchRentalByLocalId(localId).catch(() => undefined);
+          if (remote) {
+            openedVehicle.current = remote.vehicleId;
+            setRental(remote);
+            return;
+          }
           if (openedVehicle.current) router.replace({ pathname: '/vehicle', params: { id: openedVehicle.current } });
           else setRental(null);
           return;
