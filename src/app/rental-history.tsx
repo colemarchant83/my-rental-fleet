@@ -67,8 +67,8 @@ export default function RentalHistory() {
       </Text>
       {rental.checkout.savedAt ? <Text style={styles.stampLine}>Checkout recorded {formatStamp(rental.checkout.savedAt)}</Text> : null}
       {rental.checkin?.savedAt ? <Text style={styles.stampLine}>Return recorded {formatStamp(rental.checkin.savedAt)}</Text> : null}
-      {rental.sync !== 'synced' && !(rental.syncError && /expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError)) ? (
-        <Text style={styles.waiting}>Saved on this phone. {rental.syncError || 'Uploading photos and video.'}</Text>
+      {rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError) ? (
+        <Text style={styles.waiting}>{rental.syncError}</Text>
       ) : null}
 
       {rental.checkout.videoUri || rental.checkout.videoUrl ? (
