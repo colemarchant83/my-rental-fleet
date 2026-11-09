@@ -5,6 +5,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, formatStamp, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
 import { ZoomModal } from './zoom-modal';
+import { WalkaroundRecorder } from './walkaround-recorder';
 import { contentTypeFor, isStoredFile, readStoredBlob } from '../media';
 import { theme } from '../theme';
 
@@ -30,6 +31,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const [photoChoice, setPhotoChoice] = useState<SpotId | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState('');
+  const [videoOpen, setVideoOpen] = useState(false);
   const isOut = mode === 'checkout';
 
   const patch = (partial: Partial<InspectionSide>) => onChange({ ...side, ...partial });
@@ -66,16 +68,11 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
     setPhotoChoice(spotId);
   };
 
-  const addVideo = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], quality: 1 });
-    if (result.canceled || !result.assets[0]) return;
+  const addVideo = async (uri: string) => {
     setPhotoError('');
-    try {
-      const kept = await keepVideo(result.assets[0].uri);
-      patch({ videoUri: kept.uri, videoAddedAt: kept.addedAt });
-    } catch {
-      setPhotoError('This video could not be saved on the device. Try again.');
-    }
+    const kept = await keepVideo(uri);
+    patch({ videoUri: kept.uri, videoAddedAt: kept.addedAt });
+    setVideoOpen(false);
   };
 
   return (
@@ -215,9 +212,9 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       })}
 
       <Text style={styles.section}>Walk-around video (optional)</Text>
-      <Text style={styles.help}>Record a slow lap around the machine. It stays with this inspection and uploads after the card is saved.</Text>
-      <Pressable style={styles.ghost} onPress={() => void addVideo()}>
-        <Text style={styles.ghostText}>{side.videoUri ? 'Replace walk-around video' : 'Add walk-around video'}</Text>
+      <Text style={styles.help}>Record a slow lap in the app. It is saved at 1080p, 30 fps. Videos already on the phone cannot be added.</Text>
+      <Pressable style={styles.ghost} onPress={() => setVideoOpen(true)}>
+        <Text style={styles.ghostText}>{side.videoUri ? 'Replace walk-around video' : 'Record walk-around video'}</Text>
       </Pressable>
       {side.videoUri ? <VideoPreview uri={side.videoUri} /> : null}
       {side.videoUri && side.videoAddedAt ? <Text style={styles.count}>Recorded {formatStamp(side.videoAddedAt)}</Text> : null}
@@ -271,6 +268,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
         </View>
       </Modal>
       <ZoomModal uri={zoom} onClose={() => setZoom(null)} />
+      <WalkaroundRecorder visible={videoOpen} onClose={() => setVideoOpen(false)} onRecorded={addVideo} />
       <Modal visible={librarySpot !== null} transparent animationType="fade" onRequestClose={() => setLibrarySpot(null)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
