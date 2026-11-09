@@ -21,8 +21,8 @@ type Vehicle = {
 };
 
 export default function VehicleDetail() {
-  const params = useLocalSearchParams<{ id?: string }>();
-  const id = params.id;
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [missing, setMissing] = useState(false);
@@ -34,7 +34,10 @@ export default function VehicleDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setMissing(true);
+      return;
+    }
     return onSnapshot(doc(db, 'vehicles', id), (snap) => {
       if (!snap.exists()) {
         setVehicle(null);
@@ -45,7 +48,7 @@ export default function VehicleDetail() {
       setVehicle({ id: snap.id, ...data });
       setNickname(data.nickname || '');
       setMissing(false);
-    });
+    }, () => setMissing(true));
   }, [id]);
 
   useEffect(() => {

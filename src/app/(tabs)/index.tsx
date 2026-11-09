@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { loadCovers, loadRentals, subscribeFleet, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri } from '../../media';
@@ -24,15 +24,25 @@ export default function VehicleListScreen() {
   const [rentals, setRentals] = useState<LocalRental[]>([]);
   const [covers, setCovers] = useState<CoverPhoto[]>([]);
   const [error, setError] = useState('');
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    const show = (snapshot: { docs: { id: string; data: () => Omit<Vehicle, 'id'> }[] }) => {
+      setVehicles(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
+      setError('');
+      setReady(true);
+    };
+    void getDocs(collection(db, 'vehicles')).then(show).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : 'Could not load vehicles');
+      setReady(true);
+    });
     const unsub = onSnapshot(
       collection(db, 'vehicles'),
-      (snapshot) => {
-        setVehicles(snapshot.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Vehicle, 'id'>) })));
-        setError('');
-      },
-      (err) => setError(err.message || 'Could not load vehicles')
+      show,
+      (err) => {
+        setError(err.message || 'Could not load vehicles');
+        setReady(true);
+      }
     );
     return unsub;
   }, []);
@@ -55,7 +65,8 @@ export default function VehicleListScreen() {
       <Text style={styles.heading}>Rental Log</Text>
       <Text style={styles.count}>{vehicles.length} {vehicles.length === 1 ? 'machine' : 'machines'}</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
+      {!ready && !error ? <Text style={styles.intro}>Loading machines...</Text> : null}
+      {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {vehicles.map((vehicle) => {
         const open = rentals.find((rental) => rental.vehicleId === vehicle.id && rental.status === 'out');
         const out = !!open;
