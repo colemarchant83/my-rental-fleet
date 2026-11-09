@@ -152,7 +152,7 @@ async function openWebCamera(): Promise<WebSession> {
       chunks = [];
       const output = await capped.ready;
       const mime = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find((type) => MediaRecorder.isTypeSupported(type));
-      const options: MediaRecorderOptions = { videoBitsPerSecond: 8_000_000 };
+      const options: MediaRecorderOptions = { videoBitsPerSecond: 4_000_000 };
       if (mime) options.mimeType = mime;
       recorder = new MediaRecorder(output, options);
       recorder.ondataavailable = (event) => {
@@ -288,7 +288,7 @@ function NativeRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
       <View style={styles.screen}>
-        <CameraView ref={camera} style={styles.preview} facing="back" mode="video" videoQuality="1080p" videoBitrate={8_000_000} />
+        <CameraView ref={camera} style={styles.preview} facing="back" mode="video" videoQuality="1080p" videoBitrate={4_000_000} />
         {recording ? <Text style={styles.timer}>{formatClock(seconds)}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.controls}>

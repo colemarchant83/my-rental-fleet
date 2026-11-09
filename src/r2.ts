@@ -6,10 +6,9 @@ import { readStoredBlob } from './media';
 
 const SIGNER = (process.env.EXPO_PUBLIC_R2_SIGNER ?? 'https://my-rental-fleet-media.colemarchant.workers.dev').replace(/\/$/, '');
 
-function timeoutSignal(signal?: AbortSignal) {
-  const timeout = AbortSignal.timeout(45_000);
-  if (!signal) return timeout;
-  return AbortSignal.any([signal, timeout]);
+function uploadBudget(bytes: number) {
+  const steps = Math.ceil(bytes / (5 * 1024 * 1024));
+  return Math.min(15 * 60_000, Math.max(3 * 60_000, steps * 45_000));
 }
 
 async function fileBody(localUri: string, contentType: string) {
@@ -27,16 +26,16 @@ async function fileBody(localUri: string, contentType: string) {
   return { body: body.slice(0, body.size, type), type };
 }
 
-function putBlob(endpoint: string, body: Blob, type: string, signal?: AbortSignal) {
+function putBlob(endpoint: string, body: Blob, type: string) {
+  const budget = uploadBudget(body.size);
   return new Promise<string>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const timer = setTimeout(() => {
       xhr.abort();
-      reject(new Error('The upload did not finish. It is still saved on this phone and will try again.'));
-    }, 45_000);
+    }, budget);
     const fail = () => {
       clearTimeout(timer);
-      reject(new Error('The upload did not finish. It is still saved on this phone and will try again.'));
+      reject(new Error('The video is still on this phone. Leave this screen open while it uploads.'));
     };
     xhr.open('PUT', endpoint);
     xhr.setRequestHeader('Content-Type', type);
@@ -50,16 +49,14 @@ function putBlob(endpoint: string, body: Blob, type: string, signal?: AbortSigna
     };
     xhr.onerror = fail;
     xhr.onabort = fail;
-    signal?.addEventListener('abort', () => xhr.abort(), { once: true });
     xhr.send(body);
   });
 }
 
-async function uploadMultipart(key: string, body: Blob, type: string, signal?: AbortSignal) {
+async function uploadMultipart(key: string, body: Blob, type: string) {
   const start = await fetch(`${SIGNER}/upload/start?key=${encodeURIComponent(key)}`, {
     method: 'POST',
     headers: { 'Content-Type': type },
-    signal: timeoutSignal(signal),
   });
   if (start.status === 404) return '';
   if (!start.ok) throw new Error(`Media upload failed (${start.status})`);
@@ -72,8 +69,7 @@ async function uploadMultipart(key: string, body: Blob, type: string, signal?: A
     const response = await putBlob(
       `${SIGNER}/upload/part?key=${encodeURIComponent(key)}&uploadId=${encodeURIComponent(uploadId)}&part=${index + 1}`,
       chunk,
-      type,
-      signal
+      type
     );
     const part = JSON.parse(response) as { partNumber: number; etag: string };
     parts.push(part);
@@ -82,11 +78,21 @@ async function uploadMultipart(key: string, body: Blob, type: string, signal?: A
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(parts),
-    signal: timeoutSignal(signal),
   });
   if (!finish.ok) throw new Error(`Media upload failed (${finish.status})`);
   const uploaded = (await finish.text()).trim();
   return uploaded.startsWith('http') ? uploaded : `${SIGNER}/media/${key}`;
+}
+
+let chunkedUploads: Promise<boolean> | null = null;
+
+function canChunkUploads() {
+  if (!chunkedUploads) {
+    chunkedUploads = fetch(`${SIGNER}/upload/start`, { method: 'GET' })
+      .then((response) => response.ok)
+      .catch(() => false);
+  }
+  return chunkedUploads;
 }
 
 export async function uploadFile(localUri: string, key: string, contentType: string, signal?: AbortSignal): Promise<string> {
@@ -99,14 +105,11 @@ export async function uploadFile(localUri: string, key: string, contentType: str
   if (Platform.OS === 'web') {
     const file = await fileBody(localUri, contentType);
     if (!file.body.size) throw new Error('Could not read the saved photo.');
-    if (file.body.size > 20 * 1024 * 1024) {
-      const multipart = await uploadMultipart(key, file.body, file.type, signal).catch((error) => {
-        if (error instanceof Error && /404/.test(error.message)) return '';
-        throw error;
-      });
+    if (file.body.size > 20 * 1024 * 1024 && (await canChunkUploads())) {
+      const multipart = await uploadMultipart(key, file.body, file.type);
       if (multipart) return multipart;
     }
-    const uploaded = await putBlob(endpoint, file.body, file.type, signal);
+    const uploaded = await putBlob(endpoint, file.body, file.type);
     return uploaded.startsWith('http') ? uploaded : `${SIGNER}/media/${key}`;
   }
 

@@ -28,6 +28,10 @@ export default {
       return new Response(null, { status: 204, headers: cors(origin) });
     }
 
+    if (request.method === 'GET' && url.pathname === '/upload/start') {
+      return Response.json({ ok: true }, { headers: cors(origin) });
+    }
+
     if (request.method === 'POST' && url.pathname === '/upload/start') {
       const key = safeKey(url.searchParams.get('key') || '');
       if (!key) return new Response('Bad key', { status: 400, headers: cors(origin) });
