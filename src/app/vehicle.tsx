@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { formatDay, formatStamp, isOutStatus, loadCovers, loadRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, loadCovers, loadRentals, rememberCover, subscribeFleet, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri } from '../media';
 import { theme } from '../theme';
 
@@ -58,11 +58,14 @@ export default function VehicleDetail() {
   }, [id]);
 
   const open = rentals.find((rental) => rental.status === 'out');
-  const out = !!open || isOutStatus(vehicle?.status);
+  const out = !!open;
+  const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
   const display = useDisplayUri(cover?.localUri, cover?.remoteUrl || vehicle?.photoUrl);
 
   const setStatus = async (status: string) => {
     if (!id) return;
+    if (open && status !== 'Out on rent') return;
+    if (!open && status === 'Out on rent') return;
     try {
       await updateDoc(doc(db, 'vehicles', id), { status });
     } catch {
@@ -121,12 +124,12 @@ export default function VehicleDetail() {
       {vehicle.vin ? <Text style={styles.vin}>VIN {vehicle.vin}</Text> : null}
 
       <View style={[styles.badge, out ? styles.badgeOut : styles.badgeIn]}>
-        <Text style={styles.badgeText}>{out ? 'Out on rent' : vehicle.status === 'In the shop' || vehicle.status === 'In Shop' ? 'In the shop' : 'Available'}</Text>
+        <Text style={styles.badgeText}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
       </View>
 
       <View style={styles.statusRow}>
         {['Available', 'Out on rent', 'In the shop'].map((status) => {
-          const current = out ? 'Out on rent' : vehicle.status === 'In the shop' || vehicle.status === 'In Shop' ? 'In the shop' : 'Available';
+          const current = out ? 'Out on rent' : shop ? 'In the shop' : 'Available';
           const selected = status === current;
           return (
             <Pressable key={status} style={[styles.statusBtn, selected && styles.statusOn]} onPress={() => void setStatus(status)}>

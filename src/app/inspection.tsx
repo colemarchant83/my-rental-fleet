@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { InspectionForm, freshInspection } from '../components/inspection-form';
+import { InspectionForm } from '../components/inspection-form';
 import { emptySide, openRentalFor, saveCheckin, saveCheckout, type InspectionSide } from '../fleet-store';
 import { theme } from '../theme';
 
@@ -67,9 +67,8 @@ export default function InspectionScreen() {
         return;
       }
       if (!openId) {
-        const created = await saveCheckout(vehicleId, renterName, freshInspection());
-        await saveCheckin(created.localId, side);
-        openCard(created.localId);
+        setError('This return was not saved. The machine is still out. Start the return again from the machine page.');
+        setSaving(false);
         return;
       }
       await saveCheckin(openId, side);

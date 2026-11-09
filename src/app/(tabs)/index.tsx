@@ -3,7 +3,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useRouter } from 'expo-router';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { isOutStatus, loadCovers, loadRentals, subscribeFleet, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCovers, loadRentals, subscribeFleet, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri } from '../../media';
 import { theme } from '../../theme';
 
@@ -59,7 +59,8 @@ export default function VehicleListScreen() {
       {vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {vehicles.map((vehicle) => {
         const open = rentals.find((rental) => rental.vehicleId === vehicle.id && rental.status === 'out');
-        const out = !!open || isOutStatus(vehicle.status);
+        const out = !!open;
+        const shop = !out && (vehicle.status === 'In the shop' || vehicle.status === 'In Shop');
         const renter = open?.renterName || vehicle.renterName;
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
         const waiting = rentals.some((rental) => rental.vehicleId === vehicle.id && rental.sync !== 'synced');
@@ -70,7 +71,7 @@ export default function VehicleListScreen() {
               <View style={styles.titleRow}>
                 <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
                 <View style={[styles.badge, out ? styles.badgeOut : styles.badgeIn]}>
-                  <Text style={styles.badgeText}>{out ? 'Out on rent' : vehicle.status === 'In the shop' || vehicle.status === 'In Shop' ? 'In the shop' : 'Available'}</Text>
+                  <Text style={styles.badgeText}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
                 </View>
               </View>
               {vehicle.yearMakeModel ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}
