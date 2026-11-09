@@ -181,7 +181,6 @@ export default function VehicleDetail() {
 
       <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
       {vehicle.yearMakeModel ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}
-      {vehicle.specs ? <Text style={styles.specs}>{vehicle.specs}</Text> : null}
       {vehicle.vin ? <Text style={styles.vin}>VIN {vehicle.vin}</Text> : null}
 
       <View style={[styles.badge, out ? styles.badgeOut : styles.badgeIn]}>
