@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { addDoc, collection, deleteDoc, deleteField, doc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
-import { contentTypeFor, deleteStoredFile, isStoredFile, persistMedia, remoteMediaLoads } from './media';
+import { contentTypeFor, deleteStoredFile, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
 import { uploadFile, deleteStoredObject } from './r2';
 
 export const SPOTS = [
@@ -42,6 +42,7 @@ export type InspectionSide = {
   videoUri?: string;
   videoUrl?: string;
   videoAddedAt?: string;
+  videoOverLimit?: boolean;
   spots: Record<SpotId, SpotRecord>;
 };
 
@@ -290,6 +291,17 @@ async function uploadRef(ref: PhotoRef, folder: string) {
   }
 }
 
+const VIDEO_LIMIT = 100 * 1000 * 1000;
+
+async function noteLargeVideo(bytes: number, folder: string) {
+  await addDoc(collection(db, 'uploadAlerts'), {
+    kind: 'video-over-100mb',
+    bytes,
+    folder,
+    createdAt: serverTimestamp(),
+  }).catch(() => undefined);
+}
+
 async function uploadSide(side: InspectionSide, folder: string): Promise<InspectionSide> {
   const spots = {} as Record<SpotId, SpotRecord>;
   for (const spot of SPOTS) {
@@ -302,17 +314,31 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
   }
   let videoUrl = side.videoUrl;
   let videoUri = side.videoUri;
-  if (videoUri && !videoUrl) {
-    try {
-      videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, 'video/mp4');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Upload failed';
-      if (/Could not read the saved photo/i.test(message)) videoUri = undefined;
-      else lastUploadError = message;
-      videoUrl = undefined;
+  let videoOverLimit = side.videoOverLimit;
+  if (videoUri && !videoUrl && !videoOverLimit) {
+    const bytes = await mediaByteSize(videoUri);
+    if (bytes > VIDEO_LIMIT) {
+      videoOverLimit = true;
+      lastUploadError = 'This video is over 100 MB, so it was not uploaded. It is still saved on this phone.';
+      void noteLargeVideo(bytes, folder);
+    } else {
+      try {
+        videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, 'video/mp4');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Upload failed';
+        if (/Could not read the saved photo/i.test(message)) videoUri = undefined;
+        else lastUploadError = message;
+        if (/413/.test(message)) {
+          videoOverLimit = true;
+          void noteLargeVideo(bytes, folder);
+        }
+        videoUrl = undefined;
+      }
     }
+  } else if (videoOverLimit) {
+    lastUploadError = 'This video is over 100 MB, so it was not uploaded. It is still saved on this phone.';
   }
-  return { ...side, spots, videoUrl, videoUri };
+  return { ...side, spots, videoUrl, videoUri, videoOverLimit };
 }
 
 function sidePayload(side: InspectionSide) {

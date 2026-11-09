@@ -32,6 +32,19 @@ function openMediaDb(): Promise<IDBDatabase> {
   });
 }
 
+export async function mediaByteSize(uri?: string) {
+  if (!uri) return 0;
+  const stored = await readStoredBlob(uri).catch(() => null);
+  if (stored) return stored.size;
+  if (Platform.OS !== 'web') {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (info.exists && 'size' in info && typeof info.size === 'number') return info.size;
+  }
+  const response = await fetch(uri).catch(() => null);
+  if (!response?.ok) return 0;
+  return (await response.blob()).size;
+}
+
 export async function readStoredBlob(uri?: string): Promise<Blob | null> {
   if (!uri?.startsWith('idb:') || typeof indexedDB === 'undefined') return null;
   const db = await openMediaDb();
