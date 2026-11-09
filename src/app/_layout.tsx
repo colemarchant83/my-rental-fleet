@@ -2,11 +2,11 @@ import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BackLink, RefreshButton } from '../components/back-link';
+import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
 import { syncAll, watchConnection } from '../fleet-store';
 import { theme } from '../theme';
 
-function ScreenHeader({ title }: { title?: string }) {
+function ScreenHeader({ title, home }: { title?: string; home?: boolean }) {
   const insets = useSafeAreaInsets();
   return (
     <View style={{ backgroundColor: theme.bg, paddingTop: insets.top }}>
@@ -18,6 +18,7 @@ function ScreenHeader({ title }: { title?: string }) {
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 }}>
           <BackLink />
+          {home ? <HomeButton /> : null}
           <RefreshButton />
         </View>
       </View>
@@ -44,7 +45,7 @@ export default function RootLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="vehicle" options={{ header: () => <ScreenHeader /> }} />
       <Stack.Screen name="inspection" options={{ header: () => <ScreenHeader title="Inspection" /> }} />
-      <Stack.Screen name="rental-history" options={{ header: () => <ScreenHeader /> }} />
+      <Stack.Screen name="rental-history" options={{ header: () => <ScreenHeader home /> }} />
     </Stack>
   );
 }

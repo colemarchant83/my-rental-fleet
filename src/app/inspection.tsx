@@ -61,13 +61,6 @@ export default function InspectionScreen() {
         }
         router.replace({ pathname: '/rental-history', params: { localId } });
       };
-      const openMachine = () => {
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.location.assign(`/vehicle?id=${encodeURIComponent(vehicleId)}`);
-          return;
-        }
-        router.replace({ pathname: '/vehicle', params: { id: vehicleId } });
-      };
       if (mode === 'checkout') {
         const rental = await saveCheckout(vehicleId, renterName, side);
         openCard(rental.localId);
@@ -80,7 +73,7 @@ export default function InspectionScreen() {
         return;
       }
       await saveCheckin(open.localId, side);
-      openMachine();
+      openCard(open.localId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save');
       setSaving(false);

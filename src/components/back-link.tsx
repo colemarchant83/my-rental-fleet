@@ -17,6 +17,24 @@ export function BackLink() {
   );
 }
 
+export function HomeButton() {
+  const router = useRouter();
+  return (
+    <Pressable
+      hitSlop={8}
+      onPress={() => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.location.assign('/');
+          return;
+        }
+        router.replace('/');
+      }}
+    >
+      <Text style={{ color: theme.accent, fontSize: 16, fontWeight: '700' }}>Home</Text>
+    </Pressable>
+  );
+}
+
 export function RefreshButton() {
   return (
     <Pressable

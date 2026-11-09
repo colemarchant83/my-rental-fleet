@@ -278,7 +278,6 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
   }
   let videoUrl = side.videoUrl;
   let videoUri = side.videoUri;
-  if (videoUri && videoUrl && !(await remoteMediaLoads(videoUrl, 'video'))) videoUrl = undefined;
   if (videoUri && !videoUrl) {
     try {
       videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, 'video/mp4');
@@ -329,9 +328,9 @@ function rentalHasStoredFiles(rental: LocalRental) {
 function sideSettled(side: InspectionSide) {
   const photosReady = SPOTS.every((spot) => side.spots[spot.id].photos.every((photo) => {
     if (!photo.localUri && !photo.remoteUrl) return true;
-    return !!photo.remoteUrl && !isStoredFile(photo.localUri);
+    return !!photo.remoteUrl;
   }));
-  return photosReady && !isStoredFile(side.videoUri);
+  return photosReady && (!side.videoUri || !!side.videoUrl);
 }
 
 async function releaseSide(side: InspectionSide): Promise<InspectionSide> {
