@@ -196,19 +196,19 @@ function labelStatus(status: string) {
   return '—';
 }
 
-function HistoryPhoto({ photo, style, onOpen, empty }: { photo: StampedPhoto; style: object; onOpen: (uri: string) => void; empty: string }) {
+function HistoryPhoto({ photo, style, onOpen, empty, compact }: { photo: StampedPhoto; style: object; onOpen: (uri: string) => void; empty: string; compact?: boolean }) {
   const display = useDisplayUri(photo.localUri, photo.remoteUrl);
   if (!display.uri) {
     if (!empty) return null;
     return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
   }
   return (
-    <View>
+    <View style={compact ? styles.extraWrap : undefined}>
       <Pressable onPress={() => onOpen(display.uri)}>
         <Image source={{ uri: display.uri }} style={style} resizeMode="cover" onError={display.failRemote} />
-        <Text pointerEvents="none" style={styles.enlarge}>Enlarge</Text>
+        {compact ? null : <Text pointerEvents="none" style={styles.enlarge}>Enlarge</Text>}
       </Pressable>
-      {photo.addedAt ? <Text style={styles.photoStamp}>{formatStamp(photo.addedAt)}</Text> : null}
+      {!compact && photo.addedAt ? <Text style={styles.photoStamp}>{formatStamp(photo.addedAt)}</Text> : null}
     </View>
   );
 }
@@ -217,15 +217,14 @@ function PhotoStack({ photos, empty, onOpen }: { photos: StampedPhoto[]; empty: 
   if (!photos.length) {
     return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
   }
+  const extras = photos.slice(1, 4);
   return (
-    <View style={styles.sideCol}>
+    <View style={styles.stack}>
       <HistoryPhoto photo={photos[0]} style={styles.shot} onOpen={onOpen} empty={empty} />
-      {photos.length > 1 ? (
+      {extras.length ? (
         <View style={styles.extraRow}>
-          {photos.slice(1).map((photo, index) => (
-            <View key={`${photo.localUri ?? ''}-${photo.remoteUrl ?? ''}-${index}`}>
-              <HistoryPhoto photo={photo} style={styles.extra} onOpen={onOpen} empty="" />
-            </View>
+          {extras.map((photo, index) => (
+            <HistoryPhoto key={`${photo.localUri ?? ''}-${photo.remoteUrl ?? ''}-${index}`} photo={photo} style={styles.extra} onOpen={onOpen} empty="" compact />
           ))}
         </View>
       ) : null}
@@ -319,7 +318,7 @@ const styles = StyleSheet.create({
   spot: { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 12, marginBottom: 12 },
   spotTitle: { fontWeight: '800', color: theme.text, marginBottom: 8 },
   compare: { flexDirection: 'row', gap: 8 },
-  sideCol: { flex: 1 },
+  sideCol: { flex: 1, minWidth: 0 },
   sideLabel: { color: theme.text, fontWeight: '800', fontSize: 13, marginBottom: 6 },
   noteBox: { marginTop: 6, backgroundColor: theme.bg, borderRadius: 8, padding: 8, minHeight: 44 },
   noteText: { color: theme.text, fontSize: 13, lineHeight: 18 },
@@ -327,8 +326,10 @@ const styles = StyleSheet.create({
   noteWhen: { color: theme.muted, fontSize: 11, marginTop: 4 },
   frame: { width: '100%', backgroundColor: theme.input, borderRadius: 12, minHeight: 120, overflow: 'hidden' },
   shot: { width: '100%', height: 140 },
-  extraRow: { flexDirection: 'row', gap: 4, padding: 4 },
-  extra: { width: 42, height: 42, borderRadius: 6 },
+  stack: { width: '100%' },
+  extraRow: { flexDirection: 'row', gap: 4, marginTop: 4 },
+  extraWrap: { width: 48, height: 48, borderRadius: 6, overflow: 'hidden' },
+  extra: { width: 48, height: 48, borderRadius: 6 },
   empty: { color: theme.muted, textAlign: 'center', padding: 24 },
   enlarge: { position: 'absolute', right: 6, bottom: 6, color: theme.white, backgroundColor: 'rgba(0,0,0,0.45)', overflow: 'hidden', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, fontSize: 11 },
   state: { color: theme.muted, fontWeight: '700', marginTop: 6 },
