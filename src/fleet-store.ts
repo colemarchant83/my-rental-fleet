@@ -275,11 +275,12 @@ function readableSyncError(error?: string) {
 }
 
 let lastUploadError = '';
+let uploadSignal: AbortSignal | undefined;
 
 async function uploadRef(ref: PhotoRef, folder: string) {
   if (ref.remoteUrl) return ref;
   try {
-    const remoteUrl = await uploadFile(ref.localUri, `${folder}/${ref.id}.jpg`, contentTypeFor(ref.localUri));
+    const remoteUrl = await uploadFile(ref.localUri, `${folder}/${ref.id}.jpg`, contentTypeFor(ref.localUri), uploadSignal);
     return { ...ref, remoteUrl };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Upload failed';
@@ -303,7 +304,7 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
   let videoUri = side.videoUri;
   if (videoUri && !videoUrl) {
     try {
-      videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, 'video/mp4');
+      videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, 'video/mp4', uploadSignal);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Upload failed';
       if (/Could not read the saved photo/i.test(message)) videoUri = undefined;
@@ -424,7 +425,7 @@ async function pushCovers() {
   const next: CoverPhoto[] = [];
   for (const cover of covers) {
     try {
-      const remoteUrl = cover.remoteUrl ?? (await uploadFile(cover.localUri, `vehicles/${cover.vehicleId}/cover.jpg`, contentTypeFor(cover.localUri)));
+      const remoteUrl = cover.remoteUrl ?? (await uploadFile(cover.localUri, `vehicles/${cover.vehicleId}/cover.jpg`, contentTypeFor(cover.localUri), uploadSignal));
       if (!cover.remoteUrl) {
         await updateDoc(doc(db, 'vehicles', cover.vehicleId), { photoUrl: remoteUrl, photoAddedAt: cover.addedAt ?? null });
       }
@@ -442,18 +443,23 @@ async function pushCovers() {
 
 let syncing = false;
 let queued = false;
+let uploadAbort = new AbortController();
 
 export async function syncAll() {
   if (syncing) {
+    uploadAbort.abort();
     queued = true;
     return;
   }
   syncing = true;
+  const tried = new Set<string>();
   try {
     do {
       queued = false;
+      uploadAbort = new AbortController();
+      uploadSignal = uploadAbort.signal;
       const net = await NetInfo.fetch();
-      if (net.isConnected === false) return;
+      if (net.isConnected === false && (typeof navigator === 'undefined' || navigator.onLine === false)) return;
       await pushCovers();
       const rentals = await loadRentals();
       for (const rental of rentals) {
@@ -465,12 +471,17 @@ export async function syncAll() {
           const message = readableSyncError(error instanceof Error ? error.message : 'Upload failed');
           const latest = await loadRentals();
           await saveRentals(latest.map((item) => (item.localId === rental.localId ? { ...item, sync: message ? 'error' : 'pending', syncError: message || undefined } : item)));
+          if (!tried.has(rental.localId)) {
+            tried.add(rental.localId);
+            queued = true;
+          }
         }
       }
       await prunePhoneRentals(await loadRentals());
     } while (queued);
   } finally {
     syncing = false;
+    uploadSignal = undefined;
   }
 }
 
