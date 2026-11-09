@@ -166,7 +166,7 @@ export default function VehicleDetail() {
       </View>
 
       <View style={styles.pair}>
-        <Pressable style={styles.ghost} onPress={() => setShowSpecs((value) => !value)}><Text style={styles.ghostText}>Specs & recalls</Text></Pressable>
+        <Pressable style={styles.ghost} onPress={() => setShowSpecs((value) => !value)}><Text style={styles.ghostText}>Specs</Text></Pressable>
         <Pressable style={styles.ghost} onPress={() => setEditing((value) => !value)}><Text style={styles.ghostText}>Edit nickname</Text></Pressable>
       </View>
       {showSpecs ? (
@@ -179,17 +179,7 @@ export default function VehicleDetail() {
               <Text style={styles.specValue}>{row.value}</Text>
             </View>
           ))}
-          {facts?.offRoad ? <Text style={styles.specs}>This is an off-road machine, so road-vehicle recalls may not apply.</Text> : null}
-          {facts ? <Text style={styles.section}>Recalls</Text> : null}
-          {facts && facts.recalls.length === 0 ? <Text style={styles.specs}>None found for this year, make, and model.</Text> : null}
-          {facts?.recalls.map((recall) => (
-            <View key={recall.id} style={styles.recall}>
-              <Text style={styles.specValue}>{recall.component}</Text>
-              <Text style={styles.specs}>{recall.summary}</Text>
-              {recall.remedy ? <Text style={styles.specs}>Remedy: {recall.remedy}</Text> : null}
-            </View>
-          ))}
-          {!vehicle.vin && !factsLoading ? <Text style={styles.specs}>{vehicle.specs || 'Add a VIN to look up specs and recalls.'}</Text> : null}
+          {!vehicle.vin && !factsLoading ? <Text style={styles.specs}>{vehicle.specs || 'Add a VIN to look up specs.'}</Text> : null}
         </View>
       ) : null}
       {editing ? (
@@ -242,7 +232,6 @@ const styles = StyleSheet.create({
   specRow: { marginTop: 8 },
   specLabel: { color: theme.muted, fontSize: 12, fontWeight: '700' },
   specValue: { color: theme.text, fontSize: 15, fontWeight: '700', marginTop: 2 },
-  recall: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.line },
   vin: { alignSelf: 'flex-start', backgroundColor: theme.input, color: theme.text, overflow: 'hidden', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginTop: 8 },
   muted: { color: theme.muted, marginTop: 12 },
   badge: { alignSelf: 'flex-start', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 },
@@ -273,8 +262,6 @@ const styles = StyleSheet.create({
 
 type VinFacts = {
   rows: { label: string; value: string }[];
-  recalls: { id: string; component: string; summary: string; remedy: string }[];
-  offRoad: boolean;
 };
 
 function field(row: Record<string, string>, key: string) {
@@ -309,22 +296,5 @@ async function lookupVin(vin: string): Promise<VinFacts> {
     ['Manufacturer', field(row, 'Manufacturer')],
   ].filter((item): item is [string, string] => Boolean(item[1])).map(([label, value]) => ({ label, value }));
 
-  const make = field(row, 'Make');
-  const model = field(row, 'Model');
-  const year = field(row, 'ModelYear');
-  let recalls: VinFacts['recalls'] = [];
-  if (make && model && year) {
-    const recallResponse = await fetch(`https://api.nhtsa.gov/recalls/recallsByVehicle?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&modelYear=${year}`);
-    if (recallResponse.ok) {
-      const recallData = (await recallResponse.json()) as { results?: { NHTSACampaignNumber?: string; Component?: string; Summary?: string; Remedy?: string }[] };
-      recalls = (recallData.results || []).slice(0, 12).map((item, index) => ({
-        id: item.NHTSACampaignNumber || String(index),
-        component: item.Component || 'Recall',
-        summary: item.Summary || '',
-        remedy: item.Remedy || '',
-      }));
-    }
-  }
-
-  return { rows, recalls, offRoad: field(row, 'ErrorCode').split(',').includes('10') };
+  return { rows };
 }
