@@ -16,7 +16,7 @@ function PillLabel({ focused, children }: { focused: boolean; children: string }
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const bottom = Math.max(insets.bottom, 14);
+  const bottom = Math.max(insets.bottom, 12) + 18;
 
   return (
     <Tabs
