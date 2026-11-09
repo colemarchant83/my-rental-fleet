@@ -13,7 +13,9 @@ type RemotePhoto = string | { url?: string; addedAt?: string };
 type RemoteSpot = { status?: string; note?: string; notedAt?: string; photos?: RemotePhoto[] };
 
 export default function RentalHistory() {
-  const params = useLocalSearchParams<{ localId?: string; id?: string }>();
+  const params = useLocalSearchParams<{ localId?: string | string[]; id?: string | string[] }>();
+  const localId = Array.isArray(params.localId) ? params.localId[0] : params.localId;
+  const remoteId = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const [rental, setRental] = useState<LocalRental | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
@@ -24,8 +26,8 @@ export default function RentalHistory() {
 
   useEffect(() => {
     const refresh = async () => {
-      if (params.localId) {
-        const found = await rentalByLocalId(params.localId);
+      if (localId) {
+        const found = await rentalByLocalId(localId);
         if (!found) {
           if (openedVehicle.current) router.replace({ pathname: '/vehicle', params: { id: openedVehicle.current } });
           else setRental(null);
@@ -35,19 +37,19 @@ export default function RentalHistory() {
         setRental(found);
         return;
       }
-      if (!params.id) return;
-      const local = (await loadRentals()).find((item) => item.remoteId === params.id);
+      if (!remoteId) return;
+      const local = (await loadRentals()).find((item) => item.remoteId === remoteId);
       if (local) {
         setRental(local);
         return;
       }
-      const snap = await getDoc(doc(db, 'rentals', params.id));
+      const snap = await getDoc(doc(db, 'rentals', remoteId));
       if (!snap.exists()) return;
-      setRental(fromRemote(params.id, snap.data() as Record<string, unknown>));
+      setRental(fromRemote(remoteId, snap.data() as Record<string, unknown>));
     };
     void refresh();
     return subscribeFleet(() => void refresh());
-  }, [params.localId, params.id, router]);
+  }, [localId, remoteId, router]);
 
   if (!rental) {
     return <View style={styles.screen}><Text style={styles.muted}>Loading rental...</Text></View>;
@@ -57,7 +59,7 @@ export default function RentalHistory() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.titleRow}>
         <Text style={styles.renter}>{rental.renterName || 'Renter'}</Text>
-        <View style={styles.pill}><Text style={styles.pillText}>{rental.status === 'closed' ? 'Closed' : 'Out'}</Text></View>
+        <View style={styles.pill}><Text style={styles.pillText}>{rental.status === 'closed' ? 'Returned' : 'Out'}</Text></View>
       </View>
       <Text style={styles.muted}>
         Out {formatDay(rental.checkout.date)}

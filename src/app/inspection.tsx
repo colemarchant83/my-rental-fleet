@@ -66,13 +66,14 @@ export default function InspectionScreen() {
         openCard(rental.localId);
         return;
       }
-      if (!openId) {
+      const open = (await openRentalFor(vehicleId)) ?? (openId ? { localId: openId } : null);
+      if (!open?.localId) {
         setError('This return was not saved. The machine is still out. Start the return again from the machine page.');
         setSaving(false);
         return;
       }
-      await saveCheckin(openId, side);
-      openCard(openId);
+      const saved = await saveCheckin(open.localId, side);
+      openCard(saved?.localId ?? open.localId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save');
       setSaving(false);

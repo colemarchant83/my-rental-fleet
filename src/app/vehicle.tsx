@@ -163,7 +163,7 @@ export default function VehicleDetail() {
         <Pressable key={rental.localId} style={styles.rental} onPress={() => router.push({ pathname: '/rental-history', params: { localId: rental.localId } })}>
           <View style={styles.titleRow}>
             <Text style={styles.renter}>{rental.renterName}</Text>
-            <View style={styles.closed}><Text style={styles.closedText}>{rental.status === 'closed' ? 'Closed' : 'Out'}</Text></View>
+            <View style={styles.closed}><Text style={styles.closedText}>{rental.status === 'closed' ? 'Returned' : 'Out'}</Text></View>
           </View>
           <Text style={styles.specs}>
             Out {formatDay(rental.checkout.date)}
