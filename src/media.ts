@@ -45,6 +45,22 @@ export async function mediaByteSize(uri?: string) {
   return (await response.blob()).size;
 }
 
+function hex(buffer: ArrayBuffer) {
+  return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export async function fingerprint(uri?: string) {
+  if (!uri || typeof crypto === 'undefined' || !crypto.subtle) return undefined;
+  try {
+    const stored = await readStoredBlob(uri).catch(() => null);
+    const blob = stored ?? (await fetch(uri).then((response) => (response.ok ? response.blob() : null)).catch(() => null));
+    if (!blob) return undefined;
+    return hex(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
+  } catch {
+    return undefined;
+  }
+}
+
 export async function readStoredBlob(uri?: string): Promise<Blob | null> {
   if (!uri?.startsWith('idb:') || typeof indexedDB === 'undefined') return null;
   const db = await openMediaDb();

@@ -71,7 +71,12 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const addVideo = async (uri: string) => {
     setPhotoError('');
     const kept = await keepVideo(uri);
-    patch({ videoUri: kept.uri, videoAddedAt: kept.addedAt });
+    patch({
+      videoUri: kept.uri,
+      videoAddedAt: kept.addedAt,
+      videoServerAddedAt: kept.serverAddedAt,
+      videoSha256: kept.sha256,
+    });
     setVideoOpen(false);
     const bytes = await mediaByteSize(kept.uri);
     if (bytes > 100 * 1000 * 1000) {

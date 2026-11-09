@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
-import { addDoc, collection, deleteDoc, deleteField, doc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
-import { contentTypeFor, deleteStoredFile, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
+import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
 import { uploadFile, deleteStoredObject } from './r2';
 
 export const SPOTS = [
@@ -22,6 +22,9 @@ export type PhotoRef = {
   localUri: string;
   remoteUrl?: string;
   addedAt?: string;
+  serverAddedAt?: string;
+  sha256?: string;
+  sha256Mismatch?: boolean;
 };
 
 export type SpotRecord = {
@@ -39,9 +42,12 @@ export type InspectionSide = {
   notes: string;
   notesAt?: string;
   savedAt?: string;
+  serverSavedAt?: string;
   videoUri?: string;
   videoUrl?: string;
   videoAddedAt?: string;
+  videoServerAddedAt?: string;
+  videoSha256?: string;
   videoOverLimit?: boolean;
   spots: Record<SpotId, SpotRecord>;
 };
@@ -57,6 +63,7 @@ export type LocalRental = {
   sync: 'pending' | 'synced' | 'error';
   syncError?: string;
   createdAt: number;
+  serverReceivedAt?: number;
 };
 
 export type CoverPhoto = {
@@ -101,15 +108,38 @@ export function stampNow() {
   return new Date().toISOString();
 }
 
+export function clocksDisagree(phone?: string, server?: string) {
+  if (!phone || !server) return false;
+  const left = Date.parse(phone);
+  const right = Date.parse(server);
+  if (Number.isNaN(left) || Number.isNaN(right)) return false;
+  return Math.abs(left - right) > 5 * 60 * 1000;
+}
+
+async function serverNow() {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return undefined;
+  try {
+    const ref = await addDoc(collection(db, 'clock'), { at: serverTimestamp() });
+    const snap = await getDoc(ref);
+    await deleteDoc(ref).catch(() => undefined);
+    const at = snap.get('at') as { toMillis?: () => number } | undefined;
+    const ms = at?.toMillis?.();
+    return ms ? new Date(ms).toISOString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Stamp the inspection at the moment it is saved. Photo times are already set when each photo was added. */
-export function stampSide(side: InspectionSide): InspectionSide {
+export async function stampSide(side: InspectionSide): Promise<InspectionSide> {
   const savedAt = stampNow();
+  const serverSavedAt = await serverNow();
   const spots = {} as Record<SpotId, SpotRecord>;
   for (const spot of SPOTS) {
     const current = side.spots[spot.id];
-    spots[spot.id] = { ...current, notedAt: current.note.trim() ? savedAt : undefined };
+    spots[spot.id] = { ...current, notedAt: current.note.trim() ? current.notedAt || savedAt : undefined };
   }
-  return { ...side, savedAt, notesAt: side.notes.trim() ? savedAt : undefined, spots };
+  return { ...side, savedAt, serverSavedAt, notesAt: side.notes.trim() ? side.notesAt || savedAt : undefined, spots };
 }
 
 export function formatDay(iso: string) {
@@ -238,7 +268,7 @@ export async function saveCheckout(vehicleId: string, renterName: string, checko
     localId: id(),
     vehicleId,
     renterName: renterName.trim(),
-    checkout: stampSide(checkout),
+    checkout: await stampSide(checkout),
     status: 'out',
     sync: 'pending',
     createdAt: Date.now(),
@@ -251,7 +281,7 @@ export async function saveCheckout(vehicleId: string, renterName: string, checko
 
 export async function saveCheckin(localId: string, checkin: InspectionSide) {
   const rentals = await loadRentals();
-  const stamped = stampSide(checkin);
+  const stamped = await stampSide(checkin);
   const next = rentals.map((rental) =>
     rental.localId === localId ? { ...rental, checkin: stamped, status: 'closed' as const, sync: 'pending' as const, syncError: undefined } : rental
   );
@@ -282,7 +312,10 @@ async function uploadRef(ref: PhotoRef, folder: string) {
   if (ref.remoteUrl) return ref;
   try {
     const remoteUrl = await uploadFile(ref.localUri, `${folder}/${ref.id}.jpg`, contentTypeFor(ref.localUri));
-    return { ...ref, remoteUrl };
+    const storedSha = ref.sha256 ? await fingerprint(remoteUrl) : undefined;
+    const sha256Mismatch = Boolean(ref.sha256 && storedSha && storedSha !== ref.sha256);
+    if (sha256Mismatch) lastUploadError = 'A stored photo does not match the copy on this phone.';
+    return { ...ref, remoteUrl, sha256Mismatch };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Upload failed';
     if (/Could not read the saved photo/i.test(message)) return { ...ref, localUri: '' };
@@ -324,6 +357,10 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
     } else {
       try {
         videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, 'video/mp4');
+        if (side.videoSha256) {
+          const storedSha = await fingerprint(videoUrl);
+          if (storedSha && storedSha !== side.videoSha256) lastUploadError = 'The stored video does not match the copy on this phone.';
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Upload failed';
         if (/Could not read the saved photo/i.test(message)) videoUri = undefined;
@@ -350,8 +387,11 @@ function sidePayload(side: InspectionSide) {
     notes: side.notes,
     notesAt: side.notesAt ?? null,
     savedAt: side.savedAt ?? null,
+    serverSavedAt: side.serverSavedAt ?? null,
     videoUrl: side.videoUrl ?? null,
     videoAddedAt: side.videoAddedAt ?? null,
+    videoServerAddedAt: side.videoServerAddedAt ?? null,
+    videoSha256: side.videoSha256 ?? null,
     spots: Object.fromEntries(
       SPOTS.map((spot) => [
         spot.id,
@@ -361,7 +401,12 @@ function sidePayload(side: InspectionSide) {
           notedAt: side.spots[spot.id].notedAt ?? null,
           photos: side.spots[spot.id].photos
             .filter((photo) => photo.remoteUrl)
-            .map((photo) => ({ url: photo.remoteUrl, addedAt: photo.addedAt ?? null })),
+            .map((photo) => ({
+              url: photo.remoteUrl,
+              addedAt: photo.addedAt ?? null,
+              serverAddedAt: photo.serverAddedAt ?? null,
+              sha256: photo.sha256 ?? null,
+            })),
         },
       ])
     ),
@@ -424,11 +469,19 @@ async function pushRental(rental: LocalRental) {
   };
 
   let remoteId = rental.remoteId;
+  let serverReceivedAt = rental.serverReceivedAt;
   if (!remoteId) {
-    const created = await addDoc(collection(db, 'rentals'), { ...payload, createdAt: serverTimestamp() });
+    const created = await addDoc(collection(db, 'rentals'), { ...payload, createdAt: serverTimestamp(), serverReceivedAt: serverTimestamp() });
     remoteId = created.id;
+    const snap = await getDoc(created);
+    serverReceivedAt = createdMillis(snap.get('serverReceivedAt')) || serverReceivedAt;
   } else {
     await updateDoc(doc(db, 'rentals', remoteId), payload);
+    if (!serverReceivedAt) {
+      await updateDoc(doc(db, 'rentals', remoteId), { serverReceivedAt: serverTimestamp() });
+      const snap = await getDoc(doc(db, 'rentals', remoteId));
+      serverReceivedAt = createdMillis(snap.get('serverReceivedAt')) || undefined;
+    }
   }
 
   await updateDoc(doc(db, 'vehicles', rental.vehicleId), {
@@ -439,10 +492,11 @@ async function pushRental(rental: LocalRental) {
   const storedCheckout = rental.status === 'closed' ? await releaseSide(checkout) : checkout;
   const storedCheckin = rental.status === 'closed' && checkin ? await releaseSide(checkin) : checkin;
   const ready = sideSettled(storedCheckout) && (!storedCheckin || sideSettled(storedCheckin));
+  const hashWarning = /does not match/.test(lastUploadError) ? lastUploadError : undefined;
   const rentals = await loadRentals();
   const next = rentals.map((item) =>
     item.localId === rental.localId
-      ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, sync: ready ? 'synced' as const : 'pending' as const, syncError: ready ? undefined : readableSyncError(lastUploadError) || undefined }
+      ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, serverReceivedAt, sync: ready ? 'synced' as const : 'pending' as const, syncError: ready ? hashWarning : readableSyncError(lastUploadError) || undefined }
       : item
   );
   await saveRentals(await prunePhoneRentals(next));
@@ -528,11 +582,14 @@ export function watchConnection() {
 
 export async function keepPhoto(uri: string) {
   const localUri = await persistMedia(uri, 'jpg');
-  return { id: id(), localUri, addedAt: stampNow() } satisfies PhotoRef;
+  const [sha256, serverAddedAt] = await Promise.all([fingerprint(localUri), serverNow()]);
+  return { id: id(), localUri, addedAt: stampNow(), serverAddedAt, sha256 } satisfies PhotoRef;
 }
 
 export async function keepVideo(uri: string) {
-  return { uri: await persistMedia(uri, 'mp4'), addedAt: stampNow() };
+  const localUri = await persistMedia(uri, 'mp4');
+  const [sha256, serverAddedAt] = await Promise.all([fingerprint(localUri), serverNow()]);
+  return { uri: localUri, addedAt: stampNow(), serverAddedAt, sha256 };
 }
 
 function createdMillis(value: unknown) {
@@ -544,7 +601,7 @@ function createdMillis(value: unknown) {
   return 0;
 }
 
-function sideFromRemote(raw: Partial<InspectionSide> & { spots?: Record<string, { status?: string; note?: string; notedAt?: string; photos?: (string | { url?: string; addedAt?: string })[] }> }, fallbackDate: string): InspectionSide {
+function sideFromRemote(raw: Partial<InspectionSide> & { spots?: Record<string, { status?: string; note?: string; notedAt?: string; photos?: (string | { url?: string; addedAt?: string; serverAddedAt?: string; sha256?: string })[] }> }, fallbackDate: string): InspectionSide {
   const spots = {} as InspectionSide['spots'];
   for (const spot of SPOTS) {
     const found = raw.spots?.[spot.id];
@@ -555,7 +612,9 @@ function sideFromRemote(raw: Partial<InspectionSide> & { spots?: Record<string, 
       photos: (found?.photos || []).map((photo, index) => {
         const url = typeof photo === 'string' ? photo : photo.url || '';
         const addedAt = typeof photo === 'string' ? undefined : photo.addedAt;
-        return { id: `${spot.id}-${index}`, localUri: '', remoteUrl: url, addedAt };
+        const serverAddedAt = typeof photo === 'string' ? undefined : photo.serverAddedAt;
+        const sha256 = typeof photo === 'string' ? undefined : photo.sha256;
+        return { id: `${spot.id}-${index}`, localUri: '', remoteUrl: url, addedAt, serverAddedAt, sha256 };
       }).filter((photo) => photo.remoteUrl),
     };
   }
@@ -567,8 +626,11 @@ function sideFromRemote(raw: Partial<InspectionSide> & { spots?: Record<string, 
     notes: raw.notes || '',
     notesAt: raw.notesAt,
     savedAt: raw.savedAt,
+    serverSavedAt: raw.serverSavedAt,
     videoUrl: raw.videoUrl,
     videoAddedAt: raw.videoAddedAt,
+    videoServerAddedAt: raw.videoServerAddedAt,
+    videoSha256: raw.videoSha256,
     spots,
   };
 }
@@ -584,6 +646,7 @@ function rentalFromDoc(remoteId: string, data: Record<string, unknown>): LocalRe
     status: data.status === 'Checked In' || checkinRaw ? 'closed' : 'out',
     sync: 'synced',
     createdAt: createdMillis(data.createdAt) || Date.parse(String(checkout.savedAt || '')) || 0,
+    serverReceivedAt: createdMillis(data.serverReceivedAt) || undefined,
     checkout: sideFromRemote(checkout, String(data.checkoutDate || '')),
     checkin: checkinRaw ? sideFromRemote(checkinRaw, String(data.checkinDate || '')) : undefined,
   };

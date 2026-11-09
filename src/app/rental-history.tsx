@@ -6,10 +6,10 @@ import { db } from '../firebase';
 import { ZoomModal } from '../components/zoom-modal';
 import { VideoPreview } from '../components/inspection-form';
 import { useDisplayUri } from '../media';
-import { SPOTS, deleteRental, fetchRentalByLocalId, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
+import { SPOTS, clocksDisagree, deleteRental, fetchRentalByLocalId, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
 import { theme } from '../theme';
 
-type RemotePhoto = string | { url?: string; addedAt?: string };
+type RemotePhoto = string | { url?: string; addedAt?: string; serverAddedAt?: string; sha256?: string };
 type RemoteSpot = { status?: string; note?: string; notedAt?: string; photos?: RemotePhoto[] };
 
 export default function RentalHistory() {
@@ -71,8 +71,13 @@ export default function RentalHistory() {
         Out {formatDay(rental.checkout.date)}
         {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
       </Text>
-      {rental.checkout.savedAt ? <Text style={styles.stampLine}>Checkout recorded {formatStamp(rental.checkout.savedAt)}</Text> : null}
-      {rental.checkin?.savedAt ? <Text style={styles.stampLine}>Return recorded {formatStamp(rental.checkin.savedAt)}</Text> : null}
+      {rental.checkout.savedAt ? <Text style={styles.stampLine}>Checkout recorded on this phone {formatStamp(rental.checkout.savedAt)}</Text> : null}
+      {rental.checkout.serverSavedAt ? <Text style={styles.stampLine}>Server time {formatStamp(rental.checkout.serverSavedAt)}</Text> : null}
+      {clocksDisagree(rental.checkout.savedAt, rental.checkout.serverSavedAt) ? <Text style={styles.mismatch}>Phone time does not match the server.</Text> : null}
+      {rental.checkin?.savedAt ? <Text style={styles.stampLine}>Return recorded on this phone {formatStamp(rental.checkin.savedAt)}</Text> : null}
+      {rental.checkin?.serverSavedAt ? <Text style={styles.stampLine}>Server time {formatStamp(rental.checkin.serverSavedAt)}</Text> : null}
+      {rental.checkin && clocksDisagree(rental.checkin.savedAt, rental.checkin.serverSavedAt) ? <Text style={styles.mismatch}>Phone time does not match the server.</Text> : null}
+      {rental.serverReceivedAt ? <Text style={styles.stampLine}>Server received this record {formatStamp(new Date(rental.serverReceivedAt).toISOString())}</Text> : null}
       {rental.sync !== 'synced' ? (
         <Text style={styles.waiting}>
           {rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError)
@@ -91,13 +96,13 @@ export default function RentalHistory() {
 
       {rental.checkout.videoUri || rental.checkout.videoUrl ? (
         <View>
-          <Text style={styles.stampLine}>Checkout video · {formatStamp(rental.checkout.videoAddedAt)}</Text>
+          <Text style={styles.stampLine}>Checkout video · {formatStamp(rental.checkout.videoAddedAt)}{rental.checkout.videoSha256 ? ` · File ${rental.checkout.videoSha256.slice(0, 8)}` : ''}</Text>
           <VideoPreview uri={rental.checkout.videoUri || rental.checkout.videoUrl} />
         </View>
       ) : null}
       {rental.checkin?.videoUri || rental.checkin?.videoUrl ? (
         <View>
-          <Text style={styles.stampLine}>Return video · {formatStamp(rental.checkin.videoAddedAt)}</Text>
+          <Text style={styles.stampLine}>Return video · {formatStamp(rental.checkin.videoAddedAt)}{rental.checkin.videoSha256 ? ` · File ${rental.checkin.videoSha256.slice(0, 8)}` : ''}</Text>
           <VideoPreview uri={rental.checkin.videoUri || rental.checkin.videoUrl} />
         </View>
       ) : null}
@@ -264,12 +269,13 @@ function fromRemote(remoteId: string, data: Record<string, unknown>): LocalRenta
     status: data.status === 'Checked In' || checkinRaw ? 'closed' : 'out',
     sync: 'synced',
     createdAt: Date.now(),
+    serverReceivedAt: typeof data.serverReceivedAt === 'object' && data.serverReceivedAt && 'seconds' in data.serverReceivedAt ? Number((data.serverReceivedAt as { seconds: number }).seconds) * 1000 : undefined,
     checkout: sideFrom(checkout, String(data.checkoutDate || '')),
     checkin: checkinRaw ? sideFrom(checkinRaw, String(data.checkinDate || '')) : undefined,
   };
 }
 
-function sideFrom(raw: { date?: string; fuel?: string; miles?: string; hours?: string; notes?: string; notesAt?: string; savedAt?: string; videoAddedAt?: string; videoUrl?: string; spots?: Record<string, RemoteSpot> }, fallbackDate: string): InspectionSide {
+function sideFrom(raw: { date?: string; fuel?: string; miles?: string; hours?: string; notes?: string; notesAt?: string; savedAt?: string; serverSavedAt?: string; videoAddedAt?: string; videoServerAddedAt?: string; videoSha256?: string; videoUrl?: string; spots?: Record<string, RemoteSpot> }, fallbackDate: string): InspectionSide {
   const spots = {} as InspectionSide['spots'];
   for (const spot of SPOTS) {
     const found = raw.spots?.[spot.id];
@@ -280,7 +286,9 @@ function sideFrom(raw: { date?: string; fuel?: string; miles?: string; hours?: s
       photos: (found?.photos || []).map((photo, index) => {
         const url = typeof photo === 'string' ? photo : photo.url || '';
         const addedAt = typeof photo === 'string' ? undefined : photo.addedAt;
-        return { id: `${spot.id}-${index}`, localUri: url, remoteUrl: url, addedAt };
+        const serverAddedAt = typeof photo === 'string' ? undefined : photo.serverAddedAt;
+        const sha256 = typeof photo === 'string' ? undefined : photo.sha256;
+        return { id: `${spot.id}-${index}`, localUri: url, remoteUrl: url, addedAt, serverAddedAt, sha256 };
       }).filter((photo) => photo.remoteUrl),
     };
   }
@@ -292,8 +300,11 @@ function sideFrom(raw: { date?: string; fuel?: string; miles?: string; hours?: s
     notes: raw.notes || '',
     notesAt: raw.notesAt,
     savedAt: raw.savedAt,
+    serverSavedAt: raw.serverSavedAt,
     videoUrl: raw.videoUrl,
     videoAddedAt: raw.videoAddedAt,
+    videoServerAddedAt: raw.videoServerAddedAt,
+    videoSha256: raw.videoSha256,
     spots,
   };
 }
@@ -337,6 +348,7 @@ const styles = StyleSheet.create({
   issue: { color: '#c47d00' },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
   stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
+  mismatch: { color: theme.danger, marginTop: 4, fontSize: 13, fontWeight: '700' },
   photoStamp: { color: theme.muted, fontSize: 10, paddingHorizontal: 6, paddingBottom: 4 },
   extraStamp: { color: theme.muted, fontSize: 8, width: 42 },
   noteLine: { color: theme.text, marginTop: 6, fontSize: 13, lineHeight: 18 },
