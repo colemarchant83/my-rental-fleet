@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { RefreshButton } from '../../components/back-link';
+import { RefreshButton, HomeButton } from '../../components/back-link';
 import { theme } from '../../theme';
 
 function PillLabel({ focused, children }: { focused: boolean; children: string }) {
@@ -10,6 +10,15 @@ function PillLabel({ focused, children }: { focused: boolean; children: string }
       <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: focused ? theme.white : theme.muted, fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
         {children}
       </Text>
+    </View>
+  );
+}
+
+function HeaderActions({ home }: { home?: boolean }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+      {home ? <HomeButton /> : null}
+      <RefreshButton />
     </View>
   );
 }
@@ -25,7 +34,7 @@ export default function TabLayout() {
         headerTintColor: theme.text,
         headerShadowVisible: false,
         headerTitleStyle: { fontWeight: '700' },
-        headerRight: () => <RefreshButton />,
+        headerRight: () => <HeaderActions />,
         headerRightContainerStyle: { paddingRight: 16 },
         tabBarIcon: () => null,
         tabBarStyle: {
@@ -50,6 +59,7 @@ export default function TabLayout() {
         options={{
           title: 'My Rental Fleet',
           tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Maintenance Log</PillLabel>,
+          headerRight: () => <HeaderActions home />,
         }}
       />
       <Tabs.Screen
@@ -57,6 +67,7 @@ export default function TabLayout() {
         options={{
           title: 'My Rental Fleet',
           tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Add Vehicle</PillLabel>,
+          headerRight: () => <HeaderActions home />,
         }}
       />
       <Tabs.Screen name="explore" options={{ href: null }} />
