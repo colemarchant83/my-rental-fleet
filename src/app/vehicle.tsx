@@ -35,6 +35,7 @@ export default function VehicleDetail() {
   const [factsError, setFactsError] = useState('');
   const [factsLoading, setFactsLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [shownCount, setShownCount] = useState(20);
 
   useEffect(() => {
     if (!id) {
@@ -64,6 +65,10 @@ export default function VehicleDetail() {
   }, [id]);
 
   useEffect(() => {
+    setShownCount(20);
+  }, [id]);
+
+  useEffect(() => {
     if (!showSpecs || !vehicle?.vin || facts) return;
     let live = true;
     setFactsLoading(true);
@@ -84,6 +89,13 @@ export default function VehicleDetail() {
   }, [showSpecs, vehicle?.vin, facts]);
 
   const open = rentals.find((rental) => rental.status === 'out');
+  const newestFirst = [...rentals].sort((a, b) => {
+    if (a.status === 'out' && b.status !== 'out') return -1;
+    if (b.status === 'out' && a.status !== 'out') return 1;
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+  const visibleRentals = newestFirst.slice(0, shownCount);
+  const hiddenRentals = newestFirst.length - visibleRentals.length;
   const out = !!open;
   const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
   const display = useDisplayUri(cover?.localUri, cover?.remoteUrl || vehicle?.photoUrl);
@@ -197,7 +209,7 @@ export default function VehicleDetail() {
         <Text style={styles.saveText}>{out ? 'Start return inspection' : 'Start pre-rental inspection'}</Text>
       </Pressable>
 
-      {rentals.length === 0 ? <Text style={styles.muted}>No rentals yet.</Text> : rentals.map((rental) => (
+      {rentals.length === 0 ? <Text style={styles.muted}>No rentals yet.</Text> : visibleRentals.map((rental) => (
         <Pressable key={rental.localId} style={styles.rental} onPress={() => router.push({ pathname: '/rental-history', params: { localId: rental.localId } })}>
           <View style={styles.titleRow}>
             <Text style={styles.renter}>{rental.renterName}</Text>
@@ -211,6 +223,11 @@ export default function VehicleDetail() {
           {rental.sync !== 'synced' ? <Text style={styles.waiting}>{rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError) ? rental.syncError : 'Saved on this phone. Photos and video will upload.'}</Text> : null}
         </Pressable>
       ))}
+      {hiddenRentals > 0 ? (
+        <Pressable style={styles.more} onPress={() => setShownCount((count) => count + 20)}>
+          <Text style={styles.ghostText}>Show {Math.min(20, hiddenRentals)} more</Text>
+        </Pressable>
+      ) : null}
 
       <Pressable onPress={() => void remove()}>
         <Text style={styles.remove}>{confirmDelete ? 'Tap again to remove from fleet' : 'Remove from fleet'}</Text>
@@ -251,6 +268,7 @@ const styles = StyleSheet.create({
   save: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 12 },
   saveText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
   rental: { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 14, marginTop: 10 },
+  more: { borderWidth: 1, borderColor: theme.line, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12, backgroundColor: theme.card },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   renter: { color: theme.text, fontSize: 18, fontWeight: '800' },
   closed: { backgroundColor: theme.input, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
