@@ -53,7 +53,6 @@ export default function VehicleListScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Rental Log</Text>
-      <Text style={styles.intro}>Every saved machine, ready to check out and check back in. Tap one to start a pre-rental inspection or do the return inspection.</Text>
       <Text style={styles.count}>{vehicles.length} {vehicles.length === 1 ? 'machine' : 'machines'}</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
@@ -74,10 +73,14 @@ export default function VehicleListScreen() {
                   <Text style={styles.badgeText}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
                 </View>
               </View>
-              {vehicle.yearMakeModel ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}
+              {vehicle.yearMakeModel || (out && renter) ? (
+                <View style={styles.modelRow}>
+                  <Text style={styles.model}>{vehicle.yearMakeModel || ''}</Text>
+                  {out && renter ? <Text style={styles.renter}>{renter}</Text> : null}
+                </View>
+              ) : null}
               {vehicle.specs ? <Text style={styles.specs}>{vehicle.specs}</Text> : null}
               {vehicle.vin ? <Text style={styles.vin}>VIN {vehicle.vin}</Text> : null}
-              {out && renter ? <Text style={styles.with}>with {renter}</Text> : null}
               <Text style={styles.link} onPress={() => openInspection(vehicle, out ? 'checkin' : 'checkout')}>
                 {out ? 'Check in — return inspection →' : 'Check out — pre-rental inspection →'}
               </Text>
@@ -108,10 +111,11 @@ const styles = StyleSheet.create({
   cardBody: { padding: 16 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' },
   nickname: { color: theme.accent, fontWeight: '800', flex: 1, fontSize: 15 },
-  model: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 4 },
+  model: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 4, flex: 1 },
+  modelRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  renter: { color: theme.text, fontWeight: '700', fontSize: 13, textAlign: 'right', maxWidth: 110, marginTop: 8 },
   specs: { color: theme.muted, marginTop: 2 },
   vin: { color: theme.muted, marginTop: 2 },
-  with: { color: theme.muted, marginTop: 6 },
   link: { color: theme.accent, fontWeight: '700', marginTop: 12 },
   waiting: { color: theme.rent, marginTop: 8, fontSize: 13 },
   badge: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
