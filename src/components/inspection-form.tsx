@@ -325,8 +325,10 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
 }
 
 export function VideoPreview({ uri }: { uri?: string }) {
+  const [play, setPlay] = useState(false);
   const [src, setSrc] = useState('');
   useEffect(() => {
+    if (!play) return;
     let live = true;
     let objectUrl = '';
     const load = async () => {
@@ -352,8 +354,14 @@ export function VideoPreview({ uri }: { uri?: string }) {
       live = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [uri]);
-  if (!src) return <View style={styles.videoFrame} />;
+  }, [play, uri]);
+  if (!play || !src) {
+    return (
+      <Pressable style={styles.videoFrame} onPress={() => setPlay(true)}>
+        <Text style={styles.playMark}>Play</Text>
+      </Pressable>
+    );
+  }
   if (Platform.OS === 'web') {
     return (
       <View style={styles.videoFrame}>
@@ -361,12 +369,8 @@ export function VideoPreview({ uri }: { uri?: string }) {
           src,
           controls: true,
           playsInline: true,
-          preload: 'metadata',
+          preload: 'none',
           style: { width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#1c1917' },
-          onLoadedMetadata: (event: Event) => {
-            const el = event.currentTarget as HTMLVideoElement;
-            if (el.currentTime < 0.1) el.currentTime = 0.1;
-          },
         })}
       </View>
     );
@@ -510,7 +514,8 @@ const styles = StyleSheet.create({
   ghost: { borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 10, borderStyle: 'dashed' },
   ghostText: { color: theme.text, fontWeight: '600' },
   count: { color: theme.green, marginTop: 6, fontSize: 13 },
-  videoFrame: { marginTop: 10, height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1c1917' },
+  videoFrame: { marginTop: 10, height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1c1917', alignItems: 'center', justifyContent: 'center' },
+  playMark: { color: '#fff', fontWeight: '800', fontSize: 18 },
   videoBtn: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 12 },
   videoBtnText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
   remove: { color: theme.danger, fontSize: 13, marginTop: 4 },

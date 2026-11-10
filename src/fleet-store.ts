@@ -351,14 +351,14 @@ function readableSyncError(error?: string) {
 
 let lastUploadError = '';
 
-async function uploadRef(ref: PhotoRef, folder: string) {
+async function uploadRef(ref: PhotoRef, folder: string, receivedAt?: string) {
   if (ref.remoteUrl) return ref;
   try {
     const remoteUrl = await uploadFile(ref.localUri, `${folder}/${ref.id}.jpg`, contentTypeFor(ref.localUri));
     const storedSha = ref.sha256 ? await fingerprint(remoteUrl) : undefined;
     const sha256Mismatch = Boolean(ref.sha256 && storedSha && storedSha !== ref.sha256);
     if (sha256Mismatch) lastUploadError = 'A stored photo does not match the copy on this phone.';
-    return { ...ref, remoteUrl, sha256Mismatch };
+    return { ...ref, remoteUrl, serverAddedAt: ref.serverAddedAt || receivedAt, sha256Mismatch };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Upload failed';
     if (/Could not read the saved photo/i.test(message)) return ref;
@@ -379,17 +379,19 @@ async function noteLargeVideo(bytes: number, folder: string) {
 }
 
 async function uploadSide(side: InspectionSide, folder: string): Promise<InspectionSide> {
+  const receivedAt = await serverNow();
   const spots = {} as Record<SpotId, SpotRecord>;
   for (const spot of SPOTS) {
     const current = side.spots[spot.id];
     const photos: PhotoRef[] = [];
     for (const photo of current.photos) {
-      photos.push(await uploadRef(photo, `${folder}/${spot.id}`));
+      photos.push(await uploadRef(photo, `${folder}/${spot.id}`, receivedAt));
     }
     spots[spot.id] = { ...current, photos };
   }
   let videoUrl = side.videoUrl;
   let videoUri = side.videoUri;
+  let videoServerAddedAt = side.videoServerAddedAt;
   let videoOverLimit = side.videoOverLimit;
   if (videoUri && !videoUrl && !videoOverLimit) {
     const bytes = await mediaByteSize(videoUri);
@@ -400,6 +402,7 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
     } else {
       try {
         videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, 'video/mp4');
+        videoServerAddedAt = side.videoServerAddedAt || receivedAt;
         if (side.videoSha256) {
           const storedSha = await fingerprint(videoUrl);
           if (storedSha && storedSha !== side.videoSha256) lastUploadError = 'The stored video does not match the copy on this phone.';
@@ -418,7 +421,7 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
   } else if (videoOverLimit) {
     lastUploadError = 'This video is over 100 MB, so it will not be uploaded. Record a shorter one if you want it saved in storage. This copy stays on this phone.';
   }
-  return { ...side, spots, videoUrl, videoUri, videoOverLimit };
+  return { ...side, spots, videoUrl, videoUri, videoServerAddedAt, videoOverLimit };
 }
 
 function sidePayload(side: InspectionSide) {

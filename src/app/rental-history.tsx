@@ -97,14 +97,14 @@ export default function RentalHistory() {
       {rental.checkout.videoUri || rental.checkout.videoUrl ? (
         <View>
           <Text style={styles.stampLine}>Checkout video · {formatStamp(rental.checkout.videoAddedAt)}{rental.checkout.videoSha256 ? ` · File ${rental.checkout.videoSha256.slice(0, 8)}` : ''}</Text>
-          {rental.checkout.videoServerAddedAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(rental.checkout.videoServerAddedAt)}</Text> : null}
+          {rental.checkout.videoServerAddedAt || rental.serverReceivedAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(rental.checkout.videoServerAddedAt || receivedIso(rental.serverReceivedAt) || '')}</Text> : null}
           <VideoPreview uri={rental.checkout.videoUri || rental.checkout.videoUrl} />
         </View>
       ) : null}
       {rental.checkin?.videoUri || rental.checkin?.videoUrl ? (
         <View>
           <Text style={styles.stampLine}>Return video · {formatStamp(rental.checkin.videoAddedAt)}{rental.checkin.videoSha256 ? ` · File ${rental.checkin.videoSha256.slice(0, 8)}` : ''}</Text>
-          {rental.checkin.videoServerAddedAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(rental.checkin.videoServerAddedAt)}</Text> : null}
+          {rental.checkin.videoServerAddedAt || rental.serverReceivedAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(rental.checkin.videoServerAddedAt || receivedIso(rental.serverReceivedAt) || '')}</Text> : null}
           <VideoPreview uri={rental.checkin.videoUri || rental.checkin.videoUrl} />
         </View>
       ) : null}
@@ -128,7 +128,7 @@ export default function RentalHistory() {
             <View style={styles.compare}>
               <View style={styles.sideCol}>
                 <Text style={styles.sideLabel}>Check out</Text>
-                <PhotoStack photos={photosOf(rental.checkout, spot.id)} empty="No photo" onOpen={setZoom} />
+                <PhotoStack photos={photosOf(rental.checkout, spot.id, receivedIso(rental.serverReceivedAt))} empty="No photo" onOpen={setZoom} />
                 <View style={styles.noteBox}>
                   <Text style={out.note.trim() ? styles.noteText : styles.noteEmpty}>{out.note.trim() || 'No note'}</Text>
                   {out.note.trim() && out.notedAt ? <Text style={styles.noteWhen}>{formatStamp(out.notedAt)}</Text> : null}
@@ -137,7 +137,7 @@ export default function RentalHistory() {
               </View>
               <View style={styles.sideCol}>
                 <Text style={styles.sideLabel}>Check in</Text>
-                <PhotoStack photos={rental.checkin ? photosOf(rental.checkin, spot.id) : []} empty={rental.checkin ? 'No photo' : 'Not returned yet'} onOpen={setZoom} />
+                <PhotoStack photos={rental.checkin ? photosOf(rental.checkin, spot.id, receivedIso(rental.serverReceivedAt)) : []} empty={rental.checkin ? 'No photo' : 'Not returned yet'} onOpen={setZoom} />
                 <View style={styles.noteBox}>
                   <Text style={back?.note.trim() ? styles.noteText : styles.noteEmpty}>{back?.note.trim() || 'No note'}</Text>
                   {back?.note.trim() && back.notedAt ? <Text style={styles.noteWhen}>{formatStamp(back.notedAt)}</Text> : null}
@@ -191,9 +191,20 @@ export default function RentalHistory() {
 
 type StampedPhoto = { localUri?: string; remoteUrl?: string; addedAt?: string; serverAddedAt?: string };
 
-function photosOf(side: InspectionSide, spotId: (typeof SPOTS)[number]['id']): StampedPhoto[] {
+function receivedIso(value?: number | string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+function photosOf(side: InspectionSide, spotId: (typeof SPOTS)[number]['id'], receivedAt?: string): StampedPhoto[] {
   return side.spots[spotId].photos
-    .map((photo) => ({ localUri: photo.localUri, remoteUrl: photo.remoteUrl, addedAt: photo.addedAt, serverAddedAt: photo.serverAddedAt }))
+    .map((photo) => ({
+      localUri: photo.localUri,
+      remoteUrl: photo.remoteUrl,
+      addedAt: photo.addedAt,
+      serverAddedAt: photo.serverAddedAt || (photo.remoteUrl ? receivedAt : undefined),
+    }))
     .filter((photo) => photo.localUri || photo.remoteUrl);
 }
 
