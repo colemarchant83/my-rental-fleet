@@ -375,14 +375,12 @@ async function uploadRef(ref: PhotoRef, folder: string, receivedAt?: string) {
   if (ref.remoteUrl) return ref;
   try {
     const remoteUrl = await uploadFile(ref.localUri, `${folder}/${ref.id}.jpg`, contentTypeFor(ref.localUri));
-    const storedSha = ref.sha256 ? await fingerprint(remoteUrl) : undefined;
-    const sha256Mismatch = Boolean(ref.sha256 && storedSha && storedSha !== ref.sha256);
-    if (sha256Mismatch) lastUploadError = 'A stored photo does not match the copy on this phone.';
-    return { ...ref, remoteUrl, serverAddedAt: ref.serverAddedAt || receivedAt, sha256Mismatch };
+    return { ...ref, remoteUrl, serverAddedAt: ref.serverAddedAt || receivedAt };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Upload failed';
-    if (/Could not read the saved photo/i.test(message)) return ref;
-    lastUploadError = message;
+    lastUploadError = /Could not read the saved photo/i.test(message)
+      ? 'A photo is still on this phone. It will be sent again. Nothing was deleted.'
+      : message;
     return ref;
   }
 }
@@ -398,14 +396,18 @@ async function noteLargeVideo(bytes: number, folder: string) {
   }).catch(() => undefined);
 }
 
-async function uploadSide(side: InspectionSide, folder: string): Promise<InspectionSide> {
+async function uploadSide(side: InspectionSide, folder: string, onStep?: (side: InspectionSide) => Promise<void>): Promise<InspectionSide> {
   const receivedAt = await serverNow();
-  const spots = {} as Record<SpotId, SpotRecord>;
+  const spots = { ...side.spots } as Record<SpotId, SpotRecord>;
+  let currentSide = side;
   for (const spot of SPOTS) {
     const current = side.spots[spot.id] ?? { status: '' as const, note: '', photos: [] };
     const photos: PhotoRef[] = [];
     for (const photo of current.photos) {
       photos.push(await uploadRef(photo, `${folder}/${spot.id}`, receivedAt));
+      spots[spot.id] = { ...current, photos: [...photos, ...current.photos.slice(photos.length)] };
+      currentSide = { ...side, spots: { ...spots } };
+      if (onStep) await onStep(currentSide);
     }
     spots[spot.id] = { ...current, photos };
   }
@@ -417,31 +419,31 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
     const bytes = await mediaByteSize(videoUri);
     if (bytes > VIDEO_LIMIT) {
       videoOverLimit = true;
-      lastUploadError = 'This video is over 100 MB, so it will not be uploaded. Record a shorter one if you want it saved in storage. This copy stays on this phone.';
+      lastUploadError = 'A video is over 100 MB, so that video stays on this phone and was not uploaded.';
       void noteLargeVideo(bytes, folder);
     } else {
       try {
         videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, 'video/mp4');
         videoServerAddedAt = side.videoServerAddedAt || receivedAt;
-        if (side.videoSha256) {
-          const storedSha = await fingerprint(videoUrl);
-          if (storedSha && storedSha !== side.videoSha256) lastUploadError = 'The stored video does not match the copy on this phone.';
-        }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Upload failed';
-        if (/Could not read the saved photo/i.test(message)) lastUploadError = 'A video is still on this phone and will upload when it can be read.';
-        else lastUploadError = message;
+        lastUploadError = /Could not read the saved photo/i.test(message)
+          ? 'A video is still on this phone. It will be sent again. Nothing was deleted.'
+          : message;
         if (/413/.test(message)) {
           videoOverLimit = true;
+          lastUploadError = 'A video is over 100 MB, so that video stays on this phone and was not uploaded.';
           void noteLargeVideo(bytes, folder);
         }
         videoUrl = undefined;
       }
     }
   } else if (videoOverLimit) {
-    lastUploadError = 'This video is over 100 MB, so it will not be uploaded. Record a shorter one if you want it saved in storage. This copy stays on this phone.';
+    lastUploadError = 'A video is over 100 MB, so that video stays on this phone and was not uploaded.';
   }
-  return { ...side, spots, videoUrl, videoUri, videoServerAddedAt, videoOverLimit };
+  currentSide = { ...currentSide, spots, videoUrl, videoUri, videoServerAddedAt, videoOverLimit };
+  if (onStep) await onStep(currentSide);
+  return currentSide;
 }
 
 function sidePayload(side: InspectionSide) {
@@ -491,14 +493,16 @@ function sideSettled(side: InspectionSide) {
     if (!photo.localUri && !photo.remoteUrl) return true;
     return !!photo.remoteUrl;
   }));
-  return photosReady && (!side.videoUri || !!side.videoUrl);
+  const videoReady = !side.videoUri || !!side.videoUrl || !!side.videoOverLimit;
+  return photosReady && videoReady;
 }
 
 async function releaseSide(side: InspectionSide): Promise<InspectionSide> {
   const spots = {} as Record<SpotId, SpotRecord>;
   for (const spot of SPOTS) {
+    const current = side.spots[spot.id] ?? { status: '' as const, note: '', photos: [] };
     const photos: PhotoRef[] = [];
-    for (const photo of side.spots[spot.id].photos) {
+    for (const photo of current.photos) {
       if (photo.remoteUrl && isStoredFile(photo.localUri) && (await remoteMediaLoads(photo.remoteUrl, 'image'))) {
         await deleteStoredFile(photo.localUri);
         photos.push({ ...photo, localUri: '' });
@@ -506,7 +510,7 @@ async function releaseSide(side: InspectionSide): Promise<InspectionSide> {
       }
       photos.push(photo);
     }
-    spots[spot.id] = { ...side.spots[spot.id], photos };
+    spots[spot.id] = { ...current, photos };
   }
   let videoUri = side.videoUri;
   if (side.videoUrl && isStoredFile(videoUri) && (await remoteMediaLoads(side.videoUrl, 'video'))) {
@@ -521,8 +525,22 @@ async function pushRental(rental: LocalRental) {
   const open = await loadRentals();
   await saveRentals(open.map((item) => (item.localId === rental.localId ? { ...item, sync: 'pending' as const, syncError: undefined } : item)));
   const folder = `rentals/${rental.vehicleId}/${rental.localId}`;
-  const checkout = await uploadSide(rental.checkout, `${folder}/out`);
-  const checkin = rental.checkin ? await uploadSide(rental.checkin, `${folder}/in`) : undefined;
+  let checkout = rental.checkout;
+  let checkin = rental.checkin;
+  const remember = async () => {
+    const rentals = await loadRentals();
+    await saveRentals(rentals.map((item) => (item.localId === rental.localId ? { ...item, checkout, checkin, sync: 'pending' as const } : item)));
+  };
+  checkout = await uploadSide(rental.checkout, `${folder}/out`, async (next) => {
+    checkout = next;
+    await remember();
+  });
+  if (rental.checkin) {
+    checkin = await uploadSide(rental.checkin, `${folder}/in`, async (next) => {
+      checkin = next;
+      await remember();
+    });
+  }
   const payload = {
     vehicleId: rental.vehicleId,
     localId: rental.localId,
@@ -558,11 +576,13 @@ async function pushRental(rental: LocalRental) {
   const storedCheckout = rental.status === 'closed' ? await releaseSide(checkout) : checkout;
   const storedCheckin = rental.status === 'closed' && checkin ? await releaseSide(checkin) : checkin;
   const ready = sideSettled(storedCheckout) && (!storedCheckin || sideSettled(storedCheckin));
-  const hashWarning = /does not match/.test(lastUploadError) ? lastUploadError : undefined;
+  const limitNote = storedCheckout.videoOverLimit || storedCheckin?.videoOverLimit
+    ? 'A video is over 100 MB, so that video stays on this phone and was not uploaded.'
+    : undefined;
   const rentals = await loadRentals();
   const next = rentals.map((item) =>
     item.localId === rental.localId
-      ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, serverReceivedAt, sync: ready ? 'synced' as const : 'pending' as const, syncError: ready ? hashWarning : readableSyncError(lastUploadError) || undefined }
+      ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, serverReceivedAt, sync: ready ? 'synced' as const : 'pending' as const, syncError: ready ? limitNote : readableSyncError(lastUploadError) || undefined }
       : item
   );
   await saveRentals(await prunePhoneRentals(next));
@@ -630,6 +650,11 @@ export async function syncAll() {
         if (rental.sync === 'synced') continue;
         try {
           await pushRental(rental);
+          const latest = (await loadRentals()).find((item) => item.localId === rental.localId);
+          if (latest && latest.sync !== 'synced' && !tried.has(rental.localId) && !/100 MB/.test(latest.syncError || '')) {
+            tried.add(rental.localId);
+            queued = true;
+          }
         } catch (error) {
           const message = readableSyncError(error instanceof Error ? error.message : 'Upload failed');
           const latest = await loadRentals();

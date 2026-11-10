@@ -95,7 +95,7 @@ export default function RentalHistory() {
             ? rental.syncError
             : 'Files are saved on this phone, so nothing will be lost. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.'}
         </Text>
-      ) : null}
+      ) : rental.syncError ? <Text style={styles.waiting}>{rental.syncError}</Text> : null}
       {rental.status === 'out' ? (
         <Pressable
           style={styles.checkin}
