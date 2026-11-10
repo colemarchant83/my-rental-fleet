@@ -47,6 +47,7 @@ export default function VehicleDetail() {
     });
     const unsub = onSnapshot(doc(db, 'vehicles', id), (snap) => {
       if (!snap.exists()) {
+        if (snap.metadata.fromCache) return;
         setVehicle(null);
         setMissing(true);
         return;
