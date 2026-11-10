@@ -75,7 +75,7 @@ export default function VehicleListScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Rental Log</Text>
-      <Text style={styles.count}>{vehicles.length} {vehicles.length === 1 ? 'machine' : 'machines'}</Text>
+      {ready ? <Text style={styles.count}>{vehicles.length} {vehicles.length === 1 ? 'machine' : 'machines'}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {!ready && !error ? <Text style={styles.intro}>Loading machines...</Text> : null}
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
