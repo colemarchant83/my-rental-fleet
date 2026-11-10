@@ -152,6 +152,8 @@ export async function buildRentalCard(rental: LocalRental) {
   const missing: string[] = [];
   const serverFallback = rental.serverReceivedAt ? new Date(rental.serverReceivedAt).toISOString() : undefined;
 
+  const folderName = `${safeName(rental.renterName || 'Rental')} - ${safeName(formatDay(rental.checkout.date))}`;
+
   const addMedia = async (key: string, folder: string, filename: string, localUri?: string, remoteUrl?: string, fallback = 'jpg') => {
     const blob = await mediaBlob(localUri, remoteUrl);
     if (!blob) {
@@ -159,7 +161,7 @@ export async function buildRentalCard(rental: LocalRental) {
       return;
     }
     const data = await asBytes(blob);
-    const path = `${folder}/${filename}.${extFor(blob, fallback)}`;
+    const path = `${folderName}/${folder}/${filename}.${extFor(blob, fallback)}`;
     files.push({ name: path, data });
     const mime = blob.type || (fallback === 'mp4' ? 'video/mp4' : 'image/jpeg');
     const inline = !mime.startsWith('video') || data.length <= 30 * 1000 * 1000;
@@ -220,18 +222,16 @@ export async function buildRentalCard(rental: LocalRental) {
 </main>
 </body>
 </html>`;
-  files.unshift({ name: 'Rental card.html', data: new TextEncoder().encode(html) });
+  files.unshift({ name: `${folderName}/Rental card.html`, data: new TextEncoder().encode(html) });
 
-  const filename = `${safeName(rental.renterName || 'Rental')} - ${safeName(machineName)} - ${safeName(formatDay(rental.checkout.date))}.zip`;
-  const blob = zipStore(files);
-  const file = new File([blob], filename, { type: 'application/zip' });
+  const file = new File([zipStore(files)], `${folderName}.zip`, { type: 'application/zip' });
   return { file, missing };
 }
 
 export async function deliverRentalFile(file: File) {
   if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: file.name });
+      await navigator.share({ files: [file] });
       return 'shared' as const;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return 'cancelled' as const;
