@@ -172,8 +172,9 @@ export default function VehicleDetail() {
 
   if (!vehicle) {
     return (
-      <View style={styles.screen}>
-        <Text style={styles.muted}>{missing ? 'Machine not found' : 'Loading...'}</Text>
+      <View style={styles.loading}>
+        <Text style={styles.loadingTitle}>{missing ? 'Machine not found' : 'Loading rental files...'}</Text>
+        {missing ? null : <Text style={styles.muted}>This machine is opening.</Text>}
       </View>
     );
   }
@@ -312,6 +313,8 @@ export default function VehicleDetail() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg },
+  loading: { flex: 1, backgroundColor: theme.bg, padding: 24, justifyContent: 'center' },
+  loadingTitle: { color: theme.text, fontSize: 22, fontWeight: '800' },
   content: { padding: 16, paddingBottom: 48 },
   photo: { width: '100%', height: 220, borderRadius: 16, backgroundColor: theme.input },
   placeholder: { backgroundColor: theme.input, borderRadius: 16, padding: 18 },

@@ -58,7 +58,12 @@ export default function RentalHistory() {
   }, [localId, remoteId, router]);
 
   if (!rental) {
-    return <View style={styles.screen}><Text style={styles.muted}>Loading rental...</Text></View>;
+    return (
+      <View style={styles.loading}>
+        <Text style={styles.loadingTitle}>Loading rental files...</Text>
+        <Text style={styles.muted}>This rental is opening.</Text>
+      </View>
+    );
   }
 
   return (
@@ -325,6 +330,8 @@ function sideFrom(raw: { date?: string; fuel?: string; miles?: string; hours?: s
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg },
+  loading: { flex: 1, backgroundColor: theme.bg, padding: 24, justifyContent: 'center' },
+  loadingTitle: { color: theme.text, fontSize: 22, fontWeight: '800' },
   content: { padding: 16, paddingBottom: 40 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   renter: { fontSize: 28, fontWeight: '800', color: theme.text, flex: 1 },
