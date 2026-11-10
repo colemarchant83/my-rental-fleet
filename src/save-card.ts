@@ -235,6 +235,7 @@ export async function deliverRentalFile(file: File) {
       return 'shared' as const;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return 'cancelled' as const;
+      if (error instanceof Error && error.name === 'NotAllowedError') return 'blocked' as const;
     }
   }
   const url = URL.createObjectURL(file);
