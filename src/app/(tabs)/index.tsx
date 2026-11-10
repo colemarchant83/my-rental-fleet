@@ -116,7 +116,7 @@ export default function VehicleListScreen() {
               >
                 <Text style={styles.actionText}>{out ? 'Check in — return inspection' : 'Check out — pre-rental inspection'}</Text>
               </Pressable>
-              {waiting ? <Text style={styles.waiting}>Saved on this phone. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.</Text> : null}
+              {waiting ? <Text style={styles.waiting}>Files are saved on this phone, so nothing will be lost. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.</Text> : null}
             </View>
           </Pressable>
         );
