@@ -274,7 +274,7 @@ export default function VehicleDetail() {
             {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
           </Text>
           <Text style={styles.link}>Details</Text>
-          {rental.sync !== 'synced' ? <Text style={styles.waiting}>{rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError) ? rental.syncError : 'Saved on this phone. Photos and video will upload.'}</Text> : null}
+          {rental.sync !== 'synced' ? <Text style={styles.waiting}>{rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError) ? rental.syncError : 'Saved on this phone. Photos and video will be uploaded when internet connection is made.'}</Text> : null}
         </Pressable>
       ))}
       {showMore ? (

@@ -169,10 +169,19 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
                 </View>
                 <View style={styles.compareCol}>
                   <Text style={styles.compareLabel}>Return</Text>
-                  <Pressable style={[styles.compareFrame, styles.blank]} onPress={() => choosePhotos(spot.id)}>
-                    {record.photos[0] ? <MediaImage uri={record.photos[0].localUri || record.photos[0].remoteUrl || ''} style={styles.compareShot} /> : <Text style={styles.blankText}>Tap to add return</Text>}
-                  </Pressable>
+                  {record.photos[0] ? (
+                    <MediaImage uri={record.photos[0].localUri || record.photos[0].remoteUrl || ''} style={styles.compareShot} onOpen={setZoom} />
+                  ) : (
+                    <Pressable style={[styles.compareFrame, styles.blank]} onPress={() => choosePhotos(spot.id)}>
+                      <Text style={styles.blankText}>Tap to add return</Text>
+                    </Pressable>
+                  )}
                   <ThumbRow photos={record.photos.slice(1)} onOpen={setZoom} />
+                  {record.photos.length < 4 ? (
+                    <Pressable style={styles.addPhoto} onPress={() => choosePhotos(spot.id)}>
+                      <Text style={styles.addPhotoText}>Add photo</Text>
+                    </Pressable>
+                  ) : null}
                   {record.photos.length > 1 ? <Text style={styles.count}>{record.photos.length} photos</Text> : null}
                   <TextInput
                     style={styles.input}
@@ -490,6 +499,8 @@ const styles = StyleSheet.create({
   compareShot: { width: '100%', height: 150, borderRadius: 12, backgroundColor: theme.input },
   thumbRow: { flexDirection: 'row', gap: 6, marginTop: 6 },
   compareThumb: { width: 52, height: 52, borderRadius: 8, backgroundColor: theme.input },
+  addPhoto: { borderWidth: 1, borderColor: theme.action, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 8 },
+  addPhotoText: { color: theme.action, fontWeight: '800', fontSize: 14 },
   compareFrame: { width: '100%', minHeight: 150, borderRadius: 12, backgroundColor: theme.input, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   blank: { borderWidth: 1, borderStyle: 'dashed', borderColor: theme.accent, backgroundColor: theme.card },
   blankText: { color: theme.accent, fontWeight: '700', textAlign: 'center', padding: 12 },

@@ -82,7 +82,7 @@ export default function RentalHistory() {
         <Text style={styles.waiting}>
           {rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError)
             ? rental.syncError
-            : 'Saved on this phone. Photos and video will upload.'}
+            : 'Saved on this phone. Photos and video will be uploaded when internet connection is made.'}
         </Text>
       ) : null}
       {rental.status === 'out' ? (
@@ -97,12 +97,14 @@ export default function RentalHistory() {
       {rental.checkout.videoUri || rental.checkout.videoUrl ? (
         <View>
           <Text style={styles.stampLine}>Checkout video · {formatStamp(rental.checkout.videoAddedAt)}{rental.checkout.videoSha256 ? ` · File ${rental.checkout.videoSha256.slice(0, 8)}` : ''}</Text>
+          {rental.checkout.videoServerAddedAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(rental.checkout.videoServerAddedAt)}</Text> : null}
           <VideoPreview uri={rental.checkout.videoUri || rental.checkout.videoUrl} />
         </View>
       ) : null}
       {rental.checkin?.videoUri || rental.checkin?.videoUrl ? (
         <View>
           <Text style={styles.stampLine}>Return video · {formatStamp(rental.checkin.videoAddedAt)}{rental.checkin.videoSha256 ? ` · File ${rental.checkin.videoSha256.slice(0, 8)}` : ''}</Text>
+          {rental.checkin.videoServerAddedAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(rental.checkin.videoServerAddedAt)}</Text> : null}
           <VideoPreview uri={rental.checkin.videoUri || rental.checkin.videoUrl} />
         </View>
       ) : null}
@@ -187,11 +189,11 @@ export default function RentalHistory() {
   );
 }
 
-type StampedPhoto = { localUri?: string; remoteUrl?: string; addedAt?: string };
+type StampedPhoto = { localUri?: string; remoteUrl?: string; addedAt?: string; serverAddedAt?: string };
 
 function photosOf(side: InspectionSide, spotId: (typeof SPOTS)[number]['id']): StampedPhoto[] {
   return side.spots[spotId].photos
-    .map((photo) => ({ localUri: photo.localUri, remoteUrl: photo.remoteUrl, addedAt: photo.addedAt }))
+    .map((photo) => ({ localUri: photo.localUri, remoteUrl: photo.remoteUrl, addedAt: photo.addedAt, serverAddedAt: photo.serverAddedAt }))
     .filter((photo) => photo.localUri || photo.remoteUrl);
 }
 
@@ -214,6 +216,7 @@ function HistoryPhoto({ photo, style, onOpen, empty, compact }: { photo: Stamped
         {compact ? null : <Text pointerEvents="none" style={styles.enlarge}>Enlarge</Text>}
       </Pressable>
       {!compact && photo.addedAt ? <Text style={styles.photoStamp}>{formatStamp(photo.addedAt)}</Text> : null}
+      {!compact && photo.serverAddedAt ? <Text style={styles.photoStamp}>Server {formatStamp(photo.serverAddedAt)}</Text> : null}
     </View>
   );
 }
