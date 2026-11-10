@@ -1,4 +1,4 @@
-const CACHE = 'fleet-shell-v1';
+const CACHE = 'fleet-shell-v2';
 const SHELL = ['/', '/inspection', '/vehicle', '/rental-history'];
 
 self.addEventListener('install', (event) => {
@@ -25,14 +25,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
   event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          void caches.open(CACHE).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      })
-      .catch(async () => (await caches.match(request)) || (await caches.match('/')) || Response.error())
+    caches.open(CACHE).then(async (cache) => {
+      const cached = await cache.match(request);
+      const update = fetch(request)
+        .then((response) => {
+          if (response.ok) void cache.put(request, response.clone());
+          return response;
+        })
+        .catch(() => cached);
+      return cached || update;
+    })
   );
 });
