@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { loadCachedVehicles, loadCovers, loadRentals, saveCachedVehicles, subscribeFleet, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
-import { useDisplayUri } from '../../media';
+import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 
 type Vehicle = CachedVehicle;
@@ -62,7 +62,10 @@ export default function VehicleListScreen() {
   useEffect(() => {
     const refresh = () => {
       void loadRentals().then(setRentals);
-      void loadCovers().then(setCovers);
+      void loadCovers().then(async (next) => {
+        await Promise.all(next.map((cover) => warmDisplayUri(cover.localUri)));
+        setCovers(next);
+      });
     };
     refresh();
     return subscribeFleet(refresh);

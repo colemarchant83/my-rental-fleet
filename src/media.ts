@@ -83,28 +83,86 @@ async function rememberBlob(blob: Blob) {
   return `idb:${key}`;
 }
 
+async function putStoredBlob(uri: string, blob: Blob) {
+  if (!uri.startsWith('idb:') || typeof indexedDB === 'undefined') return;
+  const db = await openMediaDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('files', 'readwrite');
+    tx.objectStore('files').put(blob, uri.slice(4));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+const displayUrls = new Map<string, string>();
+
+function thumbUri(uri: string) {
+  return `idb:thumb-${uri.slice(4)}`;
+}
+
+async function shrinkImage(blob: Blob): Promise<Blob | null> {
+  if (typeof document === 'undefined' || typeof createImageBitmap === 'undefined') return null;
+  if (blob.type.startsWith('video')) return null;
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const max = 960;
+    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close?.();
+      return null;
+    }
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    return await new Promise((resolve) => canvas.toBlob((next) => resolve(next), 'image/jpeg', 0.74));
+  } catch {
+    return null;
+  }
+}
+
+/** Prepare the small on-phone copy so the next screen can show it immediately. */
+export async function warmDisplayUri(localUri?: string) {
+  if (!localUri?.startsWith('idb:') || displayUrls.has(localUri)) return;
+  const savedThumb = await readStoredBlob(thumbUri(localUri)).catch(() => null);
+  let blob = savedThumb;
+  if (!blob) {
+    const full = await readStoredBlob(localUri).catch(() => null);
+    if (!full || full.type.startsWith('video')) return;
+    const shrunk = await shrinkImage(full);
+    blob = shrunk ?? full;
+    if (shrunk) await putStoredBlob(thumbUri(localUri), shrunk).catch(() => undefined);
+  }
+  if (blob) displayUrls.set(localUri, URL.createObjectURL(blob));
+}
+
 export function useDisplayUri(localUri?: string, remoteUrl?: string) {
-  const [shown, setShown] = useState('');
+  const stored = [localUri, remoteUrl].find((uri) => isStoredFile(uri));
+  const [shown, setShown] = useState(() => (stored ? displayUrls.get(stored) ?? '' : ''));
   const [remoteFailed, setRemoteFailed] = useState(false);
 
   useEffect(() => {
     setRemoteFailed(false);
     let live = true;
-    const stored = [localUri, remoteUrl].find((uri) => isStoredFile(uri));
     if (!stored) {
       setShown('');
       return () => {
         live = false;
       };
     }
+    const known = displayUrls.get(stored);
+    if (known) {
+      setShown(known);
+      return () => {
+        live = false;
+      };
+    }
     if (stored.startsWith('idb:')) {
-      void readStoredBlob(stored)
-        .then((blob) => {
-          if (live && blob) setShown(URL.createObjectURL(blob));
-        })
-        .catch(() => {
-          if (live) setShown('');
-        });
+      void warmDisplayUri(stored).then(() => {
+        if (live) setShown(displayUrls.get(stored) ?? '');
+      });
       return () => {
         live = false;
       };
@@ -125,11 +183,12 @@ export function useDisplayUri(localUri?: string, remoteUrl?: string) {
     return () => {
       live = false;
     };
-  }, [localUri, remoteUrl]);
+  }, [localUri, remoteUrl, stored]);
 
   const direct = [localUri, remoteUrl].find((uri) => !!uri && (uri.startsWith('http') || uri.startsWith('blob:') || uri.startsWith('data:')));
+  const waitingOnPhone = !!stored?.startsWith('idb:') && !shown;
   return {
-    uri: shown || (!remoteFailed ? direct ?? '' : ''),
+    uri: shown || (waitingOnPhone || remoteFailed ? '' : direct ?? ''),
     failRemote: () => setRemoteFailed(true),
   };
 }

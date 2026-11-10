@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, rememberCover, saveCachedVehicles, subscribeFleet, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
-import { useDisplayUri } from '../media';
+import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 
 type Vehicle = CachedVehicle;
@@ -76,7 +76,11 @@ export default function VehicleDetail() {
   useEffect(() => {
     const refresh = () => {
       void loadRentals().then((all) => setRentals(all.filter((rental) => rental.vehicleId === id)));
-      void loadCovers().then((all) => setCover(all.find((item) => item.vehicleId === id)));
+      void loadCovers().then(async (all) => {
+        const found = all.find((item) => item.vehicleId === id);
+        if (found) await warmDisplayUri(found.localUri);
+        setCover(found);
+      });
     };
     refresh();
     return subscribeFleet(refresh);

@@ -22,13 +22,7 @@ export function HomeButton() {
   return (
     <Pressable
       hitSlop={8}
-      onPress={() => {
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.location.assign('/');
-          return;
-        }
-        router.replace('/');
-      }}
+      onPress={() => router.replace('/')}
     >
       <Text style={{ color: theme.accent, fontSize: 16, fontWeight: '700' }}>Home</Text>
     </Pressable>
