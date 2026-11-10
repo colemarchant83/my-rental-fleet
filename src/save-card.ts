@@ -102,6 +102,32 @@ function bytesToDataUrl(data: Uint8Array, mime: string) {
   return `data:${mime};base64,${btoa(binary)}`;
 }
 
+async function previewUrl(blob: Blob) {
+  if (blob.type.startsWith('video') || typeof createImageBitmap === 'undefined') return '';
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const max = 480;
+    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close?.();
+      return '';
+    }
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const preview = await new Promise<Blob | null>((resolve) => canvas.toBlob((result) => resolve(result), 'image/jpeg', 0.62));
+    canvas.width = 0;
+    canvas.height = 0;
+    if (!preview) return '';
+    return bytesToDataUrl(new Uint8Array(await preview.arrayBuffer()), 'image/jpeg');
+  } catch {
+    return '';
+  }
+}
+
 function clockLines(phone?: string, server?: string, fallback?: string, file?: string) {
   const serverText = server ? `Server ${formatStamp(server)}` : fallback ? `Server ${formatStamp(fallback)}` : 'No server time';
   return `<p class="stamp">Phone ${esc(formatStamp(phone) || '—')}</p><p class="stamp">${esc(serverText)}</p>${file ? `<p class="stamp">File ${esc(file)}</p>` : ''}`;
@@ -163,9 +189,9 @@ export async function buildRentalCard(rental: LocalRental) {
     const data = await asBytes(blob);
     const path = `${folderName}/${folder}/${filename}.${extFor(blob, fallback)}`;
     files.push({ name: path, data });
-    const mime = blob.type || (fallback === 'mp4' ? 'video/mp4' : 'image/jpeg');
-    const inline = !mime.startsWith('video') || data.length <= 30 * 1000 * 1000;
-    shown.set(key, inline ? bytesToDataUrl(data, mime) : path);
+    const preview = await previewUrl(blob);
+    shown.set(key, preview || `${folder}/${filename}.${extFor(blob, fallback)}`);
+    await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
   for (const spot of SPOTS) {
@@ -213,6 +239,7 @@ export async function buildRentalCard(rental: LocalRental) {
   <p>${esc(machineName)}${machine?.yearMakeModel ? ` · ${esc(machine.yearMakeModel)}` : ''}${machine?.vin ? ` · VIN ${esc(machine.vin)}` : ''}</p>
   <p class="muted">Out ${esc(formatDay(rental.checkout.date))}${rental.checkin ? ` · Back ${esc(formatDay(rental.checkin.date))}` : ''}</p>
   <p class="note">If the inspection was done offline, the server time is recorded when the next internet connection was made.</p>
+  <p class="muted">The pictures on this page are smaller copies. The full photos and videos are in the check-out and check-in folders.</p>
   ${rental.serverReceivedAt ? `<p class="muted">Server received this record ${esc(formatStamp(new Date(rental.serverReceivedAt).toISOString()))}</p>` : ''}
   ${missing.length ? `<p class="warn">These files were not on this phone and could not be included: ${esc(missing.join(', '))}</p>` : ''}
   <div class="columns">
