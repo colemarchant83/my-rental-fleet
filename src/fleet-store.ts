@@ -361,7 +361,7 @@ async function uploadRef(ref: PhotoRef, folder: string) {
     return { ...ref, remoteUrl, sha256Mismatch };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Upload failed';
-    if (/Could not read the saved photo/i.test(message)) return { ...ref, localUri: '' };
+    if (/Could not read the saved photo/i.test(message)) return ref;
     lastUploadError = message;
     return ref;
   }
@@ -406,7 +406,7 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Upload failed';
-        if (/Could not read the saved photo/i.test(message)) videoUri = undefined;
+        if (/Could not read the saved photo/i.test(message)) lastUploadError = 'A video is still on this phone and will upload when it can be read.';
         else lastUploadError = message;
         if (/413/.test(message)) {
           videoOverLimit = true;

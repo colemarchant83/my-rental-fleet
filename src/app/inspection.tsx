@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
@@ -19,6 +19,8 @@ export default function InspectionScreen() {
   const [checkoutSide, setCheckoutSide] = useState<InspectionSide | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const sideRef = useRef(side);
+  sideRef.current = side;
 
   useEffect(() => {
     if (!vehicleId) return;
@@ -53,10 +55,11 @@ export default function InspectionScreen() {
       setError('Enter the renter name');
       return;
     }
-    if (!side.miles.trim() && !side.hours.trim()) {
+    if (!sideRef.current.miles.trim() && !sideRef.current.hours.trim()) {
       setError('Enter the miles or the engine hours before saving.');
       return;
     }
+    const currentSide = sideRef.current;
     setSaving(true);
     setError('');
     try {
@@ -68,7 +71,7 @@ export default function InspectionScreen() {
         router.replace({ pathname: '/rental-history', params: { localId } });
       };
       if (mode === 'checkout') {
-        const rental = await saveCheckout(vehicleId, renterName, side);
+        const rental = await saveCheckout(vehicleId, renterName, currentSide);
         openCard(rental.localId);
         return;
       }
@@ -78,7 +81,7 @@ export default function InspectionScreen() {
         setSaving(false);
         return;
       }
-      await saveCheckin(open.localId, side);
+      await saveCheckin(open.localId, currentSide);
       openCard(open.localId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save');

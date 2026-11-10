@@ -1,11 +1,11 @@
-import { createElement, useEffect, useState } from 'react';
+import { createElement, useEffect, useRef, useState } from 'react';
 import { Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ImageStyle } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, formatStamp, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
 import { ZoomModal } from './zoom-modal';
-import { WalkaroundRecorder } from './walkaround-recorder';
+import { WalkaroundRecorder, primeWalkaroundCamera } from './walkaround-recorder';
 import { contentTypeFor, isStoredFile, mediaByteSize, readStoredBlob } from '../media';
 import { theme } from '../theme';
 
@@ -32,16 +32,24 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const [zoom, setZoom] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState('');
   const [videoOpen, setVideoOpen] = useState(false);
+  const sideRef = useRef(side);
+  sideRef.current = side;
   const isOut = mode === 'checkout';
 
-  const patch = (partial: Partial<InspectionSide>) => onChange({ ...side, ...partial });
+  const publish = (next: InspectionSide) => {
+    sideRef.current = next;
+    onChange(next);
+  };
+
+  const patch = (partial: Partial<InspectionSide>) => publish({ ...sideRef.current, ...partial });
 
   const patchSpot = (spotId: SpotId, partial: Partial<InspectionSide['spots'][SpotId]>) => {
-    onChange({ ...side, spots: { ...side.spots, [spotId]: { ...side.spots[spotId], ...partial } } });
+    const current = sideRef.current;
+    publish({ ...current, spots: { ...current.spots, [spotId]: { ...current.spots[spotId], ...partial } } });
   };
 
   const addPhotos = async (spotId: SpotId, camera: boolean) => {
-    const room = 4 - side.spots[spotId].photos.length;
+    const room = 4 - sideRef.current.spots[spotId].photos.length;
     if (room <= 0) return;
     const options = {
       mediaTypes: ['images'] as ImagePicker.MediaType[],
@@ -57,7 +65,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       for (const asset of result.assets.slice(0, room)) {
         saved.push(await keepPhoto(asset.uri));
       }
-      patchSpot(spotId, { photos: [...side.spots[spotId].photos, ...saved].slice(0, 4) });
+      patchSpot(spotId, { photos: [...sideRef.current.spots[spotId].photos, ...saved].slice(0, 4) });
     } catch {
       setPhotoError('This photo could not be saved on the device. Try again.');
     }
@@ -155,6 +163,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
                 <View style={styles.compareCol}>
                   <Text style={styles.compareLabel}>From checkout</Text>
                   {checkoutPhoto ? <MediaImage uri={checkoutPhoto} style={styles.compareShot} onOpen={setZoom} /> : <View style={styles.compareFrame}><Text style={styles.blankText}>No checkout photo</Text></View>}
+                  <ThumbRow photos={earlier.photos.slice(1)} onOpen={setZoom} />
                   {earlier.note ? <Text style={styles.compareNote}>{earlier.note}</Text> : null}
                   <Text style={styles.compareLabel}>{earlier.status === 'issue' ? 'Issue' : earlier.status === 'ok' ? 'OK' : '—'}</Text>
                 </View>
@@ -163,6 +172,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
                   <Pressable style={[styles.compareFrame, styles.blank]} onPress={() => choosePhotos(spot.id)}>
                     {record.photos[0] ? <MediaImage uri={record.photos[0].localUri || record.photos[0].remoteUrl || ''} style={styles.compareShot} /> : <Text style={styles.blankText}>Tap to add return</Text>}
                   </Pressable>
+                  <ThumbRow photos={record.photos.slice(1)} onOpen={setZoom} />
                   {record.photos.length > 1 ? <Text style={styles.count}>{record.photos.length} photos</Text> : null}
                   <TextInput
                     style={styles.input}
@@ -222,7 +232,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
 
       <Text style={styles.section}>Walk-around video (optional)</Text>
       <Text style={styles.help}>Record a slow lap in the app. It is saved at 1080p, 30 fps. Videos already on the phone cannot be added.</Text>
-      <Pressable style={styles.videoBtn} onPress={() => setVideoOpen(true)}>
+      <Pressable style={styles.videoBtn} onPress={() => { primeWalkaroundCamera(); setVideoOpen(true); }}>
         <Text style={styles.videoBtnText}>{side.videoUri ? 'Replace Walk-around Video' : 'Record Walk-around Video'}</Text>
       </Pressable>
       {side.videoUri ? <VideoPreview uri={side.videoUri} /> : null}
@@ -361,6 +371,17 @@ function spotPhoto(photo?: { localUri?: string; remoteUrl?: string }) {
   return photo.remoteUrl || photo.localUri || '';
 }
 
+function ThumbRow({ photos, onOpen }: { photos: { id: string; localUri?: string; remoteUrl?: string }[]; onOpen: (uri: string) => void }) {
+  if (!photos.length) return null;
+  return (
+    <View style={styles.thumbRow}>
+      {photos.map((photo) => (
+        <MediaImage key={photo.id} uri={photo.localUri || photo.remoteUrl || ''} style={styles.compareThumb} onOpen={onOpen} />
+      ))}
+    </View>
+  );
+}
+
 function MediaImage({ uri, style, onOpen }: { uri: string; style: StyleProp<ImageStyle>; onOpen?: (uri: string) => void }) {
   const [shown, setShown] = useState('');
   useEffect(() => {
@@ -467,6 +488,8 @@ const styles = StyleSheet.create({
   compareCol: { flex: 1, minWidth: 0 },
   compareLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', marginBottom: 4 },
   compareShot: { width: '100%', height: 150, borderRadius: 12, backgroundColor: theme.input },
+  thumbRow: { flexDirection: 'row', gap: 6, marginTop: 6 },
+  compareThumb: { width: 52, height: 52, borderRadius: 8, backgroundColor: theme.input },
   compareFrame: { width: '100%', minHeight: 150, borderRadius: 12, backgroundColor: theme.input, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   blank: { borderWidth: 1, borderStyle: 'dashed', borderColor: theme.accent, backgroundColor: theme.card },
   blankText: { color: theme.accent, fontWeight: '700', textAlign: 'center', padding: 12 },

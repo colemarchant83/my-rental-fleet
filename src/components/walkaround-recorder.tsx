@@ -27,7 +27,9 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
     let live = true;
     const open = async () => {
       try {
-        session.current = await openWebCamera();
+        const readyCamera = primedCamera ?? openWebCamera();
+        primedCamera = null;
+        session.current = await readyCamera;
         const video = videoRef.current;
         if (!video) throw new Error('camera');
         video.srcObject = session.current.preview;
@@ -119,6 +121,18 @@ type WebSession = {
   finish: () => Promise<string>;
   stop: () => void;
 };
+
+let primedCamera: Promise<WebSession> | null = null;
+
+export function primeWalkaroundCamera() {
+  if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.mediaDevices) return;
+  if (!primedCamera) {
+    primedCamera = openWebCamera().catch((error) => {
+      primedCamera = null;
+      throw error;
+    });
+  }
+}
 
 async function openWebCamera(): Promise<WebSession> {
   let stream: MediaStream;
