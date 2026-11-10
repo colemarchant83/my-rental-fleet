@@ -200,6 +200,7 @@ export async function buildRentalCard(rental: LocalRental) {
     figcaption, .muted, .stamp { color: #6f6a63; font-size: 13px; }
     video { width: 100%; border-radius: 10px; background: #1c1917; margin-top: 8px; }
     .warn { color: #b42318; font-weight: 700; }
+    .note { font-weight: 700; }
     .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 700px) { .columns { grid-template-columns: 1fr; } }
   </style>
@@ -209,6 +210,7 @@ export async function buildRentalCard(rental: LocalRental) {
   <h1>${esc(rental.renterName || 'Renter')}</h1>
   <p>${esc(machineName)}${machine?.yearMakeModel ? ` · ${esc(machine.yearMakeModel)}` : ''}${machine?.vin ? ` · VIN ${esc(machine.vin)}` : ''}</p>
   <p class="muted">Out ${esc(formatDay(rental.checkout.date))}${rental.checkin ? ` · Back ${esc(formatDay(rental.checkin.date))}` : ''}</p>
+  <p class="note">If the inspection is done offline, the server time is recorded when the connection is made.</p>
   ${rental.serverReceivedAt ? `<p class="muted">Server received this record ${esc(formatStamp(new Date(rental.serverReceivedAt).toISOString()))}</p>` : ''}
   ${missing.length ? `<p class="warn">These files were not on this phone and could not be included: ${esc(missing.join(', '))}</p>` : ''}
   <div class="columns">
