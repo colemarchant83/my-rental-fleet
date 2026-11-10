@@ -271,10 +271,10 @@ export default function VehicleDetail() {
 
       {rentals.length === 0 ? <Text style={styles.muted}>No rentals yet.</Text> : visibleRentals.map((rental) => (
         <Pressable key={rental.localId} style={styles.folder} onPress={() => router.push({ pathname: '/rental-history', params: { localId: rental.localId } })}>
-          <View style={styles.folderTab}>
+          <View style={[styles.folderTab, rental.status !== 'closed' && styles.folderTabOpen]}>
             <Text style={styles.folderTabText} numberOfLines={1}>{rental.renterName || 'Renter'}</Text>
           </View>
-          <View style={styles.folderBody}>
+          <View style={[styles.folderBody, rental.status !== 'closed' && styles.folderBodyOpen]}>
             <View style={styles.folderMeta}>
               <Text style={styles.specs}>
                 Out {formatDay(rental.checkout?.date)}
@@ -356,8 +356,10 @@ const styles = StyleSheet.create({
   saveText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
   folder: { marginTop: 14 },
   folderTab: { alignSelf: 'flex-start', maxWidth: '78%', marginBottom: -1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, borderTopLeftRadius: 12, borderTopRightRadius: 12, borderWidth: 1, borderBottomWidth: 0, backgroundColor: '#c4b49a', borderColor: '#b5a588' },
+  folderTabOpen: { backgroundColor: '#b7c6a4', borderColor: '#8ea37a' },
   folderTabText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
   folderBody: { backgroundColor: '#d5c7b0', borderWidth: 1, borderColor: '#b5a588', borderTopRightRadius: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, padding: 14 },
+  folderBodyOpen: { backgroundColor: '#d5e2c6', borderColor: '#8ea37a' },
   folderMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   folderStatus: { color: theme.ink, fontWeight: '800', fontSize: 12 },
   more: { borderWidth: 1, borderColor: theme.line, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12, backgroundColor: theme.card },
