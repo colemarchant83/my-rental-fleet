@@ -23,13 +23,12 @@ export default function RentalHistory() {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const [saving, setSaving] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveReady, setSaveReady] = useState(false);
   const [saveNote, setSaveNote] = useState('');
   const missingNote = useRef('');
   const builtFile = useRef<File | null>(null);
   const openedVehicle = useRef('');
-  const rentalForSave = useRef(rental);
-  rentalForSave.current = rental;
 
   useEffect(() => {
     const refresh = async () => {
@@ -63,34 +62,6 @@ export default function RentalHistory() {
     void refresh();
     return subscribeFleet(() => void refresh());
   }, [localId, remoteId, router]);
-
-  useEffect(() => {
-    const current = rentalForSave.current;
-    if (!current) return;
-    let live = true;
-    builtFile.current = null;
-    setSaving(true);
-    setSaveNote('');
-    const timer = setTimeout(() => {
-      void buildRentalCard(current)
-        .then(({ file, missing }) => {
-          if (!live) return;
-          builtFile.current = file;
-          missingNote.current = missing.length ? ' Some files could not be included because they are not on this phone right now.' : '';
-        })
-        .catch((error: unknown) => {
-          if (!live) return;
-          setSaveNote(error instanceof Error ? error.message : 'Could not prepare this card.');
-        })
-        .finally(() => {
-          if (live) setSaving(false);
-        });
-    }, 300);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [rental?.localId]);
 
   if (!rental) {
     return (
@@ -195,22 +166,42 @@ export default function RentalHistory() {
       {rental.checkout.notes ? <Text style={styles.notes}>Checkout notes · {formatStamp(rental.checkout.notesAt)}{'\n'}{rental.checkout.notes}</Text> : null}
       {rental.checkin?.notes ? <Text style={styles.notes}>Return notes · {formatStamp(rental.checkin.notesAt)}{'\n'}{rental.checkin.notes}</Text> : null}
       <Pressable
-        style={[styles.save, (saving || !builtFile.current) && styles.saveWaiting]}
-        disabled={saving || !builtFile.current}
+        style={[styles.save, saving && styles.saveWaiting]}
+        disabled={saving}
         onPress={() => {
-          const file = builtFile.current;
-          if (!file) return;
-          void deliverRentalFile(file).then((method) => {
-            if (method === 'cancelled' || method === 'blocked') return;
-            setSaveNote(
-              method === 'shared'
-                ? `Choose where to save it. Open the zip, then open Rental card.html.${missingNote.current}`
-                : `The card is in your downloads. Open the zip, then open Rental card.html.${missingNote.current}`
-            );
-          });
+          const openSave = (file: File) => {
+            void deliverRentalFile(file).then((method) => {
+              if (method === 'cancelled') return;
+              if (method === 'blocked') {
+                setSaveReady(true);
+                return;
+              }
+              setSaveNote(
+                method === 'shared'
+                  ? `Choose where to save it. Open the zip, then open Rental card.html.${missingNote.current}`
+                  : `The card is in your downloads. Open the zip, then open Rental card.html.${missingNote.current}`
+              );
+            });
+          };
+          if (builtFile.current) {
+            openSave(builtFile.current);
+            return;
+          }
+          setSaving(true);
+          setSaveNote('');
+          void buildRentalCard(rental)
+            .then(({ file, missing }) => {
+              builtFile.current = file;
+              missingNote.current = missing.length ? ' Some files could not be included because they are not on this phone right now.' : '';
+              openSave(file);
+            })
+            .catch((error: unknown) => {
+              setSaveNote(error instanceof Error ? error.message : 'Could not save this card.');
+            })
+            .finally(() => setSaving(false));
         }}
       >
-        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : 'Save this card to files'}</Text>
+        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : saveReady ? 'Choose where to save' : 'Save this card to files'}</Text>
       </Pressable>
       {saveNote ? <Text style={styles.help}>{saveNote}</Text> : null}
       <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
