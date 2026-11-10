@@ -127,7 +127,8 @@ export default function RentalHistory() {
       </View>
 
       {SPOTS.map((spot) => {
-        const out = rental.checkout.spots[spot.id];
+        const blank = { status: '' as const, note: '', photos: [] };
+        const out = rental.checkout.spots[spot.id] ?? blank;
         const back = rental.checkin?.spots[spot.id];
         return (
           <View key={spot.id} style={styles.spot}>
@@ -205,7 +206,7 @@ function receivedIso(value?: number | string) {
 }
 
 function photosOf(side: InspectionSide, spotId: (typeof SPOTS)[number]['id'], receivedAt?: string): StampedPhoto[] {
-  return side.spots[spotId].photos
+  return (side.spots[spotId]?.photos ?? [])
     .map((photo) => ({
       localUri: photo.localUri,
       remoteUrl: photo.remoteUrl,

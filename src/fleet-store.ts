@@ -11,8 +11,9 @@ export const SPOTS = [
   { id: 'left', label: 'Body — left side' },
   { id: 'right', label: 'Body — right side' },
   { id: 'rear', label: 'Body — rear' },
-  { id: 'windshield', label: 'Windshield' },
+  { id: 'windshield', label: 'Windows' },
   { id: 'accessories', label: 'Accessories & gear' },
+  { id: 'other', label: 'Other' },
 ] as const;
 
 export type SpotId = (typeof SPOTS)[number]['id'];
@@ -179,7 +180,7 @@ export async function stampSide(side: InspectionSide): Promise<InspectionSide> {
   const serverSavedAt = await serverNow();
   const spots = {} as Record<SpotId, SpotRecord>;
   for (const spot of SPOTS) {
-    const current = side.spots[spot.id];
+    const current = side.spots[spot.id] ?? { status: '' as const, note: '', photos: [] };
     spots[spot.id] = { ...current, notedAt: current.note.trim() ? current.notedAt || savedAt : undefined };
   }
   return { ...side, savedAt, serverSavedAt, notesAt: side.notes.trim() ? side.notesAt || savedAt : undefined, spots };
@@ -226,7 +227,24 @@ async function writeJson(key: string, value: unknown) {
 }
 
 export async function loadRentals() {
-  return readJson<LocalRental[]>(RENTALS_KEY, []);
+  const rentals = await readJson<LocalRental[]>(RENTALS_KEY, []);
+  return rentals.map((rental) => ({
+    ...rental,
+    checkout: ensureSide(rental.checkout),
+    checkin: rental.checkin ? ensureSide(rental.checkin) : undefined,
+  }));
+}
+
+function ensureSide(side: InspectionSide): InspectionSide {
+  let missing = false;
+  const spots = { ...side.spots };
+  for (const spot of SPOTS) {
+    if (!spots[spot.id]) {
+      spots[spot.id] = { status: '', note: '', photos: [] };
+      missing = true;
+    }
+  }
+  return missing ? { ...side, spots } : side;
 }
 
 export async function loadCovers() {
@@ -382,7 +400,7 @@ async function uploadSide(side: InspectionSide, folder: string): Promise<Inspect
   const receivedAt = await serverNow();
   const spots = {} as Record<SpotId, SpotRecord>;
   for (const spot of SPOTS) {
-    const current = side.spots[spot.id];
+    const current = side.spots[spot.id] ?? { status: '' as const, note: '', photos: [] };
     const photos: PhotoRef[] = [];
     for (const photo of current.photos) {
       photos.push(await uploadRef(photo, `${folder}/${spot.id}`, receivedAt));

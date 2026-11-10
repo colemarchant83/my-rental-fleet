@@ -152,7 +152,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       {!checkout ? <Text style={styles.help}>Each spot can hold up to 4 photos, so damage can be caught from more than one angle.</Text> : null}
 
       {SPOTS.map((spot) => {
-        const record = side.spots[spot.id];
+        const record = side.spots[spot.id] ?? { status: '' as const, note: '', photos: [] };
         const earlier = checkout?.spots[spot.id];
         if (earlier) {
           const checkoutPhoto = spotPhoto(earlier.photos[0]);
