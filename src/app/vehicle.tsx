@@ -267,15 +267,17 @@ export default function VehicleDetail() {
 
       {rentals.length === 0 ? <Text style={styles.muted}>No rentals yet.</Text> : visibleRentals.map((rental) => (
         <Pressable key={rental.localId} style={styles.folder} onPress={() => router.push({ pathname: '/rental-history', params: { localId: rental.localId } })}>
-          <View style={[styles.folderTab, rental.status === 'closed' ? styles.folderTabClosed : styles.folderTabOut]}>
-            <Text style={styles.folderTabText}>{rental.status === 'closed' ? 'Returned' : 'Out'}</Text>
+          <View style={styles.folderTab}>
+            <Text style={styles.folderTabText} numberOfLines={1}>{rental.renterName || 'Renter'}</Text>
           </View>
           <View style={styles.folderBody}>
-            <Text style={styles.renter}>{rental.renterName}</Text>
-            <Text style={styles.specs}>
-              Out {formatDay(rental.checkout.date)}
-              {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
-            </Text>
+            <View style={styles.folderMeta}>
+              <Text style={styles.specs}>
+                Out {formatDay(rental.checkout.date)}
+                {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
+              </Text>
+              <Text style={styles.folderStatus}>{rental.status === 'closed' ? 'Returned' : 'Out'}</Text>
+            </View>
             <Text style={styles.link}>Details</Text>
             {rental.sync !== 'synced' ? <Text style={styles.waiting}>{rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError) ? rental.syncError : 'Saved on this phone. Photos and video will be uploaded when internet connection is made.'}</Text> : null}
           </View>
@@ -347,13 +349,12 @@ const styles = StyleSheet.create({
   save: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 12 },
   saveText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
   folder: { marginTop: 14 },
-  folderTab: { alignSelf: 'flex-start', marginBottom: -1, paddingHorizontal: 16, paddingTop: 7, paddingBottom: 8, borderTopLeftRadius: 12, borderTopRightRadius: 12, borderWidth: 1, borderBottomWidth: 0 },
-  folderTabClosed: { backgroundColor: '#efe4cc', borderColor: '#ddcfae' },
-  folderTabOut: { backgroundColor: theme.rentSoft, borderColor: '#e2c9a4' },
-  folderTabText: { color: theme.ink, fontWeight: '800', fontSize: 12 },
-  folderBody: { backgroundColor: '#fffaf1', borderWidth: 1, borderColor: '#ddcfae', borderTopRightRadius: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, padding: 14 },
+  folderTab: { alignSelf: 'flex-start', maxWidth: '78%', marginBottom: -1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, borderTopLeftRadius: 12, borderTopRightRadius: 12, borderWidth: 1, borderBottomWidth: 0, backgroundColor: '#c4b49a', borderColor: '#b5a588' },
+  folderTabText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
+  folderBody: { backgroundColor: '#d5c7b0', borderWidth: 1, borderColor: '#b5a588', borderTopRightRadius: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, padding: 14 },
+  folderMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  folderStatus: { color: theme.ink, fontWeight: '800', fontSize: 12 },
   more: { borderWidth: 1, borderColor: theme.line, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12, backgroundColor: theme.card },
-  renter: { color: theme.text, fontSize: 18, fontWeight: '800' },
   link: { color: theme.accent, fontWeight: '700', marginTop: 8, textAlign: 'right' },
   waiting: { color: theme.rent, marginTop: 6, fontSize: 13 },
   remove: { color: theme.danger, fontWeight: '700', marginTop: 28 },
