@@ -584,8 +584,7 @@ export async function syncAll() {
       await pushCovers();
       const rentals = await loadRentals();
       for (const rental of rentals) {
-        if (rental.sync === 'synced' && rental.status === 'out') continue;
-        if (rental.sync === 'synced' && !rentalHasStoredFiles(rental)) continue;
+        if (rental.sync === 'synced') continue;
         try {
           await pushRental(rental);
         } catch (error) {
