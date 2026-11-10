@@ -95,6 +95,19 @@ function canChunkUploads() {
   return chunkedUploads;
 }
 
+const inflight = new Map<string, Promise<string>>();
+
+/** One send per file. A second request for the same file waits for the first instead of starting over. */
+export function beginUpload(localUri: string, key: string, contentType: string) {
+  const running = inflight.get(localUri);
+  if (running) return running;
+  const job = uploadFile(localUri, key, contentType).finally(() => {
+    if (inflight.get(localUri) === job) inflight.delete(localUri);
+  });
+  inflight.set(localUri, job);
+  return job;
+}
+
 export async function uploadFile(localUri: string, key: string, contentType: string, signal?: AbortSignal): Promise<string> {
   if (!SIGNER) {
     throw new Error('Media storage is not connected yet.');

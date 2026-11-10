@@ -7,6 +7,7 @@ import { SPOTS, emptySide, formatDay, formatStamp, keepPhoto, keepVideo, type In
 import { ZoomModal } from './zoom-modal';
 import { WalkaroundRecorder, primeWalkaroundCamera } from './walkaround-recorder';
 import { contentTypeFor, deleteStoredFile, isStoredFile, mediaByteSize, readStoredBlob } from '../media';
+import { beginUpload } from '../r2';
 import { theme } from '../theme';
 
 const FUEL = ['Not recorded', 'Empty', '1/4 tank', '1/2 tank', '3/4 tank', 'Full'];
@@ -66,6 +67,15 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
         saved.push(await keepPhoto(asset.uri));
       }
       patchSpot(spotId, { photos: [...sideRef.current.spots[spotId].photos, ...saved].slice(0, 4) });
+      for (const photo of saved) {
+        void beginUpload(photo.localUri, `captures/${photo.id}.jpg`, contentTypeFor(photo.localUri))
+          .then((remoteUrl) => {
+            const spot = sideRef.current.spots[spotId];
+            if (!spot?.photos.some((item) => item.id === photo.id)) return;
+            patchSpot(spotId, { photos: spot.photos.map((item) => (item.id === photo.id ? { ...item, remoteUrl } : item)) });
+          })
+          .catch(() => undefined);
+      }
     } catch {
       setPhotoError('This photo could not be saved on the device. Try again.');
     }
@@ -91,20 +101,30 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       videoAddedAt: kept.addedAt,
       videoServerAddedAt: kept.serverAddedAt,
       videoSha256: kept.sha256,
+      videoUrl: undefined,
+      videoOverLimit: false,
     });
     setVideoOpen(false);
     const bytes = await mediaByteSize(kept.uri);
     if (bytes > 100 * 1000 * 1000) {
+      patch({ videoOverLimit: true });
       setPhotoError('This video is over 100 MB, so it will not be uploaded. Record a shorter one if you want it saved in storage. This copy stays on this phone.');
+      return;
     }
+    void beginUpload(kept.uri, `captures/video-${Date.now()}.mp4`, 'video/mp4')
+      .then((videoUrl) => {
+        if (sideRef.current.videoUri !== kept.uri) return;
+        patch({ videoUrl });
+      })
+      .catch(() => undefined);
   };
 
   return (
     <View>
       <Text style={styles.intro}>
         {isOut
-          ? 'Walk around the machine and record its condition before it goes out. Saving keeps the inspection on this phone, then uploads when you have service.'
-          : 'Record the machine as it comes back. Checkout photos stay beside these so you can compare them.'}
+          ? 'Walk around the machine and record its condition before it goes out. Photos and video start sending while you finish the inspection. If you leave, sending continues the next time the app is opened.'
+          : 'Record the machine as it comes back. Checkout photos stay beside these so you can compare them. Photos and video start sending while you finish. If you leave, sending continues the next time the app is opened.'}
       </Text>
 
       <Text style={styles.label}>Renter Name</Text>

@@ -3,7 +3,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
 import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
-import { uploadFile, deleteStoredObject } from './r2';
+import { beginUpload, deleteStoredObject } from './r2';
 
 export const SPOTS = [
   { id: 'tires', label: 'Tires & wheels' },
@@ -374,7 +374,7 @@ let lastUploadError = '';
 async function uploadRef(ref: PhotoRef, folder: string, receivedAt?: string) {
   if (ref.remoteUrl) return ref;
   try {
-    const remoteUrl = await uploadFile(ref.localUri, `${folder}/${ref.id}.jpg`, contentTypeFor(ref.localUri));
+    const remoteUrl = await beginUpload(ref.localUri, `${folder}/${ref.id}.jpg`, contentTypeFor(ref.localUri));
     return { ...ref, remoteUrl, serverAddedAt: ref.serverAddedAt || receivedAt };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Upload failed';
@@ -423,7 +423,7 @@ async function uploadSide(side: InspectionSide, folder: string, onStep?: (side: 
       void noteLargeVideo(bytes, folder);
     } else {
       try {
-        videoUrl = await uploadFile(videoUri, `${folder}/walkaround.mp4`, 'video/mp4');
+        videoUrl = await beginUpload(videoUri, `${folder}/walkaround.mp4`, 'video/mp4');
         videoServerAddedAt = side.videoServerAddedAt || receivedAt;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Upload failed';
@@ -593,7 +593,7 @@ async function pushCovers() {
   const next: CoverPhoto[] = [];
   for (const cover of covers) {
     try {
-      const remoteUrl = cover.remoteUrl ?? (await uploadFile(cover.localUri, `vehicles/${cover.vehicleId}/cover.jpg`, contentTypeFor(cover.localUri)));
+      const remoteUrl = cover.remoteUrl ?? (await beginUpload(cover.localUri, `vehicles/${cover.vehicleId}/cover.jpg`, contentTypeFor(cover.localUri)));
       if (!cover.remoteUrl) {
         await updateDoc(doc(db, 'vehicles', cover.vehicleId), { photoUrl: remoteUrl, photoAddedAt: cover.addedAt ?? null });
       }
