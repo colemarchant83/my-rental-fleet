@@ -93,7 +93,7 @@ export default function RentalHistory() {
         <Text style={styles.waiting}>
           {rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError)
             ? rental.syncError
-            : 'Saved on this phone. Photos and video will be uploaded when internet connection is made.'}
+            : 'Saved on this phone. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.'}
         </Text>
       ) : null}
       {rental.status === 'out' ? (

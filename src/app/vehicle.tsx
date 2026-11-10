@@ -283,7 +283,7 @@ export default function VehicleDetail() {
               <Text style={styles.folderStatus}>{rental.status === 'closed' ? 'Returned' : 'Out'}</Text>
             </View>
             <Text style={styles.link}>Details</Text>
-            {rental.sync !== 'synced' ? <Text style={styles.waiting}>{rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError) ? rental.syncError : 'Saved on this phone. Photos and video will be uploaded when internet connection is made.'}</Text> : null}
+            {rental.sync !== 'synced' ? <Text style={styles.waiting}>{rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError) ? rental.syncError : 'Saved on this phone. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.'}</Text> : null}
           </View>
         </Pressable>
       ))}
