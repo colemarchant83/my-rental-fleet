@@ -27,7 +27,7 @@ export default function VehicleDetail() {
   const [factsError, setFactsError] = useState('');
   const [factsLoading, setFactsLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [shownCount, setShownCount] = useState(20);
+  const [shownCount, setShownCount] = useState(5);
   const [older, setOlder] = useState<LocalRental[]>([]);
   const [olderLoaded, setOlderLoaded] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -87,7 +87,7 @@ export default function VehicleDetail() {
   }, [id]);
 
   useEffect(() => {
-    setShownCount(20);
+    setShownCount(5);
     setOlder([]);
     setOlderLoaded(false);
   }, [id]);
@@ -292,6 +292,10 @@ export default function VehicleDetail() {
           style={styles.more}
           disabled={loadingOlder}
           onPress={() => {
+            if (hiddenRentals > 0) {
+              setShownCount((count) => count + 10);
+              return;
+            }
             if (!olderLoaded && id) {
               setLoadingOlder(true);
               void fetchVehicleRentals(id)
@@ -299,15 +303,13 @@ export default function VehicleDetail() {
                   setOlder(remote);
                   setOlderLoaded(true);
                   const known = new Set(rentals.map((rental) => rental.localId));
-                  if (remote.some((rental) => !known.has(rental.localId))) setShownCount((count) => count + 20);
+                  if (remote.some((rental) => !known.has(rental.localId))) setShownCount((count) => count + 10);
                 })
                 .finally(() => setLoadingOlder(false));
-              return;
             }
-            setShownCount((count) => count + 20);
           }}
         >
-          <Text style={styles.ghostText}>{loadingOlder ? 'Loading...' : `Show ${hiddenRentals > 0 ? Math.min(20, hiddenRentals) : 20} more`}</Text>
+          <Text style={styles.ghostText}>{loadingOlder ? 'Loading...' : `Show the previous ${hiddenRentals > 0 ? Math.min(10, hiddenRentals) : 10}`}</Text>
         </Pressable>
       ) : null}
 
