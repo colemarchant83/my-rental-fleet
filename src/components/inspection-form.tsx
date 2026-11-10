@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, formatStamp, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
 import { ZoomModal } from './zoom-modal';
 import { WalkaroundRecorder, primeWalkaroundCamera } from './walkaround-recorder';
-import { contentTypeFor, isStoredFile, mediaByteSize, readStoredBlob } from '../media';
+import { contentTypeFor, deleteStoredFile, isStoredFile, mediaByteSize, readStoredBlob } from '../media';
 import { theme } from '../theme';
 
 const FUEL = ['Not recorded', 'Empty', '1/4 tank', '1/2 tank', '3/4 tank', 'Full'];
@@ -69,6 +69,13 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
     } catch {
       setPhotoError('This photo could not be saved on the device. Try again.');
     }
+  };
+
+  const removePhoto = (spotId: SpotId, photoId: string) => {
+    const photos = sideRef.current.spots[spotId].photos;
+    const photo = photos.find((item) => item.id === photoId);
+    if (photo?.localUri) void deleteStoredFile(photo.localUri);
+    patchSpot(spotId, { photos: photos.filter((item) => item.id !== photoId) });
   };
 
   const choosePhotos = (spotId: SpotId) => {
@@ -170,13 +177,19 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
                 <View style={styles.compareCol}>
                   <Text style={styles.compareLabel}>Return</Text>
                   {record.photos[0] ? (
-                    <MediaImage uri={record.photos[0].localUri || record.photos[0].remoteUrl || ''} style={styles.compareShot} onOpen={setZoom} />
+                    <RemovablePhoto
+                      uri={record.photos[0].localUri || record.photos[0].remoteUrl || ''}
+                      style={styles.compareShot}
+                      wide
+                      onOpen={setZoom}
+                      onRemove={() => removePhoto(spot.id, record.photos[0].id)}
+                    />
                   ) : (
                     <Pressable style={[styles.compareFrame, styles.blank]} onPress={() => choosePhotos(spot.id)}>
                       <Text style={styles.blankText}>Tap to add return</Text>
                     </Pressable>
                   )}
-                  <ThumbRow photos={record.photos.slice(1)} onOpen={setZoom} />
+                  <ThumbRow photos={record.photos.slice(1)} onOpen={setZoom} onRemove={(photoId) => removePhoto(spot.id, photoId)} />
                   {record.photos.length < 4 ? (
                     <Pressable style={styles.addPhoto} onPress={() => choosePhotos(spot.id)}>
                       <Text style={styles.addPhotoText}>Add photo</Text>
@@ -216,12 +229,13 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
             </View>
             <View style={styles.photoRow}>
               {record.photos.map((photo) => (
-                <View key={photo.id}>
-                  <MediaImage uri={photo.localUri} style={styles.thumb} onOpen={setZoom} />
-                  <Pressable onPress={() => patchSpot(spot.id, { photos: record.photos.filter((item) => item.id !== photo.id) })}>
-                    <Text style={styles.remove}>Remove</Text>
-                  </Pressable>
-                </View>
+                <RemovablePhoto
+                  key={photo.id}
+                  uri={photo.localUri}
+                  style={styles.thumb}
+                  onOpen={setZoom}
+                  onRemove={() => removePhoto(spot.id, photo.id)}
+                />
               ))}
             </View>
             <Pressable style={styles.ghost} onPress={() => choosePhotos(spot.id)}>
@@ -384,13 +398,26 @@ function spotPhoto(photo?: { localUri?: string; remoteUrl?: string }) {
   return photo.remoteUrl || photo.localUri || '';
 }
 
-function ThumbRow({ photos, onOpen }: { photos: { id: string; localUri?: string; remoteUrl?: string }[]; onOpen: (uri: string) => void }) {
+function ThumbRow({ photos, onOpen, onRemove }: { photos: { id: string; localUri?: string; remoteUrl?: string }[]; onOpen: (uri: string) => void; onRemove?: (photoId: string) => void }) {
   if (!photos.length) return null;
   return (
     <View style={styles.thumbRow}>
-      {photos.map((photo) => (
+      {photos.map((photo) => onRemove ? (
+        <RemovablePhoto key={photo.id} uri={photo.localUri || photo.remoteUrl || ''} style={styles.compareThumb} onOpen={onOpen} onRemove={() => onRemove(photo.id)} />
+      ) : (
         <MediaImage key={photo.id} uri={photo.localUri || photo.remoteUrl || ''} style={styles.compareThumb} onOpen={onOpen} />
       ))}
+    </View>
+  );
+}
+
+function RemovablePhoto({ uri, style, wide, onOpen, onRemove }: { uri: string; style: StyleProp<ImageStyle>; wide?: boolean; onOpen: (uri: string) => void; onRemove: () => void }) {
+  return (
+    <View style={[styles.photoWrap, wide && styles.photoWrapWide]}>
+      <MediaImage uri={uri} style={style} onOpen={onOpen} />
+      <Pressable style={styles.photoX} onPress={onRemove} hitSlop={8}>
+        <Text style={styles.photoXText}>×</Text>
+      </Pressable>
     </View>
   );
 }
@@ -496,6 +523,10 @@ const styles = StyleSheet.create({
   choiceText: { color: theme.text, fontWeight: '700' },
   choiceTextOn: { color: theme.white },
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  photoWrap: { position: 'relative', alignSelf: 'flex-start' },
+  photoWrapWide: { alignSelf: 'stretch', width: '100%' },
+  photoX: { position: 'absolute', top: 4, right: 4, zIndex: 2, width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(28,25,23,0.72)', alignItems: 'center', justifyContent: 'center' },
+  photoXText: { color: '#fff', fontWeight: '800', fontSize: 18, lineHeight: 20 },
   thumb: { width: 92, height: 92, borderRadius: 10, backgroundColor: theme.input },
   compare: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'flex-start' },
   compareCol: { flex: 1, minWidth: 0 },
@@ -518,7 +549,6 @@ const styles = StyleSheet.create({
   playMark: { color: '#fff', fontWeight: '800', fontSize: 18 },
   videoBtn: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 12 },
   videoBtnText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
-  remove: { color: theme.danger, fontSize: 13, marginTop: 4 },
   error: { color: theme.danger, marginTop: 14, fontWeight: '600' },
   save: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 18 },
   saveText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
