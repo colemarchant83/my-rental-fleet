@@ -259,7 +259,7 @@ export async function buildRentalCard(rental: LocalRental) {
 export async function deliverRentalFile(file: File) {
   if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file] });
+      await navigator.share({ files: [file], title: file.name });
       return 'shared' as const;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return 'cancelled' as const;
