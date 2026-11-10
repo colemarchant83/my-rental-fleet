@@ -113,7 +113,7 @@ export default function VehicleListScreen() {
               >
                 <Text style={styles.actionText}>{out ? 'Check in — return inspection' : 'Check out — pre-rental inspection'}</Text>
               </Pressable>
-              {waiting ? <Text style={styles.waiting}>Saved on this phone. Photos and video will upload.</Text> : null}
+              {waiting ? <Text style={styles.waiting}>Saved on this phone. Photos and video will be uploaded when internet connection is made.</Text> : null}
             </View>
           </Pressable>
         );
