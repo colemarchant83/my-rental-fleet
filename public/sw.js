@@ -1,39 +1,34 @@
-const CACHE = 'fleet-shell-v2';
-const SHELL = ['/', '/inspection', '/vehicle', '/rental-history'];
+const CACHE = 'fleet-shell-v3';
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => undefined))))
-      .then(() => self.skipWaiting())
-  );
+self.addEventListener('install', () => {
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)));
+    await self.clients.claim();
+    const windows = await self.clients.matchAll({ type: 'window' });
+    await Promise.all(windows.map((client) => client.navigate(client.url)));
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
-  event.respondWith(
-    caches.open(CACHE).then(async (cache) => {
-      const cached = await cache.match(request);
-      const update = fetch(request)
-        .then((response) => {
-          if (response.ok) void cache.put(request, response.clone());
-          return response;
-        })
-        .catch(() => cached);
-      return cached || update;
-    })
-  );
+  if (url.origin !== self.location.origin || url.pathname === '/sw.js') return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    try {
+      const response = await fetch(request);
+      if (response && response.ok) void cache.put(request, response.clone());
+      return response;
+    } catch {
+      const cached = (await cache.match(request)) || (request.mode === 'navigate' ? await cache.match('/') : undefined);
+      if (cached) return cached;
+      return new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+    }
+  })());
 });

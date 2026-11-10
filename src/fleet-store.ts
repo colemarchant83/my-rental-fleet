@@ -186,7 +186,8 @@ export async function stampSide(side: InspectionSide): Promise<InspectionSide> {
   return { ...side, savedAt, serverSavedAt, notesAt: side.notes.trim() ? side.notesAt || savedAt : undefined, spots };
 }
 
-export function formatDay(iso: string) {
+export function formatDay(iso?: string) {
+  if (!iso) return '';
   const [year, month, day] = iso.split('-').map(Number);
   if (!year || !month || !day) return iso;
   return new Date(year, month - 1, day).toLocaleDateString(undefined, {
@@ -235,7 +236,8 @@ export async function loadRentals() {
   }));
 }
 
-function ensureSide(side: InspectionSide): InspectionSide {
+function ensureSide(side?: InspectionSide): InspectionSide {
+  if (!side?.spots) return emptySide(side?.date);
   let missing = false;
   const spots = { ...side.spots };
   for (const spot of SPOTS) {

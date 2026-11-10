@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
 import { syncAll, watchConnection } from '../fleet-store';
@@ -21,32 +21,50 @@ function ScreenHeader() {
   );
 }
 
-export function ErrorBoundary({ retry }: { error: Error; retry: () => Promise<void> }) {
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  const online = typeof navigator === 'undefined' || navigator.onLine;
+  const reload = () => {
+    if (typeof window === 'undefined') {
+      void retry();
+      return;
+    }
+    void (async () => {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      }
+      window.location.reload();
+    })();
+  };
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg, padding: 24, justifyContent: 'center' }}>
-      <Text style={{ color: theme.text, fontSize: 22, fontWeight: '800' }}>This page did not load offline.</Text>
-      <Text style={{ color: theme.muted, marginTop: 8, fontSize: 16 }}>
-        Turn the connection on once so the inspection page can be saved on this phone, then try again.
+      <Text style={{ color: theme.text, fontSize: 22, fontWeight: '800' }}>
+        {online ? 'This page hit a problem.' : 'This page did not load offline.'}
       </Text>
-      <Pressable onPress={() => void retry()} style={{ marginTop: 16 }}>
-        <Text style={{ color: theme.accent, fontWeight: '800' }}>Try again</Text>
+      <Text style={{ color: theme.muted, marginTop: 8, fontSize: 16 }}>
+        {online
+          ? error?.message || 'Reload the app and try that page again.'
+          : 'Turn the connection on once so this page can be saved on this phone, then try again.'}
+      </Text>
+      <Pressable onPress={online ? reload : () => void retry()} style={{ marginTop: 16 }}>
+        <Text style={{ color: theme.accent, fontWeight: '800' }}>{online ? 'Reload' : 'Try again'}</Text>
       </Pressable>
     </View>
   );
 }
 
 export default function RootLayout() {
-  const router = useRouter();
   useEffect(() => {
     void syncAll();
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
     }
-    router.prefetch('/inspection');
-    router.prefetch('/vehicle');
-    router.prefetch('/rental-history');
     return watchConnection();
-  }, [router]);
+  }, []);
 
   return (
     <Stack

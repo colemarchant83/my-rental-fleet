@@ -79,7 +79,7 @@ export default function RentalHistory() {
         <View style={styles.pill}><Text style={styles.pillText}>{rental.status === 'closed' ? 'Returned' : 'Out'}</Text></View>
       </View>
       <Text style={styles.muted}>
-        Out {formatDay(rental.checkout.date)}
+        Out {formatDay(rental.checkout?.date)}
         {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
       </Text>
       {rental.checkout.savedAt ? <Text style={styles.stampLine}>Checkout recorded on this phone {formatStamp(rental.checkout.savedAt)}</Text> : null}

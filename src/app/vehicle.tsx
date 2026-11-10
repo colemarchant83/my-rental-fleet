@@ -277,7 +277,7 @@ export default function VehicleDetail() {
           <View style={styles.folderBody}>
             <View style={styles.folderMeta}>
               <Text style={styles.specs}>
-                Out {formatDay(rental.checkout.date)}
+                Out {formatDay(rental.checkout?.date)}
                 {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
               </Text>
               <Text style={styles.folderStatus}>{rental.status === 'closed' ? 'Returned' : 'Out'}</Text>
