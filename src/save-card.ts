@@ -210,7 +210,7 @@ export async function buildRentalCard(rental: LocalRental) {
   <h1>${esc(rental.renterName || 'Renter')}</h1>
   <p>${esc(machineName)}${machine?.yearMakeModel ? ` · ${esc(machine.yearMakeModel)}` : ''}${machine?.vin ? ` · VIN ${esc(machine.vin)}` : ''}</p>
   <p class="muted">Out ${esc(formatDay(rental.checkout.date))}${rental.checkin ? ` · Back ${esc(formatDay(rental.checkin.date))}` : ''}</p>
-  <p class="note">If the inspection is done offline, the server time is recorded when the next internet connection is made.</p>
+  <p class="note">If the inspection was done offline, the server time is recorded when the next internet connection is made.</p>
   ${rental.serverReceivedAt ? `<p class="muted">Server received this record ${esc(formatStamp(new Date(rental.serverReceivedAt).toISOString()))}</p>` : ''}
   ${missing.length ? `<p class="warn">These files were not on this phone and could not be included: ${esc(missing.join(', '))}</p>` : ''}
   <div class="columns">
