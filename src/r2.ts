@@ -97,7 +97,8 @@ function canChunkUploads() {
 
 const inflight = new Map<string, Promise<string>>();
 
-/** One send per file. A second request for the same file waits for the first instead of starting over. */
+/** One send per file. A second request for the same file waits for the first instead of starting over.
+ * Store app: replace this website send with the phone's background upload so it continues after the app is closed or the phone is locked. */
 export function beginUpload(localUri: string, key: string, contentType: string) {
   const running = inflight.get(localUri);
   if (running) return running;
