@@ -77,6 +77,8 @@ export type CoverPhoto = {
 const RENTALS_KEY = 'fleet.rentals.v1';
 const COVERS_KEY = 'fleet.covers.v1';
 const VEHICLES_KEY = 'fleet.vehicles.v1';
+const VEHICLE_CACHE = 'fleet-data-v1';
+const VEHICLE_CACHE_URL = '/__fleet_vehicles.json';
 
 export type CachedVehicle = {
   id: string;
@@ -90,12 +92,31 @@ export type CachedVehicle = {
   photoAddedAt?: string;
 };
 
-export async function loadCachedVehicles() {
-  return readJson<CachedVehicle[]>(VEHICLES_KEY, []);
+async function readVehicleCache() {
+  if (typeof caches === 'undefined') return [] as CachedVehicle[];
+  const cache = await caches.open(VEHICLE_CACHE);
+  const response = await cache.match(VEHICLE_CACHE_URL);
+  if (!response) return [] as CachedVehicle[];
+  const data = (await response.json()) as CachedVehicle[];
+  return Array.isArray(data) ? data : [];
 }
 
-export async function saveCachedVehicles(vehicles: CachedVehicle[]) {
+async function writeVehicleCache(vehicles: CachedVehicle[]) {
+  if (typeof caches === 'undefined') return;
+  const cache = await caches.open(VEHICLE_CACHE);
+  await cache.put(VEHICLE_CACHE_URL, new Response(JSON.stringify(vehicles), { headers: { 'Content-Type': 'application/json' } }));
+}
+
+export async function loadCachedVehicles() {
+  const stored = await readJson<CachedVehicle[]>(VEHICLES_KEY, []);
+  const cached = await readVehicleCache().catch(() => [] as CachedVehicle[]);
+  return cached.length >= stored.length ? cached : stored;
+}
+
+export async function saveCachedVehicles(vehicles: CachedVehicle[], allowEmpty = false) {
+  if (!vehicles.length && !allowEmpty) return;
   await AsyncStorage.setItem(VEHICLES_KEY, JSON.stringify(vehicles));
+  await writeVehicleCache(vehicles).catch(() => undefined);
   emit();
 }
 

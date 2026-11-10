@@ -16,6 +16,7 @@ export default function VehicleListScreen() {
   const [covers, setCovers] = useState<CoverPhoto[]>([]);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
+  const [savedHere, setSavedHere] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -24,12 +25,15 @@ export default function VehicleListScreen() {
       setVehicles(saved);
       setReady(true);
     });
-    const show = (snapshot: { docs: { id: string; data: () => Omit<Vehicle, 'id'> }[] }) => {
+    const show = (snapshot: { metadata?: { fromCache?: boolean }; docs: { id: string; data: () => Omit<Vehicle, 'id'> }[] }) => {
       const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      if (!next.length && snapshot.metadata?.fromCache) return;
       setVehicles(next);
       setError('');
       setReady(true);
-      void saveCachedVehicles(next);
+      void saveCachedVehicles(next, !snapshot.metadata?.fromCache).then(() => {
+        if (next.length) setSavedHere(true);
+      });
     };
     void getDocs(collection(db, 'vehicles')).then(show).catch((err: unknown) => {
       if (!live) return;
@@ -71,6 +75,7 @@ export default function VehicleListScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Rental Log</Text>
       <Text style={styles.count}>{vehicles.length} {vehicles.length === 1 ? 'machine' : 'machines'}</Text>
+      {savedHere ? <Text style={styles.intro}>Saved on this phone for offline use.</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {!ready && !error ? <Text style={styles.intro}>Loading machines...</Text> : null}
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
