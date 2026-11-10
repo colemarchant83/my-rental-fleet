@@ -29,6 +29,35 @@ export default function RentalHistory() {
   const readyFile = useRef<File | null>(null);
   const missingNote = useRef('');
   const openedVehicle = useRef('');
+  const rentalRef = useRef(rental);
+  rentalRef.current = rental;
+
+  useEffect(() => {
+    const current = rentalRef.current;
+    if (!current) return;
+    let live = true;
+    readyFile.current = null;
+    setSaveReady(false);
+    setSaving(true);
+    setSaveNote('');
+    void buildRentalCard(current)
+      .then(({ file, missing }) => {
+        if (!live) return;
+        readyFile.current = file;
+        missingNote.current = missing.length ? ' Some files could not be included because they are not on this phone right now.' : '';
+        setSaveReady(true);
+      })
+      .catch((error: unknown) => {
+        if (!live) return;
+        setSaveNote(error instanceof Error ? error.message : 'Could not prepare this card.');
+      })
+      .finally(() => {
+        if (live) setSaving(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [rental?.localId]);
 
   useEffect(() => {
     const refresh = async () => {
@@ -166,37 +195,22 @@ export default function RentalHistory() {
       {rental.checkout.notes ? <Text style={styles.notes}>Checkout notes · {formatStamp(rental.checkout.notesAt)}{'\n'}{rental.checkout.notes}</Text> : null}
       {rental.checkin?.notes ? <Text style={styles.notes}>Return notes · {formatStamp(rental.checkin.notesAt)}{'\n'}{rental.checkin.notes}</Text> : null}
       <Pressable
-        style={styles.save}
-        disabled={saving}
+        style={[styles.save, !saveReady && styles.saveWaiting]}
+        disabled={!saveReady}
         onPress={() => {
-          if (readyFile.current) {
-            const file = readyFile.current;
-            void deliverRentalFile(file).then((method) => {
-              if (method === 'cancelled') return;
-              setSaveNote(
-                method === 'shared'
-                  ? `Choose Save to Files. Open the zip, then open Rental card.html.${missingNote.current}`
-                  : `The card is in your downloads. Open the zip, then open Rental card.html.${missingNote.current}`
-              );
-            });
-            return;
-          }
-          setSaving(true);
-          setSaveNote('');
-          void buildRentalCard(rental)
-            .then(({ file, missing }) => {
-              readyFile.current = file;
-              setSaveReady(true);
-              missingNote.current = missing.length ? ' Some files could not be included because they are not on this phone right now.' : '';
-              setSaveNote(`Ready.${missingNote.current} Tap again to put it in Files.`);
-            })
-            .catch((error: unknown) => {
-              setSaveNote(error instanceof Error ? error.message : 'Could not save this card.');
-            })
-            .finally(() => setSaving(false));
+          const file = readyFile.current;
+          if (!file) return;
+          void deliverRentalFile(file).then((method) => {
+            if (method === 'cancelled') return;
+            setSaveNote(
+              method === 'shared'
+                ? `Choose where to save it. Open the zip, then open Rental card.html.${missingNote.current}`
+                : `The card is in your downloads. Open the zip, then open Rental card.html.${missingNote.current}`
+            );
+          });
         }}
       >
-        <Text style={styles.saveText}>{saving ? 'Saving photos and video...' : saveReady ? 'Save to Files' : 'Save this card to files'}</Text>
+        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : 'Save this card to files'}</Text>
       </Pressable>
       {saveNote ? <Text style={styles.help}>{saveNote}</Text> : null}
       <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
@@ -412,6 +426,7 @@ const styles = StyleSheet.create({
   issue: { color: '#c47d00' },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
   save: { marginTop: 22, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  saveWaiting: { opacity: 0.55 },
   saveText: { color: theme.white, fontWeight: '800' },
   stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
   videoTitle: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 18 },
