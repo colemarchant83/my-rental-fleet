@@ -16,13 +16,14 @@ export default function VehicleListScreen() {
   const [covers, setCovers] = useState<CoverPhoto[]>([]);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
-  const [savedHere, setSavedHere] = useState(false);
+  const [savedIds, setSavedIds] = useState<string[]>([]);
 
   useEffect(() => {
     let live = true;
     void loadCachedVehicles().then((saved) => {
       if (!live || !saved.length) return;
       setVehicles(saved);
+      setSavedIds(saved.map((item) => item.id));
       setReady(true);
     });
     const show = (snapshot: { metadata?: { fromCache?: boolean }; docs: { id: string; data: () => Omit<Vehicle, 'id'> }[] }) => {
@@ -32,7 +33,7 @@ export default function VehicleListScreen() {
       setError('');
       setReady(true);
       void saveCachedVehicles(next, !snapshot.metadata?.fromCache).then(() => {
-        if (next.length) setSavedHere(true);
+        if (next.length) setSavedIds(next.map((item) => item.id));
       });
     };
     void getDocs(collection(db, 'vehicles')).then(show).catch((err: unknown) => {
@@ -75,7 +76,6 @@ export default function VehicleListScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Rental Log</Text>
       <Text style={styles.count}>{vehicles.length} {vehicles.length === 1 ? 'machine' : 'machines'}</Text>
-      {savedHere ? <Text style={styles.intro}>Saved on this phone for offline use.</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {!ready && !error ? <Text style={styles.intro}>Loading machines...</Text> : null}
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
@@ -103,6 +103,7 @@ export default function VehicleListScreen() {
                 </View>
               ) : null}
               {vehicle.vin ? <Text style={styles.vin}>VIN {vehicle.vin}</Text> : null}
+              {savedIds.includes(vehicle.id) ? <Text style={styles.offline}>Saved on this phone for offline use.</Text> : null}
               <Pressable
                 style={styles.action}
                 onPress={(event) => {
@@ -143,6 +144,7 @@ const styles = StyleSheet.create({
   modelRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   renter: { color: theme.text, fontWeight: '700', fontSize: 13, textAlign: 'right', maxWidth: 110, marginTop: 8 },
   vin: { color: theme.muted, marginTop: 2 },
+  offline: { color: theme.muted, marginTop: 6, fontSize: 13 },
   action: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 12, alignItems: 'center', marginTop: 14 },
   actionText: { color: theme.ink, fontWeight: '800', fontSize: 15, textAlign: 'center' },
   waiting: { color: theme.rent, marginTop: 8, fontSize: 13 },
