@@ -161,7 +161,7 @@ function sideBlock(title: string, side: InspectionSide | undefined, shown: Map<s
     <p>${esc(side.serverSavedAt ? `Server time ${formatStamp(side.serverSavedAt)}` : '')}</p>
     ${clocksDisagree(side.savedAt, side.serverSavedAt) ? '<p class="warn">Phone time does not match the server.</p>' : ''}
     <ul>${readings.map(([label, value]) => `<li>${esc(label)}: ${esc(value)}</li>`).join('')}</ul>
-    ${video?.startsWith('data:') ? `<video controls playsinline src="${video}"></video>` : video ? `<p>The walk-around video is saved in the ${title === 'Check out' ? 'check-out' : 'check-in'} folder.</p>` : ''}
+    ${video?.startsWith('data:') ? `<video controls playsinline src="${video}"></video>` : video ? `<p>The walk-around video is the file named ${title} video, next to this card.</p>` : ''}
     ${video ? clockLines(side.videoAddedAt, side.videoServerAddedAt, serverFallback, side.videoSha256?.slice(0, 8)) : ''}
     ${side.notes ? `<p>Notes · ${esc(formatStamp(side.notesAt))}<br>${esc(side.notes)}</p>` : ''}
     ${spots}
@@ -187,10 +187,11 @@ export async function buildRentalCard(rental: LocalRental) {
       return;
     }
     const data = await asBytes(blob);
-    const path = `${folderName}/${folder}/${filename}.${extFor(blob, fallback)}`;
+    const fileName = `${filename}.${extFor(blob, fallback)}`;
+    const path = folder ? `${folderName}/${folder}/${fileName}` : `${folderName}/${fileName}`;
     files.push({ name: path, data });
     const preview = await previewUrl(blob);
-    shown.set(key, preview || `${folder}/${filename}.${extFor(blob, fallback)}`);
+    shown.set(key, preview || (folder ? `${folder}/${fileName}` : fileName));
     await new Promise((resolve) => setTimeout(resolve, 0));
   };
 
@@ -208,8 +209,8 @@ export async function buildRentalCard(rental: LocalRental) {
       }
     }
   }
-  await addMedia('Check out-video', 'check-out', 'walkaround', rental.checkout.videoUri, rental.checkout.videoUrl, 'mp4');
-  if (rental.checkin) await addMedia('Check in-video', 'check-in', 'walkaround', rental.checkin.videoUri, rental.checkin.videoUrl, 'mp4');
+  await addMedia('Check out-video', '', 'Check out video', rental.checkout.videoUri, rental.checkout.videoUrl, 'mp4');
+  if (rental.checkin) await addMedia('Check in-video', '', 'Check in video', rental.checkin.videoUri, rental.checkin.videoUrl, 'mp4');
 
   const html = `<!doctype html>
 <html>
