@@ -101,14 +101,16 @@ export default function RentalHistory() {
 
       {rental.checkout.videoUri || rental.checkout.videoUrl ? (
         <View>
-          <Text style={styles.stampLine}>Checkout video · {formatStamp(rental.checkout.videoAddedAt)}{rental.checkout.videoSha256 ? ` · File ${rental.checkout.videoSha256.slice(0, 8)}` : ''}</Text>
+          <Text style={styles.videoTitle}>Check out</Text>
+          <Text style={styles.stampLine}>{formatStamp(rental.checkout.videoAddedAt)}{rental.checkout.videoSha256 ? ` · File ${rental.checkout.videoSha256.slice(0, 8)}` : ''}</Text>
           {rental.checkout.videoServerAddedAt || rental.serverReceivedAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(rental.checkout.videoServerAddedAt || receivedIso(rental.serverReceivedAt) || '')}</Text> : null}
           <VideoPreview uri={rental.checkout.videoUri || rental.checkout.videoUrl} />
         </View>
       ) : null}
       {rental.checkin?.videoUri || rental.checkin?.videoUrl ? (
         <View>
-          <Text style={styles.stampLine}>Return video · {formatStamp(rental.checkin.videoAddedAt)}{rental.checkin.videoSha256 ? ` · File ${rental.checkin.videoSha256.slice(0, 8)}` : ''}</Text>
+          <Text style={styles.videoTitle}>Check in</Text>
+          <Text style={styles.stampLine}>{formatStamp(rental.checkin.videoAddedAt)}{rental.checkin.videoSha256 ? ` · File ${rental.checkin.videoSha256.slice(0, 8)}` : ''}</Text>
           {rental.checkin.videoServerAddedAt || rental.serverReceivedAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(rental.checkin.videoServerAddedAt || receivedIso(rental.serverReceivedAt) || '')}</Text> : null}
           <VideoPreview uri={rental.checkin.videoUri || rental.checkin.videoUrl} />
         </View>
@@ -369,6 +371,7 @@ const styles = StyleSheet.create({
   issue: { color: '#c47d00' },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
   stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
+  videoTitle: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 18 },
   mismatch: { color: theme.danger, marginTop: 4, fontSize: 13, fontWeight: '700' },
   photoStamp: { color: theme.muted, fontSize: 10, paddingHorizontal: 6, paddingBottom: 4 },
   extraStamp: { color: theme.muted, fontSize: 8, width: 42 },
