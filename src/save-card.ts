@@ -94,7 +94,20 @@ async function asBytes(blob: Blob) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-function sideBlock(title: string, side: InspectionSide | undefined, files: Map<string, string>) {
+function bytesToDataUrl(data: Uint8Array, mime: string) {
+  let binary = '';
+  for (let index = 0; index < data.length; index += 8192) {
+    binary += String.fromCharCode(...data.subarray(index, index + 8192));
+  }
+  return `data:${mime};base64,${btoa(binary)}`;
+}
+
+function clockLines(phone?: string, server?: string, fallback?: string, file?: string) {
+  const serverText = server ? `Server ${formatStamp(server)}` : fallback ? `Server ${formatStamp(fallback)}` : 'No server time';
+  return `<p class="stamp">Phone ${esc(formatStamp(phone) || '—')}</p><p class="stamp">${esc(serverText)}</p>${file ? `<p class="stamp">File ${esc(file)}</p>` : ''}`;
+}
+
+function sideBlock(title: string, side: InspectionSide | undefined, shown: Map<string, string>, serverFallback?: string) {
   if (!side) return `<section><h2>${esc(title)}</h2><p>Not returned yet</p></section>`;
   const readings = [
     ['Fuel', side.fuel || 'Not recorded'],
@@ -105,18 +118,16 @@ function sideBlock(title: string, side: InspectionSide | undefined, files: Map<s
     const record = side.spots[spot.id] ?? { status: '', note: '', photos: [] };
     const photos = record.photos
       .map((photo, index) => {
-        const path = files.get(`${title}-${spot.id}-${index}`);
-        if (!path) return '';
-        const when = formatStamp(photo.addedAt);
-        const server = formatStamp(photo.serverAddedAt);
-        const file = photo.sha256 ? `File ${photo.sha256.slice(0, 8)}` : '';
-        return `<figure><img src="${esc(path)}" alt="${esc(spot.label)}"><figcaption>${esc([when, server && `Server ${server}`, file].filter(Boolean).join(' · '))}</figcaption></figure>`;
+        const src = shown.get(`${title}-${spot.id}-${index}`);
+        if (!src) return '';
+        const file = photo.sha256 ? photo.sha256.slice(0, 8) : '';
+        return `<figure><img src="${src}" alt="${esc(spot.label)}">${clockLines(photo.addedAt, photo.serverAddedAt, serverFallback, file)}</figure>`;
       })
       .join('');
     const status = record.status === 'issue' ? 'Issue' : record.status === 'ok' ? 'OK' : '—';
     return `<article><h3>${esc(spot.label)}</h3>${photos || '<p>No photo</p>'}<p>${esc(record.note.trim() || 'No note')}</p><p><strong>${status}</strong></p></article>`;
   }).join('');
-  const video = files.get(`${title}-video`);
+  const video = shown.get(`${title}-video`);
   return `<section>
     <h2>${esc(title)}</h2>
     <p>${esc(formatDay(side.date))}</p>
@@ -124,7 +135,8 @@ function sideBlock(title: string, side: InspectionSide | undefined, files: Map<s
     <p>${esc(side.serverSavedAt ? `Server time ${formatStamp(side.serverSavedAt)}` : '')}</p>
     ${clocksDisagree(side.savedAt, side.serverSavedAt) ? '<p class="warn">Phone time does not match the server.</p>' : ''}
     <ul>${readings.map(([label, value]) => `<li>${esc(label)}: ${esc(value)}</li>`).join('')}</ul>
-    ${video ? `<p><a href="${esc(video)}">Walk-around video</a>${side.videoAddedAt ? ` · ${esc(formatStamp(side.videoAddedAt))}` : ''}${side.videoSha256 ? ` · File ${esc(side.videoSha256.slice(0, 8))}` : ''}</p>` : ''}
+    ${video?.startsWith('data:') ? `<video controls playsinline src="${video}"></video>` : video ? `<p>The walk-around video is saved in the ${title === 'Check out' ? 'check-out' : 'check-in'} folder.</p>` : ''}
+    ${video ? clockLines(side.videoAddedAt, side.videoServerAddedAt, serverFallback, side.videoSha256?.slice(0, 8)) : ''}
     ${side.notes ? `<p>Notes · ${esc(formatStamp(side.notesAt))}<br>${esc(side.notes)}</p>` : ''}
     ${spots}
   </section>`;
@@ -136,8 +148,9 @@ export async function buildRentalCard(rental: LocalRental) {
   const machine = vehicles.find((item) => item.id === rental.vehicleId);
   const machineName = machine?.nickname || machine?.yearMakeModel || 'Machine';
   const files: SavedFile[] = [];
-  const paths = new Map<string, string>();
+  const shown = new Map<string, string>();
   const missing: string[] = [];
+  const serverFallback = rental.serverReceivedAt ? new Date(rental.serverReceivedAt).toISOString() : undefined;
 
   const addMedia = async (key: string, folder: string, filename: string, localUri?: string, remoteUrl?: string, fallback = 'jpg') => {
     const blob = await mediaBlob(localUri, remoteUrl);
@@ -145,9 +158,12 @@ export async function buildRentalCard(rental: LocalRental) {
       if (localUri || remoteUrl) missing.push(filename);
       return;
     }
+    const data = await asBytes(blob);
     const path = `${folder}/${filename}.${extFor(blob, fallback)}`;
-    paths.set(key, path);
-    files.push({ name: path, data: await asBytes(blob) });
+    files.push({ name: path, data });
+    const mime = blob.type || (fallback === 'mp4' ? 'video/mp4' : 'image/jpeg');
+    const inline = !mime.startsWith('video') || data.length <= 30 * 1000 * 1000;
+    shown.set(key, inline ? bytesToDataUrl(data, mime) : path);
   };
 
   for (const spot of SPOTS) {
@@ -181,7 +197,8 @@ export async function buildRentalCard(rental: LocalRental) {
     article, section { background: #fffdf8; border-radius: 16px; padding: 14px; margin-top: 12px; }
     img { width: 100%; border-radius: 10px; }
     figure { margin: 8px 0; }
-    figcaption, .muted { color: #6f6a63; font-size: 13px; }
+    figcaption, .muted, .stamp { color: #6f6a63; font-size: 13px; }
+    video { width: 100%; border-radius: 10px; background: #1c1917; margin-top: 8px; }
     .warn { color: #b42318; font-weight: 700; }
     .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 700px) { .columns { grid-template-columns: 1fr; } }
@@ -195,8 +212,8 @@ export async function buildRentalCard(rental: LocalRental) {
   ${rental.serverReceivedAt ? `<p class="muted">Server received this record ${esc(formatStamp(new Date(rental.serverReceivedAt).toISOString()))}</p>` : ''}
   ${missing.length ? `<p class="warn">These files were not on this phone and could not be included: ${esc(missing.join(', '))}</p>` : ''}
   <div class="columns">
-    ${sideBlock('Check out', rental.checkout, paths)}
-    ${sideBlock('Check in', rental.checkin, paths)}
+    ${sideBlock('Check out', rental.checkout, shown, rental.checkout.serverSavedAt || serverFallback)}
+    ${sideBlock('Check in', rental.checkin, shown, rental.checkin?.serverSavedAt || serverFallback)}
   </div>
 </main>
 </body>
