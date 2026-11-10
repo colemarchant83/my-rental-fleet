@@ -554,16 +554,35 @@ async function pushCovers() {
       if (!cover.remoteUrl) {
         await updateDoc(doc(db, 'vehicles', cover.vehicleId), { photoUrl: remoteUrl, photoAddedAt: cover.addedAt ?? null });
       }
-      if (await remoteMediaLoads(remoteUrl, 'image')) {
-        await deleteStoredFile(cover.localUri);
-        continue;
-      }
-      next.push({ ...cover, remoteUrl, sync: 'pending' });
+      next.push({ ...cover, remoteUrl, sync: 'synced' });
     } catch {
-      next.push({ ...cover, sync: cover.remoteUrl ? 'pending' : 'error' });
+      next.push(cover);
     }
   }
   await saveCovers(next);
+}
+
+async function cacheProfilePhotos() {
+  const vehicles = await loadCachedVehicles();
+  let covers = await loadCovers();
+  let changed = false;
+  for (const vehicle of vehicles) {
+    const current = covers.find((cover) => cover.vehicleId === vehicle.id);
+    if (current && isStoredFile(current.localUri)) continue;
+    const remote = current?.remoteUrl || vehicle.photoUrl;
+    if (!remote?.startsWith('http')) continue;
+    try {
+      const localUri = await persistMedia(remote, 'jpg');
+      covers = [
+        { vehicleId: vehicle.id, localUri, remoteUrl: remote, addedAt: current?.addedAt || vehicle.photoAddedAt, sync: 'synced' as const },
+        ...covers.filter((cover) => cover.vehicleId !== vehicle.id),
+      ];
+      changed = true;
+    } catch {
+      // The photo stays remote until the next time the phone has service.
+    }
+  }
+  if (changed) await saveCovers(covers);
 }
 
 let syncing = false;
@@ -582,6 +601,7 @@ export async function syncAll() {
       const net = await NetInfo.fetch();
       if (net.isConnected === false && (typeof navigator === 'undefined' || navigator.onLine === false)) return;
       await pushCovers();
+      await cacheProfilePhotos();
       const rentals = await loadRentals();
       for (const rental of rentals) {
         if (rental.sync === 'synced') continue;

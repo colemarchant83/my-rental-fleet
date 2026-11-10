@@ -127,9 +127,9 @@ export function useDisplayUri(localUri?: string, remoteUrl?: string) {
     };
   }, [localUri, remoteUrl]);
 
-  const direct = [remoteUrl, localUri].find((uri) => !!uri && (uri.startsWith('http') || uri.startsWith('blob:') || uri.startsWith('data:')));
+  const direct = [localUri, remoteUrl].find((uri) => !!uri && (uri.startsWith('http') || uri.startsWith('blob:') || uri.startsWith('data:')));
   return {
-    uri: !remoteFailed && direct ? direct : shown,
+    uri: shown || (!remoteFailed ? direct ?? '' : ''),
     failRemote: () => setRemoteFailed(true),
   };
 }
