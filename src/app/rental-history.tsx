@@ -7,6 +7,7 @@ import { ZoomModal } from '../components/zoom-modal';
 import { VideoPreview } from '../components/inspection-form';
 import { useDisplayUri } from '../media';
 import { SPOTS, clocksDisagree, deleteRental, fetchRentalByLocalId, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
+import { buildRentalCard, deliverRentalFile } from '../save-card';
 import { theme } from '../theme';
 
 type RemotePhoto = string | { url?: string; addedAt?: string; serverAddedAt?: string; sha256?: string };
@@ -22,6 +23,11 @@ export default function RentalHistory() {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveReady, setSaveReady] = useState(false);
+  const [saveNote, setSaveNote] = useState('');
+  const readyFile = useRef<File | null>(null);
+  const missingNote = useRef('');
   const openedVehicle = useRef('');
 
   useEffect(() => {
@@ -159,6 +165,40 @@ export default function RentalHistory() {
 
       {rental.checkout.notes ? <Text style={styles.notes}>Checkout notes · {formatStamp(rental.checkout.notesAt)}{'\n'}{rental.checkout.notes}</Text> : null}
       {rental.checkin?.notes ? <Text style={styles.notes}>Return notes · {formatStamp(rental.checkin.notesAt)}{'\n'}{rental.checkin.notes}</Text> : null}
+      <Pressable
+        style={styles.save}
+        disabled={saving}
+        onPress={() => {
+          if (readyFile.current) {
+            const file = readyFile.current;
+            void deliverRentalFile(file).then((method) => {
+              if (method === 'cancelled') return;
+              setSaveNote(
+                method === 'shared'
+                  ? `Choose Save to Files. Open the zip, then open Rental card.html.${missingNote.current}`
+                  : `The card is in your downloads. Open the zip, then open Rental card.html.${missingNote.current}`
+              );
+            });
+            return;
+          }
+          setSaving(true);
+          setSaveNote('');
+          void buildRentalCard(rental)
+            .then(({ file, missing }) => {
+              readyFile.current = file;
+              setSaveReady(true);
+              missingNote.current = missing.length ? ' Some files could not be included because they are not on this phone right now.' : '';
+              setSaveNote(`Ready.${missingNote.current} Tap again to put it in Files.`);
+            })
+            .catch((error: unknown) => {
+              setSaveNote(error instanceof Error ? error.message : 'Could not save this card.');
+            })
+            .finally(() => setSaving(false));
+        }}
+      >
+        <Text style={styles.saveText}>{saving ? 'Saving photos and video...' : saveReady ? 'Save to Files' : 'Save this card to files'}</Text>
+      </Pressable>
+      {saveNote ? <Text style={styles.help}>{saveNote}</Text> : null}
       <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
         <Text style={styles.deleteText}>Delete this rental</Text>
       </Pressable>
@@ -371,6 +411,8 @@ const styles = StyleSheet.create({
   ok: { color: theme.green },
   issue: { color: '#c47d00' },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
+  save: { marginTop: 22, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  saveText: { color: theme.white, fontWeight: '800' },
   stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
   videoTitle: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 18 },
   mismatch: { color: theme.danger, marginTop: 4, fontSize: 13, fontWeight: '700' },
