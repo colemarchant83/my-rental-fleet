@@ -92,6 +92,7 @@ export default function RootLayout() {
       <Stack.Screen name="vehicle" options={{ header: () => <ScreenHeader /> }} />
       <Stack.Screen name="inspection" options={{ header: () => <ScreenHeader /> }} />
       <Stack.Screen name="rental-history" options={{ header: () => <ScreenHeader /> }} />
+      <Stack.Screen name="share" options={{ title: 'Rental card', headerBackVisible: false }} />
     </Stack>
   );
 }

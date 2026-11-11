@@ -194,10 +194,10 @@ function sideBlock(title: string, side: InspectionSide | undefined, shown: Map<s
   </section>`;
 }
 
-export async function buildRentalCard(rental: LocalRental) {
+export async function buildRentalCard(rental: LocalRental, knownMachine?: { nickname?: string; yearMakeModel?: string; vin?: string }) {
   if (typeof document === 'undefined') throw new Error('Saving a card to files works from the web app.');
-  const vehicles = await loadCachedVehicles();
-  const machine = vehicles.find((item) => item.id === rental.vehicleId);
+  const vehicles = knownMachine ? [] : await loadCachedVehicles();
+  const machine = knownMachine ?? vehicles.find((item) => item.id === rental.vehicleId);
   const machineName = machine?.nickname || machine?.yearMakeModel || 'Machine';
   const files: SavedFile[] = [];
   const shown = new Map<string, string>();

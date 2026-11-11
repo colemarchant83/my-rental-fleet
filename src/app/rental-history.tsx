@@ -6,8 +6,9 @@ import { db } from '../firebase';
 import { ZoomModal } from '../components/zoom-modal';
 import { VideoPreview } from '../components/inspection-form';
 import { useDisplayUri } from '../media';
-import { SPOTS, clocksDisagree, deleteRental, fetchRentalByLocalId, formatDay, formatStamp, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
+import { SPOTS, clocksDisagree, deleteRental, fetchRentalByLocalId, formatDay, formatStamp, loadCachedVehicles, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
 import { buildRentalCard, deliverRentalFile } from '../save-card';
+import { cardReadyToShare, publishShareLink } from '../share-link';
 import { theme } from '../theme';
 
 type RemotePhoto = string | { url?: string; addedAt?: string; serverAddedAt?: string; sha256?: string };
@@ -26,6 +27,8 @@ export default function RentalHistory() {
   const [saving, setSaving] = useState(false);
   const [saveReady, setSaveReady] = useState(false);
   const [saveNote, setSaveNote] = useState('');
+  const [linking, setLinking] = useState(false);
+  const [linkNote, setLinkNote] = useState('');
   const missingNote = useRef('');
   const builtFile = useRef<File | null>(null);
   const openedVehicle = useRef('');
@@ -203,6 +206,43 @@ export default function RentalHistory() {
         <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : saveReady ? 'Ready. Tap to save or share' : 'Save to files or share this card'}</Text>
       </Pressable>
       {saveNote ? <Text style={styles.help}>{saveNote}</Text> : null}
+      <Pressable
+        style={[styles.link, linking && styles.saveWaiting]}
+        disabled={linking}
+        onPress={() => {
+          if (!rental) return;
+          if (!cardReadyToShare(rental)) {
+            setLinkNote('Wait until the photos and video finish uploading. Then this link can include them.');
+            return;
+          }
+          setLinking(true);
+          setLinkNote('');
+          void loadCachedVehicles()
+            .then((vehicles) => {
+              const machine = vehicles.find((item) => item.id === rental.vehicleId);
+              return publishShareLink(rental, machine);
+            })
+            .then(async (url) => {
+              if (typeof navigator !== 'undefined' && navigator.share) {
+                await navigator.share({
+                  title: `${rental.renterName || 'Rental'} card`,
+                  text: 'Open this link to view the rental card and save the photos and video.',
+                  url,
+                });
+                return;
+              }
+              setLinkNote(url);
+            })
+            .catch((error: unknown) => {
+              if (error instanceof Error && error.name === 'AbortError') return;
+              setLinkNote(error instanceof Error ? error.message : 'Could not make the link.');
+            })
+            .finally(() => setLinking(false));
+        }}
+      >
+        <Text style={styles.linkText}>{linking ? 'Making the link...' : 'Text or email this card'}</Text>
+      </Pressable>
+      {linkNote ? <Text style={styles.help}>{linkNote}</Text> : null}
       <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
         <Text style={styles.deleteText}>Delete this rental</Text>
       </Pressable>
@@ -415,7 +455,7 @@ const styles = StyleSheet.create({
   ok: { color: theme.green },
   issue: { color: '#c47d00' },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
-  save: { marginTop: 22, marginBottom: 40, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  save: { marginTop: 22, marginBottom: 10, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveWaiting: { opacity: 0.55 },
   saveText: { color: theme.white, fontWeight: '800' },
   stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
@@ -424,6 +464,8 @@ const styles = StyleSheet.create({
   photoStamp: { color: theme.muted, fontSize: 10, paddingHorizontal: 6, paddingBottom: 4 },
   extraStamp: { color: theme.muted, fontSize: 8, width: 42 },
   noteLine: { color: theme.text, marginTop: 6, fontSize: 13, lineHeight: 18 },
+  link: { marginTop: 10, marginBottom: 36, backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.line, paddingVertical: 14, alignItems: 'center' },
+  linkText: { color: theme.text, fontWeight: '800' },
   delete: { marginTop: 22, backgroundColor: theme.danger, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   deleteText: { color: theme.white, fontWeight: '800' },
   deleteError: { color: theme.danger, marginTop: 8, fontWeight: '600' },
