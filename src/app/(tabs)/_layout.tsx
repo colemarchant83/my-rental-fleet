@@ -59,7 +59,6 @@ export default function TabLayout() {
         options={{
           title: 'My Rental Fleet',
           tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Maintenance Log</PillLabel>,
-          headerRight: () => <HeaderActions home />,
         }}
       />
       <Tabs.Screen
