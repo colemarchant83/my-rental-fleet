@@ -26,7 +26,10 @@ self.addEventListener('fetch', (event) => {
       if (response && response.ok) void cache.put(request, response.clone());
       return response;
     } catch {
-      const cached = (await cache.match(request)) || (request.mode === 'navigate' ? await cache.match('/') : undefined);
+      const cached =
+        (await cache.match(request)) ||
+        (await cache.match(request, { ignoreSearch: true })) ||
+        (request.mode === 'navigate' ? (await cache.match('/index.html')) || (await cache.match('/')) : undefined);
       if (cached) return cached;
       return new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain' } });
     }

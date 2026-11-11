@@ -21,11 +21,12 @@ type Props = {
   checkout?: InspectionSide;
   onChange: (side: InspectionSide) => void;
   onSave: () => void;
+  onCancel: () => void;
   saving: boolean;
   error: string;
 };
 
-export function InspectionForm({ mode, renterName, renterLocked, onRenterName, side, checkout, onChange, onSave, saving, error }: Props) {
+export function InspectionForm({ mode, renterName, renterLocked, onRenterName, side, checkout, onChange, onSave, onCancel, saving, error }: Props) {
   const [fuelOpen, setFuelOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
   const [librarySpot, setLibrarySpot] = useState<SpotId | null>(null);
@@ -33,6 +34,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const [zoom, setZoom] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState('');
   const [videoOpen, setVideoOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const sideRef = useRef(side);
   sideRef.current = side;
   const isOut = mode === 'checkout';
@@ -305,6 +307,9 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
           {saving ? 'Saving...' : isOut ? 'Save & send out on rent' : 'Save & mark returned'}
         </Text>
       </Pressable>
+      <Pressable onPress={() => setCancelOpen(true)} disabled={saving} style={styles.cancelInspection}>
+        <Text style={styles.cancelInspectionText}>Cancel inspection</Text>
+      </Pressable>
       <Modal visible={photoChoice !== null} transparent animationType="fade" onRequestClose={() => setPhotoChoice(null)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -335,6 +340,26 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
           </View>
         </View>
       </Modal>
+      <Modal visible={cancelOpen} transparent animationType="fade" onRequestClose={() => setCancelOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.spotTitle}>Cancel this inspection?</Text>
+            <Text style={styles.help}>It will not be saved. You will go back one page.</Text>
+            <Pressable
+              style={styles.save}
+              onPress={() => {
+                setCancelOpen(false);
+                onCancel();
+              }}
+            >
+              <Text style={styles.saveText}>Cancel inspection</Text>
+            </Pressable>
+            <Pressable style={styles.ghost} onPress={() => setCancelOpen(false)}>
+              <Text style={styles.ghostText}>Keep working</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <ZoomModal uri={zoom} onClose={() => setZoom(null)} />
       <WalkaroundRecorder visible={videoOpen} onClose={() => setVideoOpen(false)} onRecorded={addVideo} />
       <Modal visible={librarySpot !== null} transparent animationType="fade" onRequestClose={() => setLibrarySpot(null)}>
@@ -343,6 +368,9 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
             <Text style={styles.spotTitle}>Photo library</Text>
             <Text style={styles.help}>
               A photo from your library or files is stamped when you add it to this inspection, not when the camera first took it. Take Photo if you want the time the picture was made.
+              {typeof navigator !== 'undefined' && navigator.onLine === false
+                ? ' With no service, photos stored in iCloud do not load. Take Photo still works.'
+                : ''}
             </Text>
             <Pressable
               style={styles.save}
@@ -586,6 +614,8 @@ const styles = StyleSheet.create({
   error: { color: theme.danger, marginTop: 14, fontWeight: '600' },
   save: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 18 },
   saveText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
+  cancelInspection: { alignItems: 'center', marginTop: 14, paddingVertical: 8 },
+  cancelInspectionText: { color: theme.danger, fontWeight: '700', fontSize: 15 },
   calendar: { backgroundColor: theme.card, borderRadius: 16, padding: 12, marginTop: 8, borderWidth: 1, borderColor: theme.line },
   calHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   calNav: { fontSize: 24, color: theme.accent, paddingHorizontal: 8 },

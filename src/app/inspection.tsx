@@ -5,7 +5,12 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { InspectionForm } from '../components/inspection-form';
 import { emptySide, loadCachedVehicles, openRentalFor, saveCheckin, saveCheckout, type InspectionSide } from '../fleet-store';
+import { goBack } from '../components/back-link';
 import { theme } from '../theme';
+
+function draftKey(vehicleId: string, mode: string) {
+  return `fleet-inspection-draft:${vehicleId}:${mode}`;
+}
 
 export default function InspectionScreen() {
   const params = useLocalSearchParams<{ vehicleId?: string; type?: string }>();
@@ -21,6 +26,33 @@ export default function InspectionScreen() {
   const [error, setError] = useState('');
   const sideRef = useRef(side);
   sideRef.current = side;
+  const skipDraft = useRef(true);
+
+  useEffect(() => {
+    if (!vehicleId || Platform.OS !== 'web') {
+      skipDraft.current = false;
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(draftKey(vehicleId, mode));
+      if (raw) {
+        const saved = JSON.parse(raw) as { renterName?: string; side?: InspectionSide };
+        if (saved.side) setSide(saved.side);
+        if (saved.renterName) setRenterName(saved.renterName);
+      }
+    } catch {
+      /* A bad draft should not block the inspection. */
+    }
+    const timer = setTimeout(() => {
+      skipDraft.current = false;
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [vehicleId, mode]);
+
+  useEffect(() => {
+    if (skipDraft.current || !vehicleId || Platform.OS !== 'web') return;
+    localStorage.setItem(draftKey(vehicleId, mode), JSON.stringify({ renterName, side }));
+  }, [vehicleId, mode, renterName, side]);
 
   useEffect(() => {
     if (!vehicleId) return;
@@ -64,6 +96,7 @@ export default function InspectionScreen() {
     setError('');
     try {
       const openCard = (localId: string) => {
+        if (Platform.OS === 'web') localStorage.removeItem(draftKey(vehicleId, mode));
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           window.location.assign(`/rental-history?localId=${encodeURIComponent(localId)}`);
           return;
@@ -102,6 +135,10 @@ export default function InspectionScreen() {
         checkout={mode === 'checkin' ? checkoutSide ?? undefined : undefined}
         onChange={setSide}
         onSave={() => void save()}
+        onCancel={() => {
+          if (vehicleId && Platform.OS === 'web') localStorage.removeItem(draftKey(vehicleId, mode));
+          goBack(router);
+        }}
         saving={saving}
         error={error}
       />
