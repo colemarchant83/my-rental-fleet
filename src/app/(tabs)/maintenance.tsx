@@ -86,7 +86,7 @@ export default function MaintenanceScreen() {
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
         const waiting = !!open && open.sync !== 'synced';
         return (
-          <Pressable key={vehicle.id} style={styles.card} onPress={() => router.push({ pathname: '/vehicle', params: { id: vehicle.id } })}>
+          <Pressable key={vehicle.id} style={styles.card} onPress={() => router.push({ pathname: '/maintenance-record', params: { vehicleId: vehicle.id } })}>
             <CoverImage localUri={cover?.localUri} remoteUrl={cover?.remoteUrl || vehicle.photoUrl} />
             <View style={styles.cardBody}>
               <View style={styles.titleRow}>
