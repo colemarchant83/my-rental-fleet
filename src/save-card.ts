@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+import { Directory } from 'expo-file-system';
 import { SPOTS, clocksDisagree, formatDay, formatStamp, loadCachedVehicles, type InspectionSide, type LocalRental } from './fleet-store';
 import { readStoredBlob } from './media';
 
@@ -320,7 +322,29 @@ export async function buildRentalCard(rental: LocalRental, knownMachine?: { nick
   return { file, missing };
 }
 
+function wasCancelled(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: string }).code ?? '';
+  return error.name === 'AbortError' || code === 'ERR_CANCELED' || /cancel/i.test(error.message);
+}
+
+/** Installed phone app only. Opens the Files folder so the card is saved there, with no Messages or Mail choice. */
+async function saveWithPhoneFiles(file: File) {
+  const directory = await Directory.pickDirectoryAsync();
+  const stored = directory.createFile(file.name, 'application/zip');
+  await stored.write(new Uint8Array(await file.arrayBuffer()));
+  return 'saved' as const;
+}
+
 export async function deliverRentalFile(file: File) {
+  if (Platform.OS !== 'web') {
+    try {
+      return await saveWithPhoneFiles(file);
+    } catch (error) {
+      if (wasCancelled(error)) return 'cancelled' as const;
+      throw error;
+    }
+  }
   if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file] });
