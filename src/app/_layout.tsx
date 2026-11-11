@@ -43,12 +43,12 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg, padding: 24, justifyContent: 'center' }}>
       <Text style={{ color: theme.text, fontSize: 22, fontWeight: '800' }}>
-        {online ? 'This page hit a problem.' : 'This page did not load offline.'}
+        {online ? 'This page hit a problem.' : 'Page unavailable offline'}
       </Text>
       <Text style={{ color: theme.muted, marginTop: 8, fontSize: 16 }}>
         {online
           ? error?.message || 'Reload the app and try that page again.'
-          : 'This page was not saved on the phone yet. Turn the connection on, open the rental home, then try again.'}
+          : 'This page needs an internet connection. A rental check-out or check-in can still be done from the rental home.'}
       </Text>
       <Pressable
         onPress={() => {
@@ -57,11 +57,10 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
             return;
           }
           if (online) reload();
-          else void retry();
         }}
         style={{ marginTop: 16 }}
       >
-        <Text style={{ color: theme.accent, fontWeight: '800' }}>{online ? 'Reload' : 'Go to rental home'}</Text>
+        <Text style={{ color: theme.accent, fontWeight: '800' }}>{online ? 'Reload' : 'Back to rental home'}</Text>
       </Pressable>
     </View>
   );
