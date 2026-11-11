@@ -11,6 +11,9 @@ import { beginUpload } from '../r2';
 import { theme } from '../theme';
 
 const FUEL = ['Not recorded', 'Empty', '1/4 tank', '1/2 tank', '3/4 tank', 'Full'];
+const webModalBackdrop = Platform.OS === 'web'
+  ? ({ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, height: '100dvh', maxHeight: '100dvh' } as const)
+  : null;
 
 type Props = {
   mode: 'checkout' | 'checkin';
@@ -66,6 +69,27 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       window.removeEventListener('offline', markOffline);
     };
   }, [photoChoice]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const open = photoChoice !== null || cancelOpen || librarySpot !== null;
+    if (!open) return;
+    const y = window.scrollY;
+    const body = document.body;
+    body.style.position = 'fixed';
+    body.style.top = `-${y}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    return () => {
+      body.style.position = '';
+      body.style.top = '';
+      body.style.left = '';
+      body.style.right = '';
+      body.style.width = '';
+      window.scrollTo(0, y);
+    };
+  }, [photoChoice, cancelOpen, librarySpot]);
 
   const publish = (next: InspectionSide) => {
     sideRef.current = next;
@@ -263,8 +287,8 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
                     <Pressable style={[styles.choice, record.status === 'ok' && styles.choiceOk]} onPress={() => patchSpot(spot.id, { status: 'ok' })}>
                       <Text style={[styles.choiceText, record.status === 'ok' && styles.choiceTextOn]}>✓ OK</Text>
                     </Pressable>
-                    <Pressable style={[styles.choice, record.status === 'issue' && styles.choiceIssue]} onPress={() => patchSpot(spot.id, { status: 'issue' })}>
-                      <Text style={styles.choiceText}>⚠ Issue</Text>
+                    <Pressable style={[styles.choice, styles.choiceIssue, record.status === 'issue' && styles.choiceIssueOn]} onPress={() => patchSpot(spot.id, { status: 'issue' })}>
+                      <Text style={[styles.choiceText, styles.choiceIssueText, record.status === 'issue' && styles.choiceTextOn]}>⚠ Issue</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -279,8 +303,8 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
               <Pressable style={[styles.choice, record.status === 'ok' && styles.choiceOk]} onPress={() => patchSpot(spot.id, { status: 'ok' })}>
                 <Text style={[styles.choiceText, record.status === 'ok' && styles.choiceTextOn]}>✓  OK</Text>
               </Pressable>
-              <Pressable style={[styles.choice, record.status === 'issue' && styles.choiceIssue]} onPress={() => patchSpot(spot.id, { status: 'issue' })}>
-                <Text style={styles.choiceText}>⚠  Issue / damage</Text>
+              <Pressable style={[styles.choice, styles.choiceIssue, record.status === 'issue' && styles.choiceIssueOn]} onPress={() => patchSpot(spot.id, { status: 'issue' })}>
+                <Text style={[styles.choiceText, styles.choiceIssueText, record.status === 'issue' && styles.choiceTextOn]}>⚠  Issue / damage</Text>
               </Pressable>
             </View>
             <View style={styles.photoRow}>
@@ -339,7 +363,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
         <Text style={styles.cancelInspectionText}>Cancel inspection</Text>
       </Pressable>
       <Modal visible={photoChoice !== null} transparent animationType="fade" onRequestClose={() => setPhotoChoice(null)}>
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, webModalBackdrop]}>
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Add photos</Text>
             <Pressable
@@ -363,17 +387,16 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
               >
                 <Text style={styles.ghostText}>Photo Library or Files</Text>
               </Pressable>
-            ) : (
-              <Text style={styles.help}>No service, so photos have to be taken with the camera.</Text>
-            )}
+            ) : null}
             <Pressable style={styles.ghost} onPress={() => setPhotoChoice(null)}>
               <Text style={styles.ghostText}>Cancel</Text>
             </Pressable>
+            {online ? null : <Text style={styles.help}>No service, so photos have to be taken with the camera.</Text>}
           </View>
         </View>
       </Modal>
       <Modal visible={cancelOpen} transparent animationType="fade" onRequestClose={() => setCancelOpen(false)}>
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, webModalBackdrop]}>
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Cancel this inspection?</Text>
             <Text style={styles.help}>It will not be saved. You will go back one page.</Text>
@@ -395,7 +418,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       <ZoomModal uri={zoom} onClose={() => setZoom(null)} />
       <WalkaroundRecorder visible={videoOpen} onClose={() => setVideoOpen(false)} onRecorded={addVideo} />
       <Modal visible={librarySpot !== null} transparent animationType="fade" onRequestClose={() => setLibrarySpot(null)}>
-        <View style={styles.modalBackdrop}>
+        <View style={[styles.modalBackdrop, webModalBackdrop]}>
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Photo library</Text>
             <Text style={styles.help}>
@@ -610,8 +633,10 @@ const styles = StyleSheet.create({
   choiceRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   choice: { flex: 1, backgroundColor: theme.input, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   choiceOk: { backgroundColor: theme.green },
-  choiceIssue: { backgroundColor: '#f3e2c4' },
+  choiceIssue: { backgroundColor: '#fff4dc', borderWidth: 2, borderColor: '#c2410c' },
+  choiceIssueOn: { backgroundColor: '#c2410c', borderColor: '#c2410c' },
   choiceText: { color: theme.text, fontWeight: '700' },
+  choiceIssueText: { color: '#9a3412' },
   choiceTextOn: { color: theme.white },
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   photoWrap: { position: 'relative', alignSelf: 'flex-start' },
@@ -654,5 +679,5 @@ const styles = StyleSheet.create({
   dayText: { color: theme.text },
   dayOn: { backgroundColor: theme.accent, color: theme.white, overflow: 'hidden', borderRadius: 12, paddingHorizontal: 8 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.45)', justifyContent: 'center', padding: 24 },
-  modalCard: { backgroundColor: theme.card, borderRadius: 16, padding: 18 },
+  modalCard: { backgroundColor: theme.card, borderRadius: 16, padding: 18, maxHeight: '85%' },
 });
