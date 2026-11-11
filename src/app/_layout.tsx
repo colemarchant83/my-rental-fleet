@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
 import { syncAll, watchConnection } from '../fleet-store';
@@ -48,22 +48,39 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
       <Text style={{ color: theme.muted, marginTop: 8, fontSize: 16 }}>
         {online
           ? error?.message || 'Reload the app and try that page again.'
-          : 'Turn the connection on once so this page can be saved on this phone, then try again.'}
+          : 'This page was not saved on the phone yet. Turn the connection on, open the rental home, then try again.'}
       </Text>
-      <Pressable onPress={online ? reload : () => void retry()} style={{ marginTop: 16 }}>
-        <Text style={{ color: theme.accent, fontWeight: '800' }}>{online ? 'Reload' : 'Try again'}</Text>
+      <Pressable
+        onPress={() => {
+          if (!online && typeof window !== 'undefined') {
+            window.location.assign('/');
+            return;
+          }
+          if (online) reload();
+          else void retry();
+        }}
+        style={{ marginTop: 16 }}
+      >
+        <Text style={{ color: theme.accent, fontWeight: '800' }}>{online ? 'Reload' : 'Go to rental home'}</Text>
       </Pressable>
     </View>
   );
 }
 
 export default function RootLayout() {
+  const router = useRouter();
   useEffect(() => {
+    if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+      router.prefetch('/inspection');
+      router.prefetch('/vehicle');
+      router.prefetch('/rental-history');
+    }
     void syncAll();
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
+        if (navigator.onLine === false) return;
         if (window.location.pathname.includes('inspection')) return;
         refreshing = true;
         window.location.reload();
@@ -83,7 +100,7 @@ export default function RootLayout() {
       window.removeEventListener('online', refreshAfterReconnect);
       stopWatching();
     };
-  }, []);
+  }, [router]);
 
   return (
     <Stack

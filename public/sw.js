@@ -6,8 +6,19 @@ self.addEventListener('install', () => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
     const keys = await caches.keys();
-    await Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)));
+    for (const key of keys) {
+      if (key === CACHE) continue;
+      const older = await caches.open(key);
+      const requests = await older.keys();
+      for (const request of requests) {
+        if (await cache.match(request)) continue;
+        const response = await older.match(request);
+        if (response) await cache.put(request, response);
+      }
+      await caches.delete(key);
+    }
     await self.clients.claim();
   })());
 });
