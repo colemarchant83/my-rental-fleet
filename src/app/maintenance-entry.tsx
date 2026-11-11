@@ -13,6 +13,8 @@ export default function MaintenanceEntryScreen() {
   const [vehicle, setVehicle] = useState<CachedVehicle | null>(null);
   const [date, setDate] = useState(todayIso());
   const [work, setWork] = useState('');
+  const [miles, setMiles] = useState('');
+  const [hours, setHours] = useState('');
   const [notes, setNotes] = useState('');
   const [savedAt, setSavedAt] = useState('');
   const [error, setError] = useState('');
@@ -27,6 +29,8 @@ export default function MaintenanceEntryScreen() {
       if (!record) return;
       setDate(record.date);
       setWork(record.work);
+      setMiles(record.miles || '');
+      setHours(record.hours || '');
       setNotes(record.notes);
       setSavedAt(record.savedAt);
     });
@@ -38,9 +42,13 @@ export default function MaintenanceEntryScreen() {
       setError('Add what was done before saving.');
       return;
     }
+    if (!miles.trim() && !hours.trim()) {
+      setError('Enter miles or hours before saving. One of them is required.');
+      return;
+    }
     setSaving(true);
     setError('');
-    void saveMaintenance({ localId, vehicleId, date: date || todayIso(), work, notes })
+    void saveMaintenance({ localId, vehicleId, date: date || todayIso(), work, notes, miles, hours })
       .then(() => router.back())
       .catch(() => setError('Could not save this record.'))
       .finally(() => setSaving(false));
@@ -56,6 +64,10 @@ export default function MaintenanceEntryScreen() {
       <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" placeholderTextColor={theme.muted} />
       <Text style={styles.label}>What was done</Text>
       <TextInput style={styles.input} value={work} onChangeText={setWork} placeholder="Oil change, tire repair..." placeholderTextColor={theme.muted} />
+      <Text style={styles.label}>Miles</Text>
+      <TextInput style={styles.input} value={miles} onChangeText={setMiles} placeholder="Miles" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
+      <Text style={styles.label}>Hours</Text>
+      <TextInput style={styles.input} value={hours} onChangeText={setHours} placeholder="Hours" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
       <Text style={styles.label}>Notes</Text>
       <TextInput
         style={[styles.input, styles.notes]}

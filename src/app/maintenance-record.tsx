@@ -50,6 +50,7 @@ export default function MaintenanceRecordScreen() {
           </View>
           <View style={styles.folderBody}>
             <Text style={styles.date}>{formatDay(record.date) || 'No date'}</Text>
+            <Text style={styles.date}>Miles {record.miles || '—'} · Hours {record.hours || '—'}</Text>
             {record.notes ? <Text style={styles.notes} numberOfLines={2}>{record.notes}</Text> : null}
             <Text style={styles.link}>Details</Text>
           </View>

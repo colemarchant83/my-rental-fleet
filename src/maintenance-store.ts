@@ -8,6 +8,8 @@ export type MaintenanceRecord = {
   date: string;
   work: string;
   notes: string;
+  miles: string;
+  hours: string;
   savedAt: string;
 };
 
@@ -41,6 +43,8 @@ export async function saveMaintenance(record: Omit<MaintenanceRecord, 'localId' 
     date: record.date,
     work: record.work.trim(),
     notes: record.notes.trim(),
+    miles: record.miles.trim(),
+    hours: record.hours.trim(),
     savedAt: new Date().toISOString(),
   };
   const without = records.filter((item) => item.localId !== next.localId);
