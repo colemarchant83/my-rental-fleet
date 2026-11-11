@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, formatStamp, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
 import { ZoomModal } from './zoom-modal';
 import { WalkaroundRecorder, primeWalkaroundCamera } from './walkaround-recorder';
-import { contentTypeFor, deleteStoredFile, isStoredFile, mediaByteSize, readStoredBlob } from '../media';
+import { contentTypeFor, deleteStoredFile, isStoredFile, mediaByteSize, readStoredBlob, useDisplayUri } from '../media';
 import { beginUpload } from '../r2';
 import { theme } from '../theme';
 
@@ -65,6 +65,8 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       const saved = [];
       for (const asset of result.assets.slice(0, room)) {
         saved.push(await keepPhoto(asset.uri));
+        if (asset.uri.startsWith('blob:')) URL.revokeObjectURL(asset.uri);
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
       patchSpot(spotId, { photos: [...sideRef.current.spots[spotId].photos, ...saved].slice(0, 4) });
       for (const photo of saved) {
@@ -76,8 +78,8 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
           })
           .catch(() => undefined);
       }
-    } catch {
-      setPhotoError('This photo could not be saved on the device. Try again.');
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : 'This photo could not be saved on the device. Try again.');
     }
   };
 
@@ -443,44 +445,52 @@ function RemovablePhoto({ uri, style, wide, onOpen, onRemove }: { uri: string; s
 }
 
 function MediaImage({ uri, style, onOpen }: { uri: string; style: StyleProp<ImageStyle>; onOpen?: (uri: string) => void }) {
-  const [shown, setShown] = useState('');
+  const display = useDisplayUri(uri.startsWith('idb:') ? uri : undefined, uri.startsWith('http') ? uri : undefined);
+  const [direct, setDirect] = useState('');
   useEffect(() => {
+    if (uri.startsWith('idb:') || uri.startsWith('http')) {
+      setDirect('');
+      return;
+    }
     let live = true;
-    let objectUrl = '';
     const load = async () => {
       if (!uri) {
-        setShown('');
+        setDirect('');
         return;
       }
-      if (uri.startsWith('http') || uri.startsWith('blob:') || uri.startsWith('data:')) {
-        setShown(uri);
-        return;
-      }
-      if (uri.startsWith('idb:')) {
-        const blob = await readStoredBlob(uri).catch(() => null);
-        if (!live || !blob) return;
-        objectUrl = URL.createObjectURL(blob);
-        setShown(objectUrl);
+      if (uri.startsWith('blob:') || uri.startsWith('data:')) {
+        setDirect(uri);
         return;
       }
       try {
         const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-        if (live) setShown(`data:${contentTypeFor(uri)};base64,${base64}`);
+        if (live) setDirect(`data:${contentTypeFor(uri)};base64,${base64}`);
       } catch {
-        if (live) setShown('');
+        if (live) setDirect('');
       }
     };
     void load();
     return () => {
       live = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [uri]);
+  const shown = display.uri || direct;
   if (!shown) return <View style={style} />;
   const image = <Image source={{ uri: shown }} style={style} resizeMode="cover" />;
   if (!onOpen) return image;
   return (
-    <Pressable style={styles.zoomTap} onPress={() => onOpen(shown)}>
+    <Pressable
+      style={styles.zoomTap}
+      onPress={() => {
+        if (!uri.startsWith('idb:')) {
+          onOpen(shown);
+          return;
+        }
+        void readStoredBlob(uri)
+          .then((blob) => onOpen(blob ? URL.createObjectURL(blob) : shown))
+          .catch(() => onOpen(shown));
+      }}
+    >
       {image}
       <Text style={styles.enlarge}>Enlarge</Text>
     </Pressable>

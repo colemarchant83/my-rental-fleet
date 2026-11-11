@@ -100,27 +100,55 @@ function thumbUri(uri: string) {
   return `idb:thumb-${uri.slice(4)}`;
 }
 
-async function shrinkImage(blob: Blob): Promise<Blob | null> {
+async function scaleImage(blob: Blob, max: number, quality: number): Promise<Blob | null> {
   if (typeof document === 'undefined' || typeof createImageBitmap === 'undefined') return null;
   if (blob.type.startsWith('video')) return null;
+  let bitmap: ImageBitmap | null = null;
   try {
-    const bitmap = await createImageBitmap(blob);
-    const max = 960;
-    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+    const options = blob.size > 2_000_000 ? ({ resizeWidth: max, resizeQuality: 'high' } as ImageBitmapOptions) : undefined;
+    try {
+      bitmap = await createImageBitmap(blob, options);
+    } catch {
+      bitmap = await createImageBitmap(blob);
+    }
+    const longest = Math.max(bitmap.width, bitmap.height);
+    const scale = Math.min(1, max / longest);
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    if (scale === 1 && blob.type === 'image/jpeg' && blob.size < 2_000_000) {
+      bitmap.close?.();
+      return blob;
+    }
     const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.width = width;
+    canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       bitmap.close?.();
       return null;
     }
-    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close?.();
-    return await new Promise((resolve) => canvas.toBlob((next) => resolve(next), 'image/jpeg', 0.74));
+    bitmap = null;
+    const next = await new Promise<Blob | null>((resolve) => canvas.toBlob((file) => resolve(file), 'image/jpeg', quality));
+    canvas.width = 0;
+    canvas.height = 0;
+    return next;
   } catch {
+    bitmap?.close?.();
     return null;
   }
+}
+
+async function shrinkImage(blob: Blob): Promise<Blob | null> {
+  return scaleImage(blob, 960, 0.74);
+}
+
+/** Keep a clear inspection photo without holding a 48 megapixel image in memory. */
+export async function fitPhotoBlob(blob: Blob) {
+  if (blob.type.startsWith('video')) return blob;
+  const fitted = await scaleImage(blob, 2400, 0.82);
+  return fitted ?? blob;
 }
 
 /** Prepare the small on-phone copy so the next screen can show it immediately. */
@@ -208,7 +236,16 @@ export async function persistMedia(uri: string, fallbackExt: string) {
     if (typeof indexedDB === 'undefined') throw new Error('Could not keep this photo on the device.');
     const response = await fetch(uri);
     if (!response.ok) throw new Error('Could not keep this photo on the device.');
-    return await rememberBlob(await response.blob());
+    let blob = await response.blob();
+    const video = blob.type.startsWith('video') || fallbackExt === 'mp4' || fallbackExt === 'mov';
+    if (!video) {
+      const fitted = await fitPhotoBlob(blob);
+      if ((fitted === blob && blob.size > 3_000_000) || fitted.size > 8_000_000) {
+        throw new Error('This photo is too large for the phone to keep. Try a smaller one.');
+      }
+      blob = fitted;
+    }
+    return await rememberBlob(blob);
   }
   const root = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
   if (!root) throw new Error('Could not keep this photo on the device.');
