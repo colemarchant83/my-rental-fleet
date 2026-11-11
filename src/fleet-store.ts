@@ -527,27 +527,49 @@ async function releaseSide(side: InspectionSide): Promise<InspectionSide> {
   return { ...side, spots, videoUri };
 }
 
-async function pushRental(rental: LocalRental) {
+async function pushRental(passed: LocalRental) {
   lastUploadError = '';
-  const open = await loadRentals();
-  await saveRentals(open.map((item) => (item.localId === rental.localId ? { ...item, sync: 'pending' as const, syncError: undefined } : item)));
+  const current = async () => (await loadRentals()).find((item) => item.localId === passed.localId);
+  let rental = (await current()) ?? passed;
+  await saveRentals((await loadRentals()).map((item) => (item.localId === rental.localId ? { ...item, sync: 'pending' as const, syncError: undefined } : item)));
+  rental = (await current()) ?? rental;
   const folder = `rentals/${rental.vehicleId}/${rental.localId}`;
   let checkout = rental.checkout;
   let checkin = rental.checkin;
   const remember = async () => {
     const rentals = await loadRentals();
-    await saveRentals(rentals.map((item) => (item.localId === rental.localId ? { ...item, checkout, checkin, sync: 'pending' as const } : item)));
+    await saveRentals(rentals.map((item) => {
+      if (item.localId !== rental.localId) return item;
+      return {
+        ...item,
+        checkout,
+        checkin: checkin ?? item.checkin,
+        status: item.status === 'closed' ? item.status : rental.status,
+        sync: 'pending' as const,
+      };
+    }));
   };
   checkout = await uploadSide(rental.checkout, `${folder}/out`, async (next) => {
     checkout = next;
     await remember();
   });
-  if (rental.checkin) {
-    checkin = await uploadSide(rental.checkin, `${folder}/in`, async (next) => {
+  const afterCheckout = await current();
+  if (!checkin && afterCheckout?.checkin) checkin = afterCheckout.checkin;
+  if (afterCheckout?.status === 'closed') rental = { ...rental, status: 'closed' };
+  if (checkin) {
+    checkin = await uploadSide(checkin, `${folder}/in`, async (next) => {
       checkin = next;
       await remember();
     });
   }
+  const beforeWrite = await current();
+  if (!checkin && beforeWrite?.checkin) {
+    checkin = await uploadSide(beforeWrite.checkin, `${folder}/in`, async (next) => {
+      checkin = next;
+      await remember();
+    });
+  }
+  const status = beforeWrite?.status === 'closed' || rental.status === 'closed' ? 'closed' : rental.status;
   const payload = {
     vehicleId: rental.vehicleId,
     localId: rental.localId,
@@ -556,11 +578,11 @@ async function pushRental(rental: LocalRental) {
     checkin: checkin ? sidePayload(checkin) : null,
     checkoutDate: formatDay(checkout.date),
     checkinDate: checkin ? formatDay(checkin.date) : null,
-    status: rental.status === 'closed' ? 'Checked In' : 'Checked Out',
+    status: status === 'closed' ? 'Checked In' : 'Checked Out',
   };
 
-  let remoteId = rental.remoteId;
-  let serverReceivedAt = rental.serverReceivedAt;
+  let remoteId = rental.remoteId ?? beforeWrite?.remoteId;
+  let serverReceivedAt = rental.serverReceivedAt ?? beforeWrite?.serverReceivedAt;
   if (!remoteId) {
     const created = await addDoc(collection(db, 'rentals'), { ...payload, createdAt: serverTimestamp(), serverReceivedAt: serverTimestamp() });
     remoteId = created.id;
@@ -576,20 +598,24 @@ async function pushRental(rental: LocalRental) {
   }
 
   await updateDoc(doc(db, 'vehicles', rental.vehicleId), {
-    status: rental.status === 'closed' ? 'Available' : 'Out on rent',
-    renterName: rental.status === 'closed' ? deleteField() : rental.renterName,
+    status: status === 'closed' ? 'Available' : 'Out on rent',
+    renterName: status === 'closed' ? deleteField() : rental.renterName,
   });
 
-  const storedCheckout = rental.status === 'closed' ? await releaseSide(checkout) : checkout;
-  const storedCheckin = rental.status === 'closed' && checkin ? await releaseSide(checkin) : checkin;
-  const ready = sideSettled(storedCheckout) && (!storedCheckin || sideSettled(storedCheckin));
+  const freshest = await current();
+  const missedCheckin = !!freshest?.checkin?.savedAt && freshest.checkin.savedAt !== checkin?.savedAt;
+  const finalStatus = freshest?.status === 'closed' || status === 'closed' ? 'closed' : 'out';
+  const finalCheckin = missedCheckin ? freshest?.checkin : checkin;
+  const storedCheckout = finalStatus === 'closed' && !missedCheckin ? await releaseSide(checkout) : checkout;
+  const storedCheckin = finalStatus === 'closed' && finalCheckin && !missedCheckin ? await releaseSide(finalCheckin) : finalCheckin;
+  const ready = !missedCheckin && sideSettled(storedCheckout) && (!storedCheckin || sideSettled(storedCheckin));
   const limitNote = storedCheckout.videoOverLimit || storedCheckin?.videoOverLimit
     ? 'A video is over 100 MB, so that video stays on this phone and was not uploaded.'
     : undefined;
   const rentals = await loadRentals();
   const next = rentals.map((item) =>
     item.localId === rental.localId
-      ? { ...item, checkout: storedCheckout, checkin: storedCheckin, remoteId, serverReceivedAt, sync: ready ? 'synced' as const : 'pending' as const, syncError: ready ? limitNote : readableSyncError(lastUploadError) || undefined }
+      ? { ...item, checkout: storedCheckout, checkin: storedCheckin ?? item.checkin, status: finalStatus, remoteId, serverReceivedAt, sync: ready ? 'synced' as const : 'pending' as const, syncError: ready ? limitNote : readableSyncError(lastUploadError) || undefined }
       : item
   );
   await saveRentals(await prunePhoneRentals(next));
