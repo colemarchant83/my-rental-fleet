@@ -240,7 +240,7 @@ export async function buildRentalCard(rental: LocalRental) {
   <p>${esc(machineName)}${machine?.yearMakeModel ? ` · ${esc(machine.yearMakeModel)}` : ''}${machine?.vin ? ` · VIN ${esc(machine.vin)}` : ''}</p>
   <p class="muted">Out ${esc(formatDay(rental.checkout.date))}${rental.checkin ? ` · Back ${esc(formatDay(rental.checkin.date))}` : ''}</p>
   <p class="note">If the inspection was done offline, the server time is recorded when the next internet connection was made.</p>
-  <p class="muted">The pictures on this page are smaller copies. The full photos and videos are in the check-out and check-in folders.</p>
+  <p class="note">The pictures on this page are smaller copies. The full photos and videos are in the check-out and check-in folders.</p>
   ${rental.serverReceivedAt ? `<p class="muted">Server received this record ${esc(formatStamp(new Date(rental.serverReceivedAt).toISOString()))}</p>` : ''}
   ${missing.length ? `<p class="warn">These files were not on this phone and could not be included: ${esc(missing.join(', '))}</p>` : ''}
   <div class="columns">
