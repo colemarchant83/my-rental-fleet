@@ -73,7 +73,7 @@ export default function MaintenanceEntryScreen() {
         style={[styles.input, styles.notes]}
         value={notes}
         onChangeText={setNotes}
-        placeholder="Parts, hours, anything worth keeping"
+        placeholder="Detailed description of work performed"
         placeholderTextColor={theme.muted}
         multiline
       />
