@@ -225,11 +225,11 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       <View style={styles.row}>
         <View style={styles.col}>
           <Text style={styles.label}>Odometer miles</Text>
-          <TextInput style={styles.input} value={side.miles} onChangeText={(miles) => patch({ miles })} keyboardType="numeric" placeholder="e.g. 1,240" placeholderTextColor={theme.muted} />
+          <TextInput style={styles.input} value={side.miles ?? ''} onChangeText={(miles) => patch({ miles })} keyboardType="numeric" placeholder="e.g. 1,240" placeholderTextColor={theme.muted} />
         </View>
         <View style={styles.col}>
           <Text style={styles.label}>Engine hours</Text>
-          <TextInput style={styles.input} value={side.hours} onChangeText={(hours) => patch({ hours })} keyboardType="decimal-pad" placeholder="e.g. 128.5" placeholderTextColor={theme.muted} />
+          <TextInput style={styles.input} value={side.hours ?? ''} onChangeText={(hours) => patch({ hours })} keyboardType="decimal-pad" placeholder="e.g. 128.5" placeholderTextColor={theme.muted} />
         </View>
       </View>
       <Text style={styles.help}>Enter miles or hours. One of them is required.</Text>
@@ -239,10 +239,11 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       {!checkout ? <Text style={styles.help}>Each spot can hold up to 4 photos, so damage can be caught from more than one angle.</Text> : null}
 
       {SPOTS.map((spot) => {
-        const record = side.spots[spot.id] ?? { status: '' as const, note: '', photos: [] };
-        const earlier = checkout?.spots[spot.id];
+        const record = side.spots?.[spot.id] ?? { status: '' as const, note: '', photos: [] };
+        const earlier = checkout?.spots?.[spot.id];
+        const earlierPhotos = earlier?.photos ?? [];
         if (earlier) {
-          const checkoutPhoto = spotPhoto(earlier.photos[0]);
+          const checkoutPhoto = spotPhoto(earlierPhotos[0]);
           return (
             <View key={spot.id} style={styles.spot}>
               <Text style={styles.spotTitle}>{spot.label}</Text>
@@ -250,7 +251,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
                 <View style={styles.compareCol}>
                   <Text style={styles.compareLabel}>From checkout</Text>
                   {checkoutPhoto ? <MediaImage uri={checkoutPhoto} style={styles.compareShot} onOpen={setZoom} /> : <View style={styles.compareFrame}><Text style={styles.blankText}>No checkout photo</Text></View>}
-                  <ThumbRow photos={earlier.photos.slice(1)} onOpen={setZoom} />
+                  <ThumbRow photos={earlierPhotos.slice(1)} onOpen={setZoom} />
                   {earlier.note ? <Text style={styles.compareNote}>{earlier.note}</Text> : null}
                   <Text style={styles.compareLabel}>{earlier.status === 'issue' ? 'Issue' : earlier.status === 'ok' ? 'OK' : '—'}</Text>
                 </View>
