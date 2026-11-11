@@ -24,6 +24,7 @@ export default function RentalHistory() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveReady, setSaveReady] = useState(false);
   const [saveNote, setSaveNote] = useState('');
   const missingNote = useRef('');
   const builtFile = useRef<File | null>(null);
@@ -172,9 +173,11 @@ export default function RentalHistory() {
             void deliverRentalFile(file).then((method) => {
               if (method === 'cancelled') return;
               if (method === 'blocked') {
-                setSaveNote('Tap the button again to save or share.');
+                setSaveReady(true);
+                setSaveNote('');
                 return;
               }
+              setSaveReady(false);
               setSaveNote(
                 method === 'shared'
                   ? `Save it to Files or send it from the share sheet. Open the folder, then open Rental card.html.${missingNote.current}`
@@ -187,6 +190,7 @@ export default function RentalHistory() {
             return;
           }
           setSaving(true);
+          setSaveReady(false);
           setSaveNote('');
           void buildRentalCard(rental)
             .then(({ file, missing }) => {
@@ -200,7 +204,7 @@ export default function RentalHistory() {
             .finally(() => setSaving(false));
         }}
       >
-        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : 'Save or share this card'}</Text>
+        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : saveReady ? 'Ready. Tap to save or share' : 'Save or share this card'}</Text>
       </Pressable>
       {saveNote ? <Text style={styles.help}>{saveNote}</Text> : null}
       <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
