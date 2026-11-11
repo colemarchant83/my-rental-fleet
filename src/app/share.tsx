@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { VideoPreview } from '../components/inspection-form';
@@ -45,7 +45,9 @@ export default function SharedRental() {
   const [card, setCard] = useState<SharedCard | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [ready, setReady] = useState(false);
   const [note, setNote] = useState('');
+  const built = useRef<File | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -59,6 +61,22 @@ export default function SharedRental() {
 
   const save = () => {
     if (!card) return;
+    const openSave = (file: File) => {
+      void deliverRentalFile(file).then((method) => {
+        if (method === 'cancelled') return;
+        if (method === 'blocked') {
+          setReady(true);
+          setNote('');
+          return;
+        }
+        setReady(false);
+        setNote('');
+      });
+    };
+    if (built.current) {
+      openSave(built.current);
+      return;
+    }
     const rental: LocalRental = {
       localId: 'share',
       vehicleId: 'share',
@@ -71,10 +89,13 @@ export default function SharedRental() {
       serverReceivedAt: card.serverReceivedAt,
     };
     setSaving(true);
+    setReady(false);
     setNote('');
     void buildRentalCard(rental, { nickname: card.machineName, yearMakeModel: card.yearMakeModel, vin: card.vin })
-      .then(({ file }) => deliverRentalFile(file))
-      .then(() => setNote('Choose Save to Files, or pick another place, on the share sheet.'))
+      .then(({ file }) => {
+        built.current = file;
+        openSave(file);
+      })
       .catch((reason: unknown) => setNote(reason instanceof Error ? reason.message : 'Could not save the files.'))
       .finally(() => setSaving(false));
   };
@@ -108,7 +129,7 @@ export default function SharedRental() {
         {card.checkin ? ` · Back ${formatDay(card.checkin.date)}` : ''}
       </Text>
       <Pressable style={styles.save} disabled={saving} onPress={save}>
-        <Text style={styles.saveText}>{saving ? 'Preparing the files...' : 'Save the files'}</Text>
+        <Text style={styles.saveText}>{saving ? 'Preparing the files...' : ready ? 'Ready. Tap to save' : 'Save to files'}</Text>
       </Pressable>
       {note ? <Text style={styles.muted}>{note}</Text> : null}
       <Text style={styles.muted}>This saves the card, the photos, and the videos onto this phone or computer.</Text>
