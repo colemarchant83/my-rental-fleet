@@ -4,6 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
 import { syncAll, watchConnection } from '../fleet-store';
+import { OfflineWall } from '../components/offline-gate';
 import { theme } from '../theme';
 
 function ScreenHeader() {
@@ -132,6 +133,7 @@ export default function RootLayout() {
   }, [router]);
 
   return (
+    <View style={{ flex: 1 }}>
     <Stack
       screenOptions={{
         headerStyle: { backgroundColor: theme.bg },
@@ -149,5 +151,7 @@ export default function RootLayout() {
       <Stack.Screen name="maintenance-entry" options={{ header: () => <ScreenHeader /> }} />
       <Stack.Screen name="share" options={{ title: 'Rental card', headerBackVisible: false }} />
     </Stack>
+    <OfflineWall />
+    </View>
   );
 }
