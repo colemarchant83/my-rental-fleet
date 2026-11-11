@@ -151,7 +151,11 @@ function sideBlock(title: string, side: InspectionSide | undefined, shown: Map<s
       })
       .join('');
     const status = record.status === 'issue' ? 'Issue' : record.status === 'ok' ? 'OK' : '—';
-    return `<article><h3>${esc(spot.label)}</h3>${photos || '<p>No photo</p>'}<p>${esc(record.note.trim() || 'No note')}</p><p><strong>${status}</strong></p></article>`;
+    const heading = record.status === 'issue'
+      ? `<h3>${esc(spot.label)}<span class="issue">Issue</span></h3>`
+      : `<h3>${esc(spot.label)}</h3>`;
+    const statusLine = record.status === 'issue' ? '' : `<p><strong>${status}</strong></p>`;
+    return `<article>${heading}${photos || '<p>No photo</p>'}<p>${esc(record.note.trim() || 'No note')}</p>${statusLine}</article>`;
   }).join('');
   const video = shown.get(`${title}-video`);
   return `<section>
@@ -228,7 +232,9 @@ export async function buildRentalCard(rental: LocalRental) {
     figure { margin: 8px 0; }
     figcaption, .muted, .stamp { color: #6f6a63; font-size: 13px; }
     video { width: 100%; border-radius: 10px; background: #1c1917; margin-top: 8px; }
+    h3 { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
     .warn { color: #b42318; font-weight: 700; }
+    .issue { color: #b42318; font-weight: 800; }
     .note { font-weight: 700; }
     .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 700px) { .columns { grid-template-columns: 1fr; } }
