@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { formatStamp, loadCachedVehicles, todayIso, type CachedVehicle } from '../fleet-store';
+import { clocksDisagree, formatStamp, loadCachedVehicles, todayIso, type CachedVehicle } from '../fleet-store';
 import { loadMaintenanceRecord, saveMaintenance } from '../maintenance-store';
 import { theme } from '../theme';
 
@@ -17,6 +17,7 @@ export default function MaintenanceEntryScreen() {
   const [hours, setHours] = useState('');
   const [notes, setNotes] = useState('');
   const [savedAt, setSavedAt] = useState('');
+  const [serverSavedAt, setServerSavedAt] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -33,6 +34,7 @@ export default function MaintenanceEntryScreen() {
       setHours(record.hours || '');
       setNotes(record.notes);
       setSavedAt(record.savedAt);
+      setServerSavedAt(record.serverSavedAt || '');
     });
   }, [vehicleId, localId]);
 
@@ -77,7 +79,15 @@ export default function MaintenanceEntryScreen() {
         placeholderTextColor={theme.muted}
         multiline
       />
-      {savedAt ? <Text style={styles.stamp}>Saved {formatStamp(savedAt)}</Text> : null}
+      {savedAt ? <Text style={styles.stamp}>Recorded on this phone {formatStamp(savedAt)}</Text> : null}
+      {savedAt ? (
+        <Text style={styles.stamp}>
+          {serverSavedAt
+            ? `Server ${formatStamp(serverSavedAt)}`
+            : 'Server time is recorded when the next internet connection is made.'}
+        </Text>
+      ) : null}
+      {clocksDisagree(savedAt, serverSavedAt) ? <Text style={styles.error}>Phone time does not match the server.</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable style={styles.save} disabled={saving} onPress={save}>
         <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save record'}</Text>

@@ -174,6 +174,13 @@ async function serverNow() {
   }
 }
 
+/** Phone time plus the server clock. The server time stays empty when there is no connection. */
+export async function proofTimes() {
+  const savedAt = stampNow();
+  const serverSavedAt = await serverNow();
+  return { savedAt, serverSavedAt };
+}
+
 /** Stamp the inspection at the moment it is saved. Photo times are already set when each photo was added. */
 export async function stampSide(side: InspectionSide): Promise<InspectionSide> {
   const savedAt = stampNow();
