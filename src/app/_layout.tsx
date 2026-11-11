@@ -95,9 +95,39 @@ export default function RootLayout() {
     };
     window.addEventListener('online', refreshAfterReconnect);
     const stopWatching = watchConnection();
+    let cover: HTMLDivElement | undefined;
+    let updateCover: (() => void) | undefined;
+    if (typeof document !== 'undefined') {
+      const manifest = document.createElement('link');
+      manifest.rel = 'manifest';
+      manifest.href = '/manifest.webmanifest';
+      document.head.appendChild(manifest);
+      const phone = window.matchMedia('(pointer: coarse)').matches && Math.min(window.screen.width, window.screen.height) < 600;
+      if (phone) {
+        const orientation = window.screen.orientation as { lock?: (orientation: string) => Promise<void> } | undefined;
+        if (orientation?.lock) void orientation.lock('portrait').catch(() => undefined);
+        cover = document.createElement('div');
+        cover.setAttribute('role', 'alertdialog');
+        cover.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;padding:32px;background:#e4d9c8;color:#1c1917;text-align:center;font-family:system-ui,sans-serif';
+        cover.innerHTML = '<div style="font-size:28px;font-weight:800;line-height:1.2">Turn the phone upright</div><div style="margin-top:12px;font-size:17px;color:#6f6a63">The app stays upright so the buttons stay lined up.</div>';
+        document.body.appendChild(cover);
+        updateCover = () => {
+          if (!cover) return;
+          cover.style.display = window.matchMedia('(orientation: landscape)').matches ? 'flex' : 'none';
+        };
+        updateCover();
+        window.addEventListener('orientationchange', updateCover);
+        window.addEventListener('resize', updateCover);
+      }
+    }
     return () => {
       window.removeEventListener('online', refreshAfterReconnect);
+      if (updateCover) {
+        window.removeEventListener('orientationchange', updateCover);
+        window.removeEventListener('resize', updateCover);
+      }
       stopWatching();
+      cover?.remove();
     };
   }, [router]);
 

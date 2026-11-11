@@ -1,0 +1,9 @@
+{
+  "name": "My Rental Fleet",
+  "short_name": "My Rental Fleet",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e4d9c8",
+  "theme_color": "#e4d9c8",
+  "start_url": "/"
+}
