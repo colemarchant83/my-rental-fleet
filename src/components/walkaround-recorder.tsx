@@ -71,6 +71,7 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
     let url = '';
     try {
       url = await session.current.finish();
+      session.current.stop();
       await onRecorded(url);
     } catch {
       setSaving(false);
@@ -92,24 +93,32 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
             style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#000' },
           })}
         </View>
-        {recording || saving ? <Text style={styles.timer}>{formatClock(seconds)}</Text> : null}
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <View style={styles.controls}>
-          {recording ? (
-            <Pressable style={styles.stop} onPress={() => void finish()} disabled={saving}>
-              <Text style={styles.stopText}>{saving ? 'Saving...' : 'Stop'}</Text>
-            </Pressable>
-          ) : (
-            <Pressable style={[styles.record, !ready && styles.dim]} onPress={start} disabled={!ready || saving}>
-              <Text style={styles.recordText}>Record</Text>
-            </Pressable>
-          )}
-          {!recording && !saving ? (
-            <Pressable onPress={onClose}>
-              <Text style={styles.cancel}>Cancel</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        {saving ? (
+          <View style={styles.saving}>
+            <Text style={styles.savingTitle}>Saving the video</Text>
+            <Text style={styles.savingNote}>A long video takes a few seconds. Keep this screen open.</Text>
+          </View>
+        ) : null}
+        {!saving && recording ? <Text style={styles.timer}>{formatClock(seconds)}</Text> : null}
+        {!saving && error ? <Text style={styles.error}>{error}</Text> : null}
+        {saving ? null : (
+          <View style={styles.controls}>
+            {recording ? (
+              <Pressable style={styles.stop} onPress={() => void finish()}>
+                <Text style={styles.stopText}>Stop</Text>
+              </Pressable>
+            ) : (
+              <Pressable style={[styles.record, !ready && styles.dim]} onPress={start} disabled={!ready}>
+                <Text style={styles.recordText}>Record</Text>
+              </Pressable>
+            )}
+            {!recording ? (
+              <Pressable onPress={onClose}>
+                <Text style={styles.cancel}>Cancel</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        )}
       </View>
     </Modal>
   );
@@ -342,6 +351,19 @@ const styles = StyleSheet.create({
   record: { backgroundColor: theme.danger, borderRadius: 28, paddingVertical: 16, paddingHorizontal: 36 },
   recordText: { color: '#fff', fontWeight: '800', fontSize: 18 },
   dim: { opacity: 0.4 },
+  saving: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    backgroundColor: '#000',
+  },
+  savingTitle: { color: '#fff', fontSize: 28, fontWeight: '800', textAlign: 'center' },
+  savingNote: { color: '#e7e1d6', fontSize: 16, textAlign: 'center', marginTop: 12, lineHeight: 22 },
   stop: { backgroundColor: theme.action, borderRadius: 28, paddingVertical: 16, paddingHorizontal: 36 },
   stopText: { color: theme.ink, fontWeight: '800', fontSize: 18 },
   cancel: { color: '#fff', fontWeight: '700', fontSize: 16 },

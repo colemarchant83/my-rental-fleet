@@ -698,8 +698,8 @@ export async function keepPhoto(uri: string) {
 
 export async function keepVideo(uri: string) {
   const localUri = await persistMedia(uri, 'mp4');
-  const [sha256, serverAddedAt] = await Promise.all([fingerprint(localUri), serverNow()]);
-  return { uri: localUri, addedAt: stampNow(), serverAddedAt, sha256 };
+  const serverAddedAt = await serverNow();
+  return { uri: localUri, addedAt: stampNow(), serverAddedAt, sha256: undefined as string | undefined };
 }
 
 function createdMillis(value: unknown) {

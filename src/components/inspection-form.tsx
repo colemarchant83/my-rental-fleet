@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { SPOTS, emptySide, formatDay, formatStamp, keepPhoto, keepVideo, type InspectionSide, type SpotId } from '../fleet-store';
 import { ZoomModal } from './zoom-modal';
 import { WalkaroundRecorder, primeWalkaroundCamera } from './walkaround-recorder';
-import { contentTypeFor, deleteStoredFile, isStoredFile, mediaByteSize, readStoredBlob, useDisplayUri } from '../media';
+import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, readStoredBlob, useDisplayUri } from '../media';
 import { beginUpload } from '../r2';
 import { theme } from '../theme';
 
@@ -107,6 +107,10 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       videoOverLimit: false,
     });
     setVideoOpen(false);
+    void fingerprint(kept.uri).then((sha256) => {
+      if (!sha256 || sideRef.current.videoUri !== kept.uri) return;
+      patch({ videoSha256: sha256 });
+    });
     const bytes = await mediaByteSize(kept.uri);
     if (bytes > 100 * 1000 * 1000) {
       patch({ videoOverLimit: true });
