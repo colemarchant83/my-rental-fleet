@@ -35,9 +35,21 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const [photoError, setPhotoError] = useState('');
   const [videoOpen, setVideoOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const sideRef = useRef(side);
   sideRef.current = side;
   const isOut = mode === 'checkout';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
+  }, []);
 
   const publish = (next: InspectionSide) => {
     sideRef.current = next;
@@ -324,16 +336,20 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
             >
               <Text style={styles.saveText}>Take Photo</Text>
             </Pressable>
-            <Pressable
-              style={styles.ghost}
-              onPress={() => {
-                const spotId = photoChoice;
-                setPhotoChoice(null);
-                if (spotId) setLibrarySpot(spotId);
-              }}
-            >
-              <Text style={styles.ghostText}>Photo Library or Files</Text>
-            </Pressable>
+            {online ? (
+              <Pressable
+                style={styles.ghost}
+                onPress={() => {
+                  const spotId = photoChoice;
+                  setPhotoChoice(null);
+                  if (spotId) setLibrarySpot(spotId);
+                }}
+              >
+                <Text style={styles.ghostText}>Photo Library or Files</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.help}>No service, so photos have to be taken with the camera.</Text>
+            )}
             <Pressable style={styles.ghost} onPress={() => setPhotoChoice(null)}>
               <Text style={styles.ghostText}>Cancel</Text>
             </Pressable>
@@ -368,9 +384,6 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
             <Text style={styles.spotTitle}>Photo library</Text>
             <Text style={styles.help}>
               A photo from your library or files is stamped when you add it to this inspection, not when the camera first took it. Take Photo if you want the time the picture was made.
-              {typeof navigator !== 'undefined' && navigator.onLine === false
-                ? ' With no service, photos stored in iCloud do not load. Take Photo still works.'
-                : ''}
             </Text>
             <Pressable
               style={styles.save}
