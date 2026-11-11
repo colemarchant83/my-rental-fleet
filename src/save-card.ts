@@ -1,7 +1,7 @@
 import { SPOTS, clocksDisagree, formatDay, formatStamp, loadCachedVehicles, type InspectionSide, type LocalRental } from './fleet-store';
 import { readStoredBlob } from './media';
 
-type SavedFile = { name: string; data: Uint8Array };
+type SavedFile = { name: string; data: Uint8Array; modified?: Date };
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -19,6 +19,13 @@ function crc32(data: Uint8Array) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
+function dosStamp(date: Date) {
+  const year = Math.min(2107, Math.max(1980, date.getFullYear()));
+  const time = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const day = ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  return { time, day };
+}
+
 function zipStore(items: SavedFile[]) {
   const encoder = new TextEncoder();
   const parts: BlobPart[] = [];
@@ -27,11 +34,14 @@ function zipStore(items: SavedFile[]) {
   for (const item of items) {
     const name = encoder.encode(item.name);
     const crc = crc32(item.data);
+    const stamp = item.modified && !Number.isNaN(item.modified.getTime()) ? dosStamp(item.modified) : { time: 0, day: 0 };
     const local = new Uint8Array(30 + name.length);
     const view = new DataView(local.buffer);
     view.setUint32(0, 0x04034b50, true);
     view.setUint16(4, 20, true);
     view.setUint16(8, 0, true);
+    view.setUint16(10, stamp.time, true);
+    view.setUint16(12, stamp.day, true);
     view.setUint32(14, crc, true);
     view.setUint32(18, item.data.length, true);
     view.setUint32(22, item.data.length, true);
@@ -43,6 +53,8 @@ function zipStore(items: SavedFile[]) {
     centralView.setUint32(0, 0x02014b50, true);
     centralView.setUint16(4, 20, true);
     centralView.setUint16(6, 20, true);
+    centralView.setUint16(12, stamp.time, true);
+    centralView.setUint16(14, stamp.day, true);
     centralView.setUint32(16, crc, true);
     centralView.setUint32(20, item.data.length, true);
     centralView.setUint32(24, item.data.length, true);
@@ -69,6 +81,12 @@ function esc(value: string) {
 
 function safeName(value: string) {
   return value.replace(/[^\w.-]+/g, ' ').trim().replace(/\s+/g, ' ') || 'Rental';
+}
+
+function clockName(phone?: string, server?: string, fallback?: string) {
+  const phoneText = (formatStamp(phone) || 'not recorded').replace(/:/g, '-');
+  const serverText = (formatStamp(server || fallback) || 'not recorded').replace(/:/g, '-');
+  return safeName(`phone ${phoneText} server ${serverText}`);
 }
 
 function extFor(blob: Blob, fallback: string) {
@@ -133,7 +151,7 @@ function clockLines(phone?: string, server?: string, fallback?: string, file?: s
   return `<p class="stamp">Phone ${esc(formatStamp(phone) || '—')}</p><p class="stamp">${esc(serverText)}</p>${file ? `<p class="stamp">File ${esc(file)}</p>` : ''}`;
 }
 
-function sideBlock(title: string, side: InspectionSide | undefined, shown: Map<string, string>, serverFallback?: string) {
+function sideBlock(title: string, side: InspectionSide | undefined, shown: Map<string, string>, serverFallback?: string, videoName?: string) {
   if (!side) return `<section><h2>${esc(title)}</h2><p>Not returned yet</p></section>`;
   const readings = [
     ['Fuel', side.fuel || 'Not recorded'],
@@ -165,7 +183,7 @@ function sideBlock(title: string, side: InspectionSide | undefined, shown: Map<s
     <p>${esc(side.serverSavedAt ? `Server time ${formatStamp(side.serverSavedAt)}` : '')}</p>
     ${clocksDisagree(side.savedAt, side.serverSavedAt) ? '<p class="warn">Phone time does not match the server.</p>' : ''}
     <ul>${readings.map(([label, value]) => `<li>${esc(label)}: ${esc(value)}</li>`).join('')}</ul>
-    ${video?.startsWith('data:') ? `<video controls playsinline src="${video}"></video>` : video ? `<p>The walk-around video is the file named ${title} video, next to this card.</p>` : ''}
+    ${video?.startsWith('data:') ? `<video controls playsinline src="${video}"></video>` : videoName ? `<p>The walk-around video is the file named ${esc(videoName)}, next to this card.</p>` : ''}
     ${video ? clockLines(side.videoAddedAt, side.videoServerAddedAt, serverFallback, side.videoSha256?.slice(0, 8)) : ''}
     ${side.notes ? `<p>Notes · ${esc(formatStamp(side.notesAt))}<br>${esc(side.notes)}</p>` : ''}
     ${spots}
@@ -184,37 +202,73 @@ export async function buildRentalCard(rental: LocalRental) {
 
   const folderName = `${safeName(rental.renterName || 'Rental')} - ${safeName(formatDay(rental.checkout.date))}`;
 
-  const addMedia = async (key: string, folder: string, filename: string, localUri?: string, remoteUrl?: string, fallback = 'jpg') => {
+  const addMedia = async (key: string, folder: string, filename: string, localUri?: string, remoteUrl?: string, fallback = 'jpg', modified?: string) => {
     const blob = await mediaBlob(localUri, remoteUrl);
     if (!blob) {
       if (localUri || remoteUrl) missing.push(filename);
-      return;
+      return '';
     }
     const data = await asBytes(blob);
     const fileName = `${filename}.${extFor(blob, fallback)}`;
     const path = folder ? `${folderName}/${folder}/${fileName}` : `${folderName}/${fileName}`;
-    files.push({ name: path, data });
+    const when = modified ? new Date(modified) : undefined;
+    files.push({ name: path, data, modified: when && !Number.isNaN(when.getTime()) ? when : undefined });
     const preview = await previewUrl(blob);
-    shown.set(key, preview || (folder ? `${folder}/${fileName}` : fileName));
+    shown.set(key, preview || encodeURI(folder ? `${folder}/${fileName}` : fileName));
     await new Promise((resolve) => setTimeout(resolve, 0));
+    return fileName;
   };
 
   for (const spot of SPOTS) {
     const checkout = rental.checkout.spots[spot.id];
     for (let index = 0; index < (checkout?.photos.length || 0); index += 1) {
       const photo = checkout.photos[index];
-      await addMedia(`Check out-${spot.id}-${index}`, 'check-out', `${spot.id}-${index + 1}`, photo.localUri, photo.remoteUrl);
+      await addMedia(
+        `Check out-${spot.id}-${index}`,
+        'check-out',
+        `${spot.label} ${index + 1} ${clockName(photo.addedAt, photo.serverAddedAt, serverFallback)}`,
+        photo.localUri,
+        photo.remoteUrl,
+        'jpg',
+        photo.addedAt,
+      );
     }
     const checkin = rental.checkin?.spots[spot.id];
     if (checkin) {
       for (let index = 0; index < checkin.photos.length; index += 1) {
         const photo = checkin.photos[index];
-        await addMedia(`Check in-${spot.id}-${index}`, 'check-in', `${spot.id}-${index + 1}`, photo.localUri, photo.remoteUrl);
+        await addMedia(
+          `Check in-${spot.id}-${index}`,
+          'check-in',
+          `${spot.label} ${index + 1} ${clockName(photo.addedAt, photo.serverAddedAt, serverFallback)}`,
+          photo.localUri,
+          photo.remoteUrl,
+          'jpg',
+          photo.addedAt,
+        );
       }
     }
   }
-  await addMedia('Check out-video', '', 'Check out video', rental.checkout.videoUri, rental.checkout.videoUrl, 'mp4');
-  if (rental.checkin) await addMedia('Check in-video', '', 'Check in video', rental.checkin.videoUri, rental.checkin.videoUrl, 'mp4');
+  const checkoutVideoName = await addMedia(
+    'Check out-video',
+    '',
+    `Check out video ${clockName(rental.checkout.videoAddedAt, rental.checkout.videoServerAddedAt, serverFallback)}`,
+    rental.checkout.videoUri,
+    rental.checkout.videoUrl,
+    'mp4',
+    rental.checkout.videoAddedAt,
+  );
+  const checkinVideoName = rental.checkin
+    ? await addMedia(
+      'Check in-video',
+      '',
+      `Check in video ${clockName(rental.checkin.videoAddedAt, rental.checkin.videoServerAddedAt, serverFallback)}`,
+      rental.checkin.videoUri,
+      rental.checkin.videoUrl,
+      'mp4',
+      rental.checkin.videoAddedAt,
+    )
+    : '';
 
   const html = `<!doctype html>
 <html>
@@ -250,8 +304,8 @@ export async function buildRentalCard(rental: LocalRental) {
   ${rental.serverReceivedAt ? `<p class="muted">Server received this record ${esc(formatStamp(new Date(rental.serverReceivedAt).toISOString()))}</p>` : ''}
   ${missing.length ? `<p class="warn">These files were not on this phone and could not be included: ${esc(missing.join(', '))}</p>` : ''}
   <div class="columns">
-    ${sideBlock('Check out', rental.checkout, shown, rental.checkout.serverSavedAt || serverFallback)}
-    ${sideBlock('Check in', rental.checkin, shown, rental.checkin?.serverSavedAt || serverFallback)}
+    ${sideBlock('Check out', rental.checkout, shown, rental.checkout.serverSavedAt || serverFallback, checkoutVideoName)}
+    ${sideBlock('Check in', rental.checkin, shown, rental.checkin?.serverSavedAt || serverFallback, checkinVideoName)}
   </div>
 </main>
 </body>
