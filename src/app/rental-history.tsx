@@ -178,11 +178,7 @@ export default function RentalHistory() {
                 return;
               }
               setSaveReady(false);
-              setSaveNote(
-                method === 'shared'
-                  ? `Save it to Files or send it from the share sheet. Open the folder, then open Rental card.html.${missingNote.current}`
-                  : `The card downloaded. Open the zip, then open Rental card.html.${missingNote.current}`
-              );
+              setSaveNote(missingNote.current.trim());
             });
           };
           if (builtFile.current) {
@@ -204,7 +200,7 @@ export default function RentalHistory() {
             .finally(() => setSaving(false));
         }}
       >
-        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : saveReady ? 'Ready. Tap to save or share' : 'Save or share this card'}</Text>
+        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : saveReady ? 'Ready. Tap to save or share' : 'Save to files or share this card'}</Text>
       </Pressable>
       {saveNote ? <Text style={styles.help}>{saveNote}</Text> : null}
       <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
@@ -419,7 +415,7 @@ const styles = StyleSheet.create({
   ok: { color: theme.green },
   issue: { color: '#c47d00' },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
-  save: { marginTop: 22, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  save: { marginTop: 22, marginBottom: 22, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveWaiting: { opacity: 0.55 },
   saveText: { color: theme.white, fontWeight: '800' },
   stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
