@@ -35,21 +35,37 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const [photoError, setPhotoError] = useState('');
   const [videoOpen, setVideoOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
+  const [online, setOnline] = useState(false);
   const sideRef = useRef(side);
   sideRef.current = side;
   const isOut = mode === 'checkout';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const update = () => setOnline(navigator.onLine);
-    window.addEventListener('online', update);
-    window.addEventListener('offline', update);
-    return () => {
-      window.removeEventListener('online', update);
-      window.removeEventListener('offline', update);
+    let live = true;
+    const markOffline = () => setOnline(false);
+    const check = () => {
+      if (navigator.onLine === false) {
+        setOnline(false);
+        return;
+      }
+      void fetch('/sw.js', { method: 'HEAD', cache: 'no-store' })
+        .then((response) => {
+          if (live) setOnline(response.ok);
+        })
+        .catch(() => {
+          if (live) setOnline(false);
+        });
     };
-  }, []);
+    check();
+    window.addEventListener('online', check);
+    window.addEventListener('offline', markOffline);
+    return () => {
+      live = false;
+      window.removeEventListener('online', check);
+      window.removeEventListener('offline', markOffline);
+    };
+  }, [photoChoice]);
 
   const publish = (next: InspectionSide) => {
     sideRef.current = next;

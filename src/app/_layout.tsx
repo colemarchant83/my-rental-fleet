@@ -37,7 +37,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
         const keys = await caches.keys();
         await Promise.all(keys.map((key) => caches.delete(key)));
       }
-      window.location.reload();
+      window.location.replace(window.location.href);
     })();
   };
   return (
@@ -63,7 +63,19 @@ export default function RootLayout() {
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
     }
-    return watchConnection();
+    const refreshAfterReconnect = () => {
+      if (typeof window === 'undefined') return;
+      if (window.location.pathname.includes('inspection')) return;
+      if (sessionStorage.getItem('fleet-refreshed-online') === '1') return;
+      sessionStorage.setItem('fleet-refreshed-online', '1');
+      window.location.reload();
+    };
+    window.addEventListener('online', refreshAfterReconnect);
+    const stopWatching = watchConnection();
+    return () => {
+      window.removeEventListener('online', refreshAfterReconnect);
+      stopWatching();
+    };
   }, []);
 
   return (
