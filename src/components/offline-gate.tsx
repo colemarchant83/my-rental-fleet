@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Platform, Text, View } from 'react-native';
-import NetInfo from '@react-native-community/netinfo';
 import { theme } from '../theme';
 
 function useConnection() {
@@ -16,30 +15,30 @@ function useConnection() {
         mark(false);
         return;
       }
-      void NetInfo.fetch().then((state) => {
-        if (!live) return;
-        if (state.isConnected === false) {
-          mark(false);
-          return;
-        }
-        void fetch(`https://my-rental-fleet.web.app/sw.js?t=${Date.now()}`, { method: 'HEAD', cache: 'no-store', mode: 'no-cors' })
-          .then(() => mark(true))
-          .catch(() => mark(false));
-      });
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 4000);
+      void fetch(`/online.txt?t=${Date.now()}`, { method: 'GET', cache: 'no-store', signal: controller.signal })
+        .then((response) => {
+          if (live) mark(response.ok);
+        })
+        .catch(() => {
+          if (live) mark(false);
+        })
+        .finally(() => window.clearTimeout(timer));
     };
     const markOffline = () => mark(false);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') check();
+    };
     check();
-    const stopNet = NetInfo.addEventListener((state) => {
-      if (state.isConnected === false) markOffline();
-      else check();
-    });
     window.addEventListener('online', check);
     window.addEventListener('offline', markOffline);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       live = false;
-      stopNet();
       window.removeEventListener('online', check);
       window.removeEventListener('offline', markOffline);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
   return online;

@@ -1,4 +1,4 @@
-const CACHE = 'fleet-shell-v4';
+const CACHE = 'fleet-shell-v5';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -27,7 +27,7 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || url.pathname === '/sw.js') return;
+  if (url.origin !== self.location.origin || url.pathname === '/sw.js' || url.pathname === '/online.txt') return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     try {
