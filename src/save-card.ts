@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
-import { Directory } from 'expo-file-system';
 import { SPOTS, clocksDisagree, formatDay, formatStamp, loadCachedVehicles, type InspectionSide, type LocalRental } from './fleet-store';
 import { readStoredBlob } from './media';
+import { saveWithPhoneFiles } from './save-phone';
 
 type SavedFile = { name: string; data: Uint8Array; modified?: Date };
 
@@ -329,17 +329,14 @@ function wasCancelled(error: unknown) {
 }
 
 /** Installed phone app only. Opens the Files folder so the card is saved there, with no Messages or Mail choice. */
-async function saveWithPhoneFiles(file: File) {
-  const directory = await Directory.pickDirectoryAsync();
-  const stored = directory.createFile(file.name, 'application/zip');
-  await stored.write(new Uint8Array(await file.arrayBuffer()));
-  return 'saved' as const;
+async function saveOnPhone(file: File) {
+  return saveWithPhoneFiles(file);
 }
 
 export async function deliverRentalFile(file: File) {
   if (Platform.OS !== 'web') {
     try {
-      return await saveWithPhoneFiles(file);
+      return await saveOnPhone(file);
     } catch (error) {
       if (wasCancelled(error)) return 'cancelled' as const;
       throw error;

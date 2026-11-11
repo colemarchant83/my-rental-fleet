@@ -61,6 +61,13 @@ export default function RootLayout() {
   useEffect(() => {
     void syncAll();
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        if (window.location.pathname.includes('inspection')) return;
+        refreshing = true;
+        window.location.reload();
+      });
       void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
     }
     const refreshAfterReconnect = () => {
