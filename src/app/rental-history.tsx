@@ -203,7 +203,7 @@ export default function RentalHistory() {
             .finally(() => setSaving(false));
         }}
       >
-        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : saveReady ? 'Ready. Tap to save or share' : 'Save to files or share this card'}</Text>
+        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : saveReady ? 'Ready. Tap to save' : 'Save to files'}</Text>
       </Pressable>
       {saveNote ? <Text style={styles.help}>{saveNote}</Text> : null}
       <Pressable
