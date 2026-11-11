@@ -39,6 +39,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const [videoOpen, setVideoOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [online, setOnline] = useState(false);
+  const [orientationKey, setOrientationKey] = useState(0);
   const sideRef = useRef(side);
   sideRef.current = side;
   const isOut = mode === 'checkout';
@@ -71,23 +72,34 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   }, [photoChoice]);
 
   useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    let timer = 0;
+    const bump = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setOrientationKey((value) => value + 1), 120);
+    };
+    const landscape = window.matchMedia('(orientation: landscape)');
+    window.addEventListener('orientationchange', bump);
+    landscape.addEventListener('change', bump);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('orientationchange', bump);
+      landscape.removeEventListener('change', bump);
+    };
+  }, []);
+
+  useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const open = photoChoice !== null || cancelOpen || librarySpot !== null;
     if (!open) return;
-    const y = window.scrollY;
+    const html = document.documentElement;
     const body = document.body;
-    body.style.position = 'fixed';
-    body.style.top = `-${y}px`;
-    body.style.left = '0';
-    body.style.right = '0';
-    body.style.width = '100%';
+    const previous = { html: html.style.overflow, body: body.style.overflow };
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
     return () => {
-      body.style.position = '';
-      body.style.top = '';
-      body.style.left = '';
-      body.style.right = '';
-      body.style.width = '';
-      window.scrollTo(0, y);
+      html.style.overflow = previous.html;
+      body.style.overflow = previous.body;
     };
   }, [photoChoice, cancelOpen, librarySpot]);
 
@@ -363,7 +375,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       <Pressable onPress={() => setCancelOpen(true)} disabled={saving} style={styles.cancelInspection}>
         <Text style={styles.cancelInspectionText}>Cancel inspection</Text>
       </Pressable>
-      <Modal visible={photoChoice !== null} transparent animationType="fade" onRequestClose={() => setPhotoChoice(null)}>
+      <Modal key={`photos-${orientationKey}`} visible={photoChoice !== null} transparent animationType="fade" onRequestClose={() => setPhotoChoice(null)}>
         <View style={[styles.modalBackdrop, webModalBackdrop]}>
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Add photos</Text>
@@ -396,7 +408,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
           </View>
         </View>
       </Modal>
-      <Modal visible={cancelOpen} transparent animationType="fade" onRequestClose={() => setCancelOpen(false)}>
+      <Modal key={`cancel-${orientationKey}`} visible={cancelOpen} transparent animationType="fade" onRequestClose={() => setCancelOpen(false)}>
         <View style={[styles.modalBackdrop, webModalBackdrop]}>
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Cancel this inspection?</Text>
@@ -418,7 +430,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       </Modal>
       <ZoomModal uri={zoom} onClose={() => setZoom(null)} />
       <WalkaroundRecorder visible={videoOpen} onClose={() => setVideoOpen(false)} onRecorded={addVideo} />
-      <Modal visible={librarySpot !== null} transparent animationType="fade" onRequestClose={() => setLibrarySpot(null)}>
+      <Modal key={`library-${orientationKey}`} visible={librarySpot !== null} transparent animationType="fade" onRequestClose={() => setLibrarySpot(null)}>
         <View style={[styles.modalBackdrop, webModalBackdrop]}>
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Photo library</Text>
