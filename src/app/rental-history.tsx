@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
   ok: { color: theme.green },
   issue: { color: '#c47d00' },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
-  save: { marginTop: 22, marginBottom: 22, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  save: { marginTop: 22, marginBottom: 40, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveWaiting: { opacity: 0.55 },
   saveText: { color: theme.white, fontWeight: '800' },
   stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
