@@ -109,7 +109,7 @@ export default function RootLayout() {
         cover = document.createElement('div');
         cover.setAttribute('role', 'alertdialog');
         cover.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;padding:32px;background:#e4d9c8;color:#1c1917;text-align:center;font-family:system-ui,sans-serif';
-        cover.innerHTML = '<div style="font-size:28px;font-weight:800;line-height:1.2">Turn the phone upright</div><div style="margin-top:12px;font-size:17px;color:#6f6a63">The app stays upright so the buttons stay lined up.</div>';
+        cover.innerHTML = '<div style="font-size:28px;font-weight:800;line-height:1.2">Turn the phone upright</div>';
         document.body.appendChild(cover);
         updateCover = () => {
           if (!cover) return;
