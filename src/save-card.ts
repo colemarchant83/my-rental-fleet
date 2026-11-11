@@ -83,10 +83,14 @@ function safeName(value: string) {
   return value.replace(/[^\w.-]+/g, ' ').trim().replace(/\s+/g, ' ') || 'Rental';
 }
 
+function fileName(value: string) {
+  return value.replace(/[^\w.:-]+/g, ' ').trim().replace(/\s+/g, ' ') || 'file';
+}
+
 function clockName(phone?: string, server?: string, fallback?: string) {
-  const phoneText = (formatStamp(phone) || 'not recorded').replace(/:/g, '-');
-  const serverText = (formatStamp(server || fallback) || 'not recorded').replace(/:/g, '-');
-  return safeName(`phone ${phoneText} server ${serverText}`);
+  const phoneText = formatStamp(phone) || 'not recorded';
+  const serverText = formatStamp(server || fallback) || 'not recorded';
+  return fileName(`phone ${phoneText} server ${serverText}`);
 }
 
 function extFor(blob: Blob, fallback: string) {
