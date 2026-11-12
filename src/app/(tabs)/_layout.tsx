@@ -1,8 +1,11 @@
 import { Tabs } from 'expo-router';
 import { Text, View } from 'react-native';
+import { enableFreeze } from 'react-native-screens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RefreshButton, HomeButton } from '../../components/back-link';
 import { theme } from '../../theme';
+
+enableFreeze(false);
 
 function PillLabel({ focused, children }: { focused: boolean; children: string }) {
   return (
@@ -29,7 +32,10 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      detachInactiveScreens={false}
       screenOptions={{
+        freezeOnBlur: false,
+        lazy: false,
         headerStyle: { backgroundColor: theme.bg },
         headerTintColor: theme.text,
         headerShadowVisible: false,

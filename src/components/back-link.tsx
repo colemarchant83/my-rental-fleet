@@ -77,7 +77,7 @@ export function RefreshButton() {
         setTimeout(() => {
           setFlash(false);
           setLabel('Refreshing...');
-        }, 180);
+        }, 320);
         const started = Date.now();
         void syncAll().finally(() => {
           const wait = Math.max(0, 700 - (Date.now() - started));
@@ -85,7 +85,19 @@ export function RefreshButton() {
         });
       }}
     >
-      <Text style={{ color: !online ? theme.muted : flash ? theme.white : theme.accent, fontSize: 16, fontWeight: '700' }}>{label}</Text>
+      <Text
+        style={{
+          color: !online ? theme.muted : flash ? theme.white : theme.accent,
+          backgroundColor: flash ? theme.ink : 'transparent',
+          borderRadius: 8,
+          overflow: 'hidden',
+          paddingHorizontal: flash ? 8 : 0,
+          fontSize: 16,
+          fontWeight: '700',
+        }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }

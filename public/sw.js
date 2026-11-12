@@ -1,4 +1,4 @@
-const CACHE = 'fleet-shell-v5';
+const CACHE = 'fleet-shell-v6';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
