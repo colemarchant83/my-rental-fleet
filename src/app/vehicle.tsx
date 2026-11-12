@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { deleteDoc, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, rememberCover, saveCachedVehicles, subscribeFleet, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
@@ -26,7 +26,6 @@ export default function VehicleDetail() {
   const [facts, setFacts] = useState<VinFacts | null>(null);
   const [factsError, setFactsError] = useState('');
   const [factsLoading, setFactsLoading] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [shownCount, setShownCount] = useState(5);
   const [older, setOlder] = useState<LocalRental[]>([]);
   const [olderLoaded, setOlderLoaded] = useState(false);
@@ -175,16 +174,6 @@ export default function VehicleDetail() {
     }
   };
 
-  const remove = async () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
-    if (!id) return;
-    await deleteDoc(doc(db, 'vehicles', id));
-    router.back();
-  };
-
   if (!vehicle) {
     return (
       <View style={styles.loading}>
@@ -311,11 +300,6 @@ export default function VehicleDetail() {
           <Text style={styles.ghostText}>{`Show the previous ${Math.min(10, hiddenRentals)}`}</Text>
         </Pressable>
       ) : null}
-
-      <Pressable onPress={() => void remove()}>
-        <Text style={styles.remove}>{confirmDelete ? 'Tap again to remove from fleet' : 'Remove from fleet'}</Text>
-      </Pressable>
-      {Platform.OS === 'web' ? <View style={{ height: 24 }} /> : null}
     </ScrollView>
   );
 }
@@ -366,7 +350,6 @@ const styles = StyleSheet.create({
   more: { borderWidth: 1, borderColor: theme.line, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12, backgroundColor: theme.card },
   link: { color: theme.accent, fontWeight: '700', marginTop: 8, textAlign: 'right' },
   waiting: { color: theme.rent, marginTop: 6, fontSize: 13 },
-  remove: { color: theme.danger, fontWeight: '700', marginTop: 28 },
 });
 
 type VinFacts = {
