@@ -183,6 +183,37 @@ export default function AddScreen() {
 
   return (
     <OfflineGate>
+      {step === 'plate' || step === 'barcode' ? (
+        <View style={styles.scanScreen}>
+          <Pressable onPress={() => { setError(''); setStep('add'); }}>
+            <Text style={styles.back}>Back</Text>
+          </Pressable>
+          <Text style={styles.heading}>{step === 'plate' ? 'VIN plate' : 'VIN barcode'}</Text>
+          <View style={styles.cameraFrame}>
+            <CameraView
+              ref={camera}
+              style={styles.cameraFill}
+              facing="back"
+              active
+              barcodeScannerSettings={{ barcodeTypes: ['code39', 'code128', 'code93', 'qr', 'datamatrix', 'pdf417'] }}
+              onBarcodeScanned={step === 'barcode' ? (result) => {
+                const found = extractVin(result.data);
+                if (!found || locked.current) return;
+                locked.current = true;
+                void useVin(found);
+              } : undefined}
+            />
+          </View>
+          {step === 'plate' ? (
+            <Pressable style={styles.choice} disabled={reading} onPress={() => void capturePlate()}>
+              {reading ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.choiceText}>Read this plate</Text>}
+            </Pressable>
+          ) : (
+            <Text style={styles.help}>{reading ? 'Looking up that VIN...' : 'Point the camera at the barcode.'}</Text>
+          )}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+        </View>
+      ) : (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         {step !== 'menu' ? (
           <Pressable onPress={() => { setError(''); setStep(step === 'review' || step === 'plate' || step === 'barcode' || step === 'vin' || step === 'manual' ? 'add' : 'menu'); }}>
@@ -209,31 +240,6 @@ export default function AddScreen() {
             <Pressable style={styles.choice} onPress={() => void openCamera('barcode')}><Text style={styles.choiceText}>Scan VIN barcode</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('vin'); }}><Text style={styles.choiceText}>Enter VIN</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('manual'); }}><Text style={styles.choiceText}>Enter year, make, and model</Text></Pressable>
-          </>
-        ) : null}
-
-        {step === 'plate' || step === 'barcode' ? (
-          <>
-            <Text style={styles.heading}>{step === 'plate' ? 'VIN plate' : 'VIN barcode'}</Text>
-            <CameraView
-              ref={camera}
-              style={styles.camera}
-              facing="back"
-              barcodeScannerSettings={{ barcodeTypes: ['code39', 'code128', 'code93', 'qr', 'datamatrix', 'pdf417'] }}
-              onBarcodeScanned={step === 'barcode' ? (result) => {
-                const found = extractVin(result.data);
-                if (!found || locked.current) return;
-                locked.current = true;
-                void useVin(found);
-              } : undefined}
-            />
-            {step === 'plate' ? (
-              <Pressable style={styles.choice} disabled={reading} onPress={() => void capturePlate()}>
-                {reading ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.choiceText}>Read this plate</Text>}
-              </Pressable>
-            ) : (
-              <Text style={styles.help}>{reading ? 'Looking up that VIN...' : 'Point the camera at the barcode.'}</Text>
-            )}
           </>
         ) : null}
 
@@ -283,6 +289,7 @@ export default function AddScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </ScrollView>
+      )}
 
       <Modal visible={!!warned && !confirming} transparent animationType="fade" onRequestClose={() => setWarnId('')}>
         <View style={styles.modalBackdrop}>
@@ -319,6 +326,7 @@ export default function AddScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg },
+  scanScreen: { flex: 1, backgroundColor: theme.bg, padding: 16 },
   content: { padding: 16, paddingBottom: 48 },
   heading: { fontSize: 32, fontWeight: '800', color: theme.text, marginBottom: 8 },
   back: { color: theme.accent, fontWeight: '800', fontSize: 16, marginBottom: 12 },
@@ -329,7 +337,8 @@ const styles = StyleSheet.create({
   choiceText: { color: theme.ink, fontWeight: '800', fontSize: 17 },
   deleteChoice: { backgroundColor: theme.danger, borderRadius: 14, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   deleteChoiceText: { color: theme.white, fontWeight: '800', fontSize: 17 },
-  camera: { width: '100%', height: 360, borderRadius: 16, overflow: 'hidden', marginTop: 12, backgroundColor: '#111' },
+  cameraFrame: { width: '100%', height: 420, borderRadius: 16, overflow: 'hidden', marginTop: 12, backgroundColor: '#111' },
+  cameraFill: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 14, marginTop: 12 },
   rowText: { flex: 1 },
   machine: { color: theme.text, fontWeight: '800', fontSize: 18 },
