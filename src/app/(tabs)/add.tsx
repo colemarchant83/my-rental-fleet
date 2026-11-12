@@ -94,7 +94,19 @@ export default function AddScreen() {
     }).catch(() => undefined);
   }, []);
 
-  useFocusEffect(loadVehicles);
+  useFocusEffect(useCallback(() => {
+    loadVehicles();
+    return () => {
+      setSaving(false);
+      setReading(false);
+      setStep('menu');
+      setNickname('');
+      setYearMakeModel('');
+      setSpecs('');
+      setVin('');
+      setError('');
+    };
+  }, [loadVehicles]));
 
   const resetForm = () => {
     setNickname('');
@@ -143,9 +155,11 @@ export default function AddScreen() {
       const saved = await loadCachedVehicles();
       await saveCachedVehicles([vehicle, ...saved.filter((item) => item.id !== vehicle.id)]);
       resetForm();
+      setStep('menu');
       router.replace('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save vehicle');
+    } finally {
       setSaving(false);
     }
   };
