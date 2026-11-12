@@ -79,61 +79,85 @@ export default function MaintenanceEntryScreen() {
     <OfflineGate>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.kicker}>{name}</Text>
-      <Text style={styles.heading}>{saved ? 'Maintenance record' : 'New maintenance record'}</Text>
-      <Text style={styles.label}>Date</Text>
-      <TextInput style={styles.input} value={date} onChangeText={setDate} editable={!saved} placeholder="YYYY-MM-DD" placeholderTextColor={theme.muted} />
-      <Text style={styles.label}>What was done</Text>
-      <TextInput style={styles.input} value={work} onChangeText={setWork} editable={!saved} placeholder="Oil change, tire repair..." placeholderTextColor={theme.muted} />
-      <Text style={styles.label}>Miles</Text>
-      <TextInput style={styles.input} value={miles} onChangeText={setMiles} editable={!saved} placeholder="Miles" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
-      <Text style={styles.label}>Hours</Text>
-      <TextInput style={styles.input} value={hours} onChangeText={setHours} editable={!saved} placeholder="Hours" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
-      <Text style={styles.label}>Notes</Text>
-      <TextInput
-        style={[styles.input, styles.notes]}
-        value={notes}
-        onChangeText={setNotes}
-        editable={!saved}
-        placeholder="Detailed description of work performed"
-        placeholderTextColor={theme.muted}
-        multiline
-      />
-      {savedAt ? <Text style={styles.stamp}>Recorded on this phone {formatStamp(savedAt)}</Text> : null}
-      {savedAt ? (
-        <Text style={styles.stamp}>
-          {serverSavedAt
-            ? `Server ${formatStamp(serverSavedAt)}`
-            : 'Server time is recorded when the next internet connection is made.'}
-        </Text>
-      ) : null}
-      {clocksDisagree(savedAt, serverSavedAt) ? <Text style={styles.error}>Phone time does not match the server.</Text> : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
       {saved ? (
-        <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
-          <Text style={styles.deleteText}>Delete this record</Text>
-        </Pressable>
-      ) : (
-        <Pressable style={styles.save} disabled={saving} onPress={save}>
-          <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save record'}</Text>
-        </Pressable>
-      )}
-      <Modal visible={confirming} transparent animationType="fade" onRequestClose={() => setConfirming(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.spotTitle}>Delete this record?</Text>
-            <Text style={styles.help}>
-              This permanently deletes the {work.trim() || 'maintenance'} record from {formatDay(date)}. Nothing from this record is kept. This cannot be undone.
-            </Text>
-            <Pressable style={styles.delete} disabled={deleting} onPress={remove}>
-              <Text style={styles.deleteText}>{deleting ? 'Deleting...' : 'Delete record'}</Text>
-            </Pressable>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Pressable style={styles.cancel} onPress={() => setConfirming(false)} disabled={deleting}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </Pressable>
+        <>
+          <Text style={styles.heading}>{work.trim() || 'Maintenance record'}</Text>
+          <Text style={styles.when}>{formatDay(date) || 'No date'}</Text>
+          <View style={styles.card}>
+            <View style={styles.facts}>
+              <View style={styles.fact}>
+                <Text style={styles.factLabel}>Miles</Text>
+                <Text style={styles.factValue}>{miles || '—'}</Text>
+              </View>
+              <View style={styles.fact}>
+                <Text style={styles.factLabel}>Hours</Text>
+                <Text style={styles.factValue}>{hours || '—'}</Text>
+              </View>
+            </View>
+            <Text style={styles.factLabel}>Notes</Text>
+            <Text style={styles.noteBody}>{notes.trim() || 'No notes'}</Text>
+            {savedAt ? <Text style={styles.stamp}>Recorded on this phone {formatStamp(savedAt)}</Text> : null}
+            {savedAt ? (
+              <Text style={styles.stamp}>
+                {serverSavedAt
+                  ? `Server ${formatStamp(serverSavedAt)}`
+                  : 'Server time is recorded when the next internet connection is made.'}
+              </Text>
+            ) : null}
+            {clocksDisagree(savedAt, serverSavedAt) ? <Text style={styles.error}>Phone time does not match the server.</Text> : null}
           </View>
-        </View>
-      </Modal>
+        </>
+      ) : (
+        <>
+          <Text style={styles.heading}>New maintenance record</Text>
+          <Text style={styles.label}>Date</Text>
+          <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" placeholderTextColor={theme.muted} />
+          <Text style={styles.label}>What was done</Text>
+          <TextInput style={styles.input} value={work} onChangeText={setWork} placeholder="Oil change, tire repair..." placeholderTextColor={theme.muted} />
+          <Text style={styles.label}>Miles</Text>
+          <TextInput style={styles.input} value={miles} onChangeText={setMiles} placeholder="Miles" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
+          <Text style={styles.label}>Hours</Text>
+          <TextInput style={styles.input} value={hours} onChangeText={setHours} placeholder="Hours" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
+          <Text style={styles.label}>Notes</Text>
+          <TextInput
+            style={[styles.input, styles.notes]}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Detailed description of work performed"
+            placeholderTextColor={theme.muted}
+            multiline
+          />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Pressable style={styles.save} disabled={saving} onPress={save}>
+            <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save record'}</Text>
+          </Pressable>
+        </>
+      )}
+      {saved ? (
+        <>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
+            <Text style={styles.deleteText}>Delete this record</Text>
+          </Pressable>
+          <Modal visible={confirming} transparent animationType="fade" onRequestClose={() => setConfirming(false)}>
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <Text style={styles.spotTitle}>Delete this record?</Text>
+                <Text style={styles.help}>
+                  This permanently deletes the {work.trim() || 'maintenance'} record from {formatDay(date)}. Nothing from this record is kept. This cannot be undone.
+                </Text>
+                <Pressable style={styles.delete} disabled={deleting} onPress={remove}>
+                  <Text style={styles.deleteText}>{deleting ? 'Deleting...' : 'Delete record'}</Text>
+                </Pressable>
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+                <Pressable style={styles.cancel} onPress={() => setConfirming(false)} disabled={deleting}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          </Modal>
+        </>
+      ) : null}
     </ScrollView>
     </OfflineGate>
   );
@@ -144,6 +168,13 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 48 },
   kicker: { color: theme.accent, fontWeight: '800', fontSize: 15 },
   heading: { color: theme.text, fontSize: 28, fontWeight: '800', marginTop: 4 },
+  when: { color: theme.muted, marginTop: 4, fontWeight: '700' },
+  card: { backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 16, marginTop: 16 },
+  facts: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  fact: { flex: 1, backgroundColor: theme.bg, borderRadius: 12, padding: 12 },
+  factLabel: { color: theme.muted, fontWeight: '700', fontSize: 13 },
+  factValue: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 2 },
+  noteBody: { color: theme.text, marginTop: 6, fontSize: 16, lineHeight: 22 },
   label: { color: theme.muted, fontWeight: '700', marginTop: 16 },
   input: { backgroundColor: theme.input, borderRadius: 12, padding: 14, marginTop: 8, color: theme.text },
   notes: { minHeight: 110, textAlignVertical: 'top' },
