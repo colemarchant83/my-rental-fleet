@@ -72,6 +72,12 @@ export function RefreshButton() {
       disabled={!online || label !== 'Refresh'}
       onPress={() => {
         if (!online || label !== 'Refresh') return;
+        if (Platform.OS === 'web' && typeof document !== 'undefined') {
+          const flash = document.createElement('div');
+          flash.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:2147483646;pointer-events:none;opacity:0.9';
+          document.body.appendChild(flash);
+          setTimeout(() => flash.remove(), 160);
+        }
         setLabel('Refreshing...');
         const started = Date.now();
         void syncAll().finally(() => {
