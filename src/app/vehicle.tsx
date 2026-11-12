@@ -197,7 +197,7 @@ export default function VehicleDetail() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       {display.uri ? (
-        <Image source={{ uri: display.uri }} style={styles.photo} onError={display.failRemote} />
+        <Image source={{ uri: display.uri }} style={styles.photo} resizeMode="contain" onError={display.failRemote} />
       ) : (
         <View style={styles.placeholder}>
           <Text style={styles.muted}>No photo yet — add one so the crew can spot this machine at a glance.</Text>

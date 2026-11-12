@@ -316,7 +316,7 @@ export default function AddScreen() {
             <Text style={styles.label}>VIN, if it has one</Text>
             <TextInput style={styles.input} placeholder="Optional" placeholderTextColor={theme.muted} value={vin} onChangeText={setVin} autoCapitalize="characters" />
             <Text style={styles.label}>Card photo</Text>
-            {photoUri ? <Image source={{ uri: photoUri }} style={styles.preview} /> : <Text style={styles.help}>Optional. This is the photo on the machine card.</Text>}
+            {photoUri ? <Image source={{ uri: photoUri }} style={styles.preview} resizeMode="contain" /> : <Text style={styles.help}>Optional. This is the photo on the machine card.</Text>}
             <View style={styles.photoRow}>
               <Pressable style={styles.photoButton} disabled={saving} onPress={() => void pickPhoto(true)}>
                 <Text style={styles.photoButtonText}>{photoUri ? 'Retake photo' : 'Take photo'}</Text>
@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
   help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
   label: { color: theme.text, fontWeight: '600', marginTop: 14, marginBottom: 6 },
   input: { backgroundColor: theme.input, color: theme.text, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16 },
-  preview: { width: '100%', height: 210, borderRadius: 16, marginTop: 8, backgroundColor: theme.input },
+  preview: { width: '100%', height: 260, borderRadius: 16, marginTop: 8, backgroundColor: theme.input },
   photoRow: { flexDirection: 'row', gap: 10 },
   photoButton: { flex: 1, backgroundColor: theme.card, borderRadius: 14, borderWidth: 1, borderColor: theme.line, minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
   photoButtonText: { color: theme.text, fontWeight: '800', fontSize: 15, textAlign: 'center' },
