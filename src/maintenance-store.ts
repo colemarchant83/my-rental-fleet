@@ -14,6 +14,7 @@ export type MaintenanceRecord = {
   notesAt?: string;
   miles: string;
   hours: string;
+  cost: string;
   photos: PhotoRef[];
   savedAt: string;
   serverSavedAt?: string;
@@ -104,6 +105,7 @@ export async function saveMaintenance(record: Omit<MaintenanceRecord, 'localId' 
     notesAt: notes ? existing?.notesAt || savedAt : undefined,
     miles: record.miles.trim(),
     hours: record.hours.trim(),
+    cost: (record.cost || '').trim(),
     photos,
     savedAt,
     serverSavedAt,

@@ -52,7 +52,7 @@ export default function MaintenanceRecordScreen() {
           </View>
           <View style={styles.folderBody}>
             <Text style={styles.date}>{formatDay(record.date) || 'No date'}</Text>
-            <Text style={styles.date}>Miles {record.miles || '—'} · Hours {record.hours || '—'}</Text>
+            <Text style={styles.date}>Miles {record.miles || '—'} · Hours {record.hours || '—'}{record.cost ? ` · ${record.cost.startsWith('$') ? record.cost : `$${record.cost}`}` : ''}</Text>
             <Text style={styles.date}>Phone {formatStamp(record.savedAt)}</Text>
             <Text style={styles.date}>{record.serverSavedAt ? `Server ${formatStamp(record.serverSavedAt)}` : 'Server time is recorded when the next internet connection is made.'}</Text>
             {clocksDisagree(record.savedAt, record.serverSavedAt) ? <Text style={styles.warn}>Phone time does not match the server.</Text> : null}

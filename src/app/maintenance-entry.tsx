@@ -20,6 +20,7 @@ export default function MaintenanceEntryScreen() {
   const [work, setWork] = useState('');
   const [miles, setMiles] = useState('');
   const [hours, setHours] = useState('');
+  const [cost, setCost] = useState('');
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<PhotoRef[]>([]);
   const [savedAt, setSavedAt] = useState('');
@@ -42,6 +43,7 @@ export default function MaintenanceEntryScreen() {
       setWork(record.work);
       setMiles(record.miles || '');
       setHours(record.hours || '');
+      setCost(record.cost || '');
       setNotes(record.notes);
       setPhotos(record.photos ?? []);
       setSavedAt(record.savedAt);
@@ -61,7 +63,7 @@ export default function MaintenanceEntryScreen() {
     }
     setSaving(true);
     setError('');
-    void saveMaintenance({ localId, vehicleId, date: date || todayIso(), work, notes, miles, hours, photos })
+    void saveMaintenance({ localId, vehicleId, date: date || todayIso(), work, notes, miles, hours, cost, photos })
       .then(() => router.back())
       .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not save this record.'))
       .finally(() => setSaving(false));
@@ -133,6 +135,10 @@ export default function MaintenanceEntryScreen() {
               </View>
             </View>
             <View style={styles.noteBox}>
+              <Text style={styles.factLabel}>Cost</Text>
+              <Text style={styles.factValue}>{cost.trim() ? (cost.trim().startsWith('$') ? cost.trim() : `$${cost.trim()}`) : '—'}</Text>
+            </View>
+            <View style={[styles.noteBox, styles.photoBox]}>
               <Text style={styles.factLabel}>Notes</Text>
               <Text style={styles.noteBody}>{notes.trim() || 'No notes'}</Text>
             </View>
@@ -168,6 +174,8 @@ export default function MaintenanceEntryScreen() {
           <TextInput style={styles.input} value={miles} onChangeText={setMiles} placeholder="Miles" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
           <Text style={styles.label}>Hours</Text>
           <TextInput style={styles.input} value={hours} onChangeText={setHours} placeholder="Hours" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
+          <Text style={styles.label}>Cost</Text>
+          <TextInput style={styles.input} value={cost} onChangeText={setCost} placeholder="0.00" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
           <Text style={styles.label}>Notes</Text>
           <TextInput
             style={[styles.input, styles.notes]}
