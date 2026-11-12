@@ -216,7 +216,7 @@ export default function AddScreen() {
       ) : (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
         {step !== 'menu' ? (
-          <Pressable onPress={() => { setError(''); setStep(step === 'review' || step === 'plate' || step === 'barcode' || step === 'vin' || step === 'manual' ? 'add' : 'menu'); }}>
+          <Pressable onPress={() => { setError(''); setStep(step === 'review' || step === 'vin' || step === 'manual' ? 'add' : 'menu'); }}>
             <Text style={styles.back}>Back</Text>
           </Pressable>
         ) : null}
