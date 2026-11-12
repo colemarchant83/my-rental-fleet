@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { clocksDisagree, formatDay, formatStamp, loadCachedVehicles, type CachedVehicle } from '../fleet-store';
 import { loadMaintenance, type MaintenanceRecord } from '../maintenance-store';
+import { OfflineGate } from '../components/offline-gate';
 import { theme } from '../theme';
 
 export default function MaintenanceRecordScreen() {
@@ -28,6 +29,7 @@ export default function MaintenanceRecordScreen() {
   const hidden = Math.max(0, records.length - shown);
 
   return (
+    <OfflineGate>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.kicker}>{name}</Text>
       {vehicle?.yearMakeModel && vehicle.nickname ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}
@@ -55,6 +57,7 @@ export default function MaintenanceRecordScreen() {
             <Text style={styles.date}>{record.serverSavedAt ? `Server ${formatStamp(record.serverSavedAt)}` : 'Server time is recorded when the next internet connection is made.'}</Text>
             {clocksDisagree(record.savedAt, record.serverSavedAt) ? <Text style={styles.warn}>Phone time does not match the server.</Text> : null}
             {record.notes ? <Text style={styles.notes} numberOfLines={2}>{record.notes}</Text> : null}
+            {record.photos?.length ? <Text style={styles.date}>{record.photos.length === 1 ? '1 photo' : `${record.photos.length} photos`}</Text> : null}
             <Text style={styles.link}>Details</Text>
           </View>
         </Pressable>
@@ -65,6 +68,7 @@ export default function MaintenanceRecordScreen() {
         </Pressable>
       ) : null}
     </ScrollView>
+    </OfflineGate>
   );
 }
 

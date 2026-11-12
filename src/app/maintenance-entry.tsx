@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { clocksDisagree, formatDay, formatStamp, loadCachedVehicles, todayIso, type CachedVehicle } from '../fleet-store';
+import * as ImagePicker from 'expo-image-picker';
+import { clocksDisagree, formatDay, formatStamp, keepPhoto, loadCachedVehicles, todayIso, type CachedVehicle, type PhotoRef } from '../fleet-store';
 import { deleteMaintenance, loadMaintenanceRecord, saveMaintenance } from '../maintenance-store';
+import { deleteStoredFile, useDisplayUri } from '../media';
+import { deleteStoredObject } from '../r2';
+import { ZoomModal } from '../components/zoom-modal';
 import { OfflineGate } from '../components/offline-gate';
 import { theme } from '../theme';
 
@@ -17,12 +21,15 @@ export default function MaintenanceEntryScreen() {
   const [miles, setMiles] = useState('');
   const [hours, setHours] = useState('');
   const [notes, setNotes] = useState('');
+  const [photos, setPhotos] = useState<PhotoRef[]>([]);
   const [savedAt, setSavedAt] = useState('');
   const [serverSavedAt, setServerSavedAt] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [zoom, setZoom] = useState<string | null>(null);
 
   useEffect(() => {
     void loadCachedVehicles().then((vehicles) => {
@@ -36,6 +43,7 @@ export default function MaintenanceEntryScreen() {
       setMiles(record.miles || '');
       setHours(record.hours || '');
       setNotes(record.notes);
+      setPhotos(record.photos ?? []);
       setSavedAt(record.savedAt);
       setServerSavedAt(record.serverSavedAt || '');
     });
@@ -53,9 +61,9 @@ export default function MaintenanceEntryScreen() {
     }
     setSaving(true);
     setError('');
-    void saveMaintenance({ localId, vehicleId, date: date || todayIso(), work, notes, miles, hours })
+    void saveMaintenance({ localId, vehicleId, date: date || todayIso(), work, notes, miles, hours, photos })
       .then(() => router.back())
-      .catch(() => setError('Could not save this record.'))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not save this record.'))
       .finally(() => setSaving(false));
   };
 
@@ -71,6 +79,36 @@ export default function MaintenanceEntryScreen() {
         setDeleting(false);
         setError('Could not delete this record.');
       });
+  };
+
+  const addPhotos = async (camera: boolean) => {
+    const room = 8 - photos.length;
+    if (room <= 0) return;
+    const options = {
+      mediaTypes: ['images'] as ImagePicker.MediaType[],
+      quality: 0.92,
+      allowsMultipleSelection: !camera,
+      selectionLimit: room,
+    };
+    const result = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
+    if (result.canceled) return;
+    setError('');
+    try {
+      const saved: PhotoRef[] = [];
+      for (const asset of result.assets.slice(0, room)) {
+        saved.push(await keepPhoto(asset.uri));
+        if (asset.uri.startsWith('blob:')) URL.revokeObjectURL(asset.uri);
+      }
+      setPhotos((current) => [...current, ...saved].slice(0, 8));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'This photo could not be saved.');
+    }
+  };
+
+  const removePhoto = (photo: PhotoRef) => {
+    setPhotos((current) => current.filter((item) => item.id !== photo.id));
+    void deleteStoredFile(photo.localUri);
+    void deleteStoredObject(photo.remoteUrl).catch(() => undefined);
   };
 
   const name = vehicle?.nickname || vehicle?.yearMakeModel || 'This machine';
@@ -98,6 +136,16 @@ export default function MaintenanceEntryScreen() {
               <Text style={styles.factLabel}>Notes</Text>
               <Text style={styles.noteBody}>{notes.trim() || 'No notes'}</Text>
             </View>
+            {photos.length ? (
+              <View style={[styles.noteBox, styles.photoBox]}>
+                <Text style={styles.factLabel}>Receipts and invoices</Text>
+                <View style={styles.photoRow}>
+                  {photos.map((photo) => (
+                    <ReceiptPhoto key={photo.id} photo={photo} onOpen={setZoom} />
+                  ))}
+                </View>
+              </View>
+            ) : null}
             {savedAt ? <Text style={styles.stamp}>Recorded on this phone {formatStamp(savedAt)}</Text> : null}
             {savedAt ? (
               <Text style={styles.stamp}>
@@ -129,6 +177,25 @@ export default function MaintenanceEntryScreen() {
             placeholderTextColor={theme.muted}
             multiline
           />
+          <Text style={styles.label}>Receipts and invoices</Text>
+          <Text style={styles.help}>Photos only. Take a picture or add one from your library. Up to 8.</Text>
+          {photos.length ? (
+            <View style={styles.photoRow}>
+              {photos.map((photo) => (
+                <ReceiptPhoto key={photo.id} photo={photo} onOpen={setZoom} onRemove={() => removePhoto(photo)} />
+              ))}
+            </View>
+          ) : null}
+          {photos.length < 8 ? (
+            <View style={styles.photoActions}>
+              <Pressable style={styles.photoButton} onPress={() => void addPhotos(true)}>
+                <Text style={styles.photoButtonText}>Take photo</Text>
+              </Pressable>
+              <Pressable style={styles.photoButton} onPress={() => setLibraryOpen(true)}>
+                <Text style={styles.photoButtonText}>Photo library</Text>
+              </Pressable>
+            </View>
+          ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable style={styles.save} disabled={saving} onPress={save}>
             <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save record'}</Text>
@@ -146,7 +213,7 @@ export default function MaintenanceEntryScreen() {
               <View style={styles.modalCard}>
                 <Text style={styles.spotTitle}>Delete this record?</Text>
                 <Text style={styles.help}>
-                  This permanently deletes the {work.trim() || 'maintenance'} record from {formatDay(date)}. Nothing from this record is kept. This cannot be undone.
+                  This permanently deletes the {work.trim() || 'maintenance'} record from {formatDay(date)}, including the notes and every receipt photo stored for this record. Nothing from this record is kept. This cannot be undone.
                 </Text>
                 <Pressable style={styles.delete} disabled={deleting} onPress={remove}>
                   <Text style={styles.deleteText}>{deleting ? 'Deleting...' : 'Delete record'}</Text>
@@ -160,6 +227,29 @@ export default function MaintenanceEntryScreen() {
           </Modal>
         </>
       ) : null}
+      <Modal visible={libraryOpen} transparent animationType="fade" onRequestClose={() => setLibraryOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.spotTitle}>Photo library</Text>
+            <Text style={styles.help}>
+              A photo from your library or files is stamped when you add it to this record, not when the camera first took it. Take Photo if you want the time the picture was made.
+            </Text>
+            <Pressable
+              style={styles.save}
+              onPress={() => {
+                setLibraryOpen(false);
+                void addPhotos(false);
+              }}
+            >
+              <Text style={styles.saveText}>Continue</Text>
+            </Pressable>
+            <Pressable style={styles.cancel} onPress={() => setLibraryOpen(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <ZoomModal uri={zoom} onClose={() => setZoom(null)} />
     </ScrollView>
     </OfflineGate>
   );
@@ -177,6 +267,15 @@ const styles = StyleSheet.create({
   factLabel: { color: theme.muted, fontWeight: '700', fontSize: 13 },
   factValue: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 2 },
   noteBox: { backgroundColor: theme.bg, borderRadius: 12, padding: 12 },
+  photoBox: { marginTop: 12 },
+  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
+  photoActions: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  photoButton: { flex: 1, backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.line, paddingVertical: 14, alignItems: 'center' },
+  photoButtonText: { color: theme.text, fontWeight: '800' },
+  receipt: { width: 104 },
+  receiptImage: { width: 104, height: 104, borderRadius: 10, backgroundColor: theme.input },
+  photoStamp: { color: theme.muted, fontSize: 11, marginTop: 4 },
+  removeText: { color: theme.danger, fontWeight: '700', marginTop: 4 },
   noteBody: { color: theme.text, marginTop: 6, fontSize: 16, lineHeight: 22 },
   label: { color: theme.muted, fontWeight: '700', marginTop: 16 },
   input: { backgroundColor: theme.input, borderRadius: 12, padding: 14, marginTop: 8, color: theme.text },
@@ -194,3 +293,21 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.45)', justifyContent: 'center', padding: 24 },
   modalCard: { backgroundColor: theme.card, borderRadius: 16, padding: 18 },
 });
+
+function ReceiptPhoto({ photo, onOpen, onRemove }: { photo: PhotoRef; onOpen: (uri: string) => void; onRemove?: () => void }) {
+  const display = useDisplayUri(photo.localUri, photo.remoteUrl);
+  return (
+    <View style={styles.receipt}>
+      <Pressable onPress={() => display.uri && onOpen(display.uri)}>
+        {display.uri ? <Image source={{ uri: display.uri }} style={styles.receiptImage} onError={display.failRemote} /> : <View style={styles.receiptImage} />}
+      </Pressable>
+      {photo.addedAt ? <Text style={styles.photoStamp}>{formatStamp(photo.addedAt)}</Text> : null}
+      {photo.serverAddedAt ? <Text style={styles.photoStamp}>Server {formatStamp(photo.serverAddedAt)}</Text> : null}
+      {onRemove ? (
+        <Pressable onPress={onRemove}>
+          <Text style={styles.removeText}>Remove</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}

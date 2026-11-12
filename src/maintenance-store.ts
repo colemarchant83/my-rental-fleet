@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { proofTimes } from './fleet-store';
+import { proofTimes, type PhotoRef } from './fleet-store';
+import { contentTypeFor, deleteStoredFile } from './media';
+import { beginUpload, deleteStoredObject } from './r2';
 
 const KEY = 'fleet.maintenance.v1';
 
@@ -12,6 +14,7 @@ export type MaintenanceRecord = {
   notesAt?: string;
   miles: string;
   hours: string;
+  photos: PhotoRef[];
   savedAt: string;
   serverSavedAt?: string;
 };
@@ -49,6 +52,11 @@ export async function loadMaintenance(vehicleId: string) {
 
 export async function deleteMaintenance(localId: string) {
   const records = await readAll();
+  const target = records.find((record) => record.localId === localId);
+  for (const photo of target?.photos ?? []) {
+    await deleteStoredObject(photo.remoteUrl);
+    await deleteStoredFile(photo.localUri);
+  }
   await writeAll(records.filter((record) => record.localId !== localId));
 }
 
@@ -57,7 +65,7 @@ export async function loadMaintenanceRecord(localId: string) {
   return records.find((record) => record.localId === localId) ?? null;
 }
 
-export async function saveMaintenance(record: Omit<MaintenanceRecord, 'localId' | 'savedAt' | 'serverSavedAt' | 'notesAt'> & { localId?: string }) {
+export async function saveMaintenance(record: Omit<MaintenanceRecord, 'localId' | 'savedAt' | 'serverSavedAt' | 'notesAt' | 'photos'> & { localId?: string; photos?: PhotoRef[] }) {
   const records = await readAll();
   const existing = record.localId ? records.find((item) => item.localId === record.localId) : undefined;
   let savedAt = existing?.savedAt;
@@ -68,8 +76,27 @@ export async function saveMaintenance(record: Omit<MaintenanceRecord, 'localId' 
     serverSavedAt = serverSavedAt || times.serverSavedAt;
   }
   const notes = record.notes.trim();
+  const localId = record.localId || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const photos: PhotoRef[] = [];
+  for (const photo of record.photos ?? []) {
+    if (photo.remoteUrl) {
+      photos.push(photo);
+      continue;
+    }
+    try {
+      const remoteUrl = await beginUpload(photo.localUri, `maintenance/${record.vehicleId}/${localId}/${photo.id}.jpg`, contentTypeFor(photo.localUri));
+      photos.push({ ...photo, remoteUrl, serverAddedAt: photo.serverAddedAt || serverSavedAt });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not upload the photo.';
+      throw new Error(
+        /video is still on this phone/i.test(message)
+          ? 'A photo is still on this phone. Stay on this page and tap Save record again.'
+          : message
+      );
+    }
+  }
   const next: MaintenanceRecord = {
-    localId: record.localId || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    localId,
     vehicleId: record.vehicleId,
     date: record.date,
     work: record.work.trim(),
@@ -77,6 +104,7 @@ export async function saveMaintenance(record: Omit<MaintenanceRecord, 'localId' 
     notesAt: notes ? existing?.notesAt || savedAt : undefined,
     miles: record.miles.trim(),
     hours: record.hours.trim(),
+    photos,
     savedAt,
     serverSavedAt,
   };
