@@ -73,9 +73,10 @@ export function RefreshButton() {
       onPress={() => {
         if (!online || label !== 'Refresh') return;
         setLabel('Refreshing...');
+        const started = Date.now();
         void syncAll().finally(() => {
-          setLabel('Updated');
-          setTimeout(() => setLabel('Refresh'), 900);
+          const wait = Math.max(0, 700 - (Date.now() - started));
+          setTimeout(() => setLabel('Refresh'), wait);
         });
       }}
     >
