@@ -30,7 +30,7 @@ function PageBar({ onBack }: { onBack?: () => void }) {
   );
 }
 
-type Step = 'menu' | 'add' | 'delete' | 'plate' | 'barcode' | 'vin' | 'hull' | 'manual' | 'review';
+type Step = 'menu' | 'add' | 'delete' | 'barcode' | 'vin' | 'hull' | 'manual' | 'review';
 
 function extractVin(text: string) {
   const compact = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -55,17 +55,6 @@ async function decodeVin(vin: string) {
     value('FuelTypePrimary'),
   ].filter(Boolean).join(' · ');
   return { yearMakeModel, specs: engine };
-}
-
-async function readPlate(uri: string) {
-  const { createWorker } = await import('tesseract.js');
-  const worker = await createWorker('eng');
-  try {
-    const result = await worker.recognize(uri);
-    return extractVin(result.data.text);
-  } finally {
-    await worker.terminate();
-  }
 }
 
 export default function AddScreen() {
@@ -184,7 +173,7 @@ export default function AddScreen() {
     }
   };
 
-  const openCamera = async (next: 'plate' | 'barcode') => {
+  const openCamera = async () => {
     setError('');
     if (!permission?.granted) {
       const result = await requestPermission();
@@ -194,26 +183,7 @@ export default function AddScreen() {
       }
     }
     locked.current = false;
-    setStep(next);
-  };
-
-  const capturePlate = async () => {
-    if (!camera.current || reading) return;
-    setReading(true);
-    setError('');
-    try {
-      const picture = await camera.current.takePictureAsync({ quality: 0.7 });
-      const found = picture?.uri ? await readPlate(picture.uri) : '';
-      if (!found) {
-        setError('Could not read a VIN on that plate. Try again, or enter it manually.');
-        setReading(false);
-        return;
-      }
-      await useVin(found);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not read the VIN plate.');
-      setReading(false);
-    }
+    setStep('barcode');
   };
 
   const pickPhoto = async (camera: boolean) => {
@@ -245,15 +215,15 @@ export default function AddScreen() {
   const confirming = vehicles.find((item) => item.id === confirmId);
   const goBack = () => {
     setError('');
-    setStep(step === 'review' || step === 'vin' || step === 'hull' || step === 'manual' || step === 'plate' || step === 'barcode' ? 'add' : 'menu');
+    setStep(step === 'review' || step === 'vin' || step === 'hull' || step === 'manual' || step === 'barcode' ? 'add' : 'menu');
   };
 
   return (
     <OfflineGate>
-      {step === 'plate' || step === 'barcode' ? (
+      {step === 'barcode' ? (
         <View style={[styles.scanScreen, { paddingTop: insets.top + 8 }]}>
           <PageBar onBack={goBack} />
-          <Text style={styles.heading}>{step === 'plate' ? 'VIN plate' : 'VIN barcode'}</Text>
+          <Text style={styles.heading}>VIN barcode</Text>
           <View style={styles.cameraFrame}>
             <CameraView
               ref={camera}
@@ -261,21 +231,15 @@ export default function AddScreen() {
               facing="back"
               active
               barcodeScannerSettings={{ barcodeTypes: ['code39', 'code128', 'code93', 'qr', 'datamatrix', 'pdf417'] }}
-              onBarcodeScanned={step === 'barcode' ? (result) => {
+              onBarcodeScanned={(result) => {
                 const found = extractVin(result.data);
                 if (!found || locked.current) return;
                 locked.current = true;
                 void useVin(found);
-              } : undefined}
+              }}
             />
           </View>
-          {step === 'plate' ? (
-            <Pressable style={styles.choice} disabled={reading} onPress={() => void capturePlate()}>
-              {reading ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.choiceText}>Read this plate</Text>}
-            </Pressable>
-          ) : (
-            <Text style={styles.help}>{reading ? 'Looking up that VIN...' : 'Point the camera at the barcode.'}</Text>
-          )}
+          <Text style={styles.help}>{reading ? 'Looking up that VIN...' : 'Point the camera at the barcode.'}</Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : (
@@ -304,8 +268,7 @@ export default function AddScreen() {
         {step === 'add' ? (
           <>
             <Text style={styles.heading}>Add vehicle</Text>
-            <Pressable style={styles.choice} onPress={() => void openCamera('plate')}><Text style={styles.choiceText}>Scan VIN plate</Text></Pressable>
-            <Pressable style={styles.choice} onPress={() => void openCamera('barcode')}><Text style={styles.choiceText}>Scan VIN barcode</Text></Pressable>
+            <Pressable style={styles.choice} onPress={() => void openCamera()}><Text style={styles.choiceText}>Scan VIN barcode</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('vin'); }}><Text style={styles.choiceText}>Enter VIN</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('hull'); }}><Text style={styles.choiceText}>Enter boat hull numbers</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('manual'); }}><Text style={styles.choiceText}>Enter year, make, and model</Text></Pressable>
