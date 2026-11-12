@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { loadCachedVehicles, loadCovers, loadRentals, saveCachedVehicles, subscribeFleet, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
@@ -17,8 +17,6 @@ export default function VehicleListScreen() {
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
   const [savedIds, setSavedIds] = useState<string[]>([]);
-  const [, setShown] = useState(0);
-  useFocusEffect(useCallback(() => setShown((value) => value + 1), []));
 
   useEffect(() => {
     let live = true;
@@ -84,10 +82,6 @@ export default function VehicleListScreen() {
   const openInspection = (vehicle: Vehicle, mode: 'checkout' | 'checkin') => {
     router.push({ pathname: '/inspection', params: { vehicleId: vehicle.id, type: mode } });
   };
-
-  const path = typeof window === 'undefined' ? '/' : window.location.pathname;
-  const rentalPage = path === '/' || path === '' || path.endsWith('/index');
-  if (!rentalPage) return <View style={styles.screen} />;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>

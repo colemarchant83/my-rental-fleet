@@ -65,16 +65,21 @@ export function HomeButton() {
 
 export function RefreshButton() {
   const online = useOnline();
+  const [label, setLabel] = useState('Refresh');
   return (
     <Pressable
       hitSlop={8}
-      disabled={!online}
+      disabled={!online || label !== 'Refresh'}
       onPress={() => {
-        if (!online) return;
-        void syncAll();
+        if (!online || label !== 'Refresh') return;
+        setLabel('Refreshing...');
+        void syncAll().finally(() => {
+          setLabel('Updated');
+          setTimeout(() => setLabel('Refresh'), 900);
+        });
       }}
     >
-      <Text style={{ color: online ? theme.accent : theme.muted, fontSize: 16, fontWeight: '700' }}>Refresh</Text>
+      <Text style={{ color: online ? theme.accent : theme.muted, fontSize: 16, fontWeight: '700' }}>{label}</Text>
     </Pressable>
   );
 }
