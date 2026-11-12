@@ -308,7 +308,7 @@ export default function AddScreen() {
 
         {step === 'manual' || step === 'review' ? (
           <>
-            <Text style={styles.heading}>{step === 'review' ? 'Check this vehicle' : 'Enter the machine'}</Text>
+            <Text style={styles.heading}>Add vehicle</Text>
             <Text style={styles.label}>Nickname</Text>
             <TextInput style={styles.input} placeholder="e.g. Dad's truck" placeholderTextColor={theme.muted} value={nickname} onChangeText={setNickname} />
             <Text style={styles.label}>Year, make, model</Text>
