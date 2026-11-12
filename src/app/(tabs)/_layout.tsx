@@ -6,8 +6,8 @@ import { theme } from '../../theme';
 
 function PillLabel({ focused, children }: { focused: boolean; children: string }) {
   return (
-    <View style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 16, paddingHorizontal: 8, paddingVertical: 7 }}>
-      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: focused ? theme.white : theme.muted, fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+    <View style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 18, paddingHorizontal: 10, paddingVertical: 8, maxWidth: '100%' }}>
+      <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72} style={{ color: focused ? theme.white : theme.text, fontSize: 13, fontWeight: '800', textAlign: 'center', lineHeight: 16 }}>
         {children}
       </Text>
     </View>
@@ -37,11 +37,13 @@ export default function TabLayout() {
         headerRight: () => <HeaderActions />,
         headerRightContainerStyle: { paddingRight: 16 },
         tabBarIcon: () => null,
+        tabBarItemStyle: { paddingHorizontal: 2, paddingTop: 4 },
         tabBarStyle: {
-          backgroundColor: theme.bg,
+          backgroundColor: theme.card,
           borderTopColor: theme.line,
-          height: 54 + bottom,
-          paddingTop: 6,
+          borderTopWidth: 1,
+          height: 64 + bottom,
+          paddingTop: 8,
           paddingBottom: bottom,
         },
         sceneStyle: { backgroundColor: theme.bg },
