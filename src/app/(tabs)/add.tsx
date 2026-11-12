@@ -307,7 +307,7 @@ export default function AddScreen() {
             <Pressable style={styles.choice} onPress={() => void openCamera('plate')}><Text style={styles.choiceText}>Scan VIN plate</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => void openCamera('barcode')}><Text style={styles.choiceText}>Scan VIN barcode</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('vin'); }}><Text style={styles.choiceText}>Enter VIN</Text></Pressable>
-            <Pressable style={styles.choice} onPress={() => { setError(''); setStep('hull'); }}><Text style={styles.choiceText}>Enter hull number</Text></Pressable>
+            <Pressable style={styles.choice} onPress={() => { setError(''); setStep('hull'); }}><Text style={styles.choiceText}>Enter boat hull numbers</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('manual'); }}><Text style={styles.choiceText}>Enter year, make, and model</Text></Pressable>
           </>
         ) : null}
@@ -324,7 +324,7 @@ export default function AddScreen() {
 
         {step === 'hull' ? (
           <>
-            <Text style={styles.heading}>Enter hull number</Text>
+            <Text style={styles.heading}>Enter boat hull numbers</Text>
             <TextInput style={styles.input} placeholder="Hull number" placeholderTextColor={theme.muted} value={vin} onChangeText={setVin} autoCapitalize="characters" />
             <Pressable style={styles.choice} onPress={() => useHull(vin)}>
               <Text style={styles.choiceText}>Use this hull number</Text>
