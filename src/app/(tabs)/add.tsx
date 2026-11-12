@@ -1,12 +1,13 @@
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeButton, RefreshButton } from '../../components/back-link';
 import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { deleteVehicleRecord, loadCachedVehicles, saveCachedVehicles, type CachedVehicle } from '../../fleet-store';
+import { deleteVehicleRecord, loadCachedVehicles, rememberCover, saveCachedVehicles, type CachedVehicle } from '../../fleet-store';
 import { deleteMaintenance, loadMaintenance } from '../../maintenance-store';
 import { OfflineGate } from '../../components/offline-gate';
 import { theme } from '../../theme';
@@ -78,6 +79,7 @@ export default function AddScreen() {
   const [yearMakeModel, setYearMakeModel] = useState('');
   const [specs, setSpecs] = useState('');
   const [vin, setVin] = useState('');
+  const [photoUri, setPhotoUri] = useState('');
   const [saving, setSaving] = useState(false);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState('');
@@ -104,6 +106,7 @@ export default function AddScreen() {
       setYearMakeModel('');
       setSpecs('');
       setVin('');
+      setPhotoUri('');
       setError('');
     };
   }, [loadVehicles]));
@@ -113,6 +116,7 @@ export default function AddScreen() {
     setYearMakeModel('');
     setSpecs('');
     setVin('');
+    setPhotoUri('');
     setError('');
   };
 
@@ -154,6 +158,7 @@ export default function AddScreen() {
       };
       const saved = await loadCachedVehicles();
       await saveCachedVehicles([vehicle, ...saved.filter((item) => item.id !== vehicle.id)]);
+      if (photoUri) await rememberCover(ref.id, photoUri);
       resetForm();
       setStep('menu');
       router.replace('/');
@@ -194,6 +199,14 @@ export default function AddScreen() {
       setError(err instanceof Error ? err.message : 'Could not read the VIN plate.');
       setReading(false);
     }
+  };
+
+  const pickPhoto = async (camera: boolean) => {
+    setError('');
+    const options = { mediaTypes: ['images'] as ImagePicker.MediaType[], quality: 0.92 };
+    const result = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
+    if (result.canceled || !result.assets[0]) return;
+    setPhotoUri(result.assets[0].uri);
   };
 
   const removeVehicle = async (vehicleId: string) => {
@@ -302,6 +315,16 @@ export default function AddScreen() {
             <TextInput style={styles.input} placeholder="e.g. 2004 Dodge 3500" placeholderTextColor={theme.muted} value={yearMakeModel} onChangeText={setYearMakeModel} />
             <Text style={styles.label}>VIN, if it has one</Text>
             <TextInput style={styles.input} placeholder="Optional" placeholderTextColor={theme.muted} value={vin} onChangeText={setVin} autoCapitalize="characters" />
+            <Text style={styles.label}>Card photo</Text>
+            {photoUri ? <Image source={{ uri: photoUri }} style={styles.preview} /> : <Text style={styles.help}>Optional. This is the photo on the machine card.</Text>}
+            <View style={styles.photoRow}>
+              <Pressable style={styles.photoButton} disabled={saving} onPress={() => void pickPhoto(true)}>
+                <Text style={styles.photoButtonText}>{photoUri ? 'Retake photo' : 'Take photo'}</Text>
+              </Pressable>
+              <Pressable style={styles.photoButton} disabled={saving} onPress={() => void pickPhoto(false)}>
+                <Text style={styles.photoButtonText}>{photoUri ? 'Change photo' : 'Photo library'}</Text>
+              </Pressable>
+            </View>
             <Pressable style={styles.choice} disabled={saving} onPress={() => void saveVehicle()}>
               {saving ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.choiceText}>Save vehicle</Text>}
             </Pressable>
@@ -378,6 +401,10 @@ const styles = StyleSheet.create({
   help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
   label: { color: theme.text, fontWeight: '600', marginTop: 14, marginBottom: 6 },
   input: { backgroundColor: theme.input, color: theme.text, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16 },
+  preview: { width: '100%', height: 210, borderRadius: 16, marginTop: 8, backgroundColor: theme.input },
+  photoRow: { flexDirection: 'row', gap: 10 },
+  photoButton: { flex: 1, backgroundColor: theme.card, borderRadius: 14, borderWidth: 1, borderColor: theme.line, minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  photoButtonText: { color: theme.text, fontWeight: '800', fontSize: 15, textAlign: 'center' },
   choice: { backgroundColor: theme.action, borderRadius: 14, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
   choiceText: { color: theme.ink, fontWeight: '800', fontSize: 17 },
   deleteChoice: { backgroundColor: theme.danger, borderRadius: 14, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
