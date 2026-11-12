@@ -205,11 +205,10 @@ export default function AddScreen() {
         {step === 'add' ? (
           <>
             <Text style={styles.heading}>Add vehicle</Text>
-            <Text style={styles.help}>A VIN is optional. Some machines do not have one.</Text>
             <Pressable style={styles.choice} onPress={() => void openCamera('plate')}><Text style={styles.choiceText}>Scan VIN plate</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => void openCamera('barcode')}><Text style={styles.choiceText}>Scan VIN barcode</Text></Pressable>
-            <Pressable style={styles.choiceAlt} onPress={() => { setError(''); setStep('vin'); }}><Text style={styles.choiceAltText}>Enter VIN</Text></Pressable>
-            <Pressable style={styles.choiceAlt} onPress={() => { setError(''); setStep('manual'); }}><Text style={styles.choiceAltText}>Enter year, make, and model</Text></Pressable>
+            <Pressable style={styles.choice} onPress={() => { setError(''); setStep('vin'); }}><Text style={styles.choiceText}>Enter VIN</Text></Pressable>
+            <Pressable style={styles.choice} onPress={() => { setError(''); setStep('manual'); }}><Text style={styles.choiceText}>Enter year, make, and model</Text></Pressable>
           </>
         ) : null}
 
@@ -328,8 +327,6 @@ const styles = StyleSheet.create({
   input: { backgroundColor: theme.input, color: theme.text, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16 },
   choice: { backgroundColor: theme.action, borderRadius: 14, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
   choiceText: { color: theme.ink, fontWeight: '800', fontSize: 17 },
-  choiceAlt: { backgroundColor: theme.card, borderRadius: 14, borderWidth: 1, borderColor: theme.line, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-  choiceAltText: { color: theme.text, fontWeight: '800', fontSize: 17 },
   deleteChoice: { backgroundColor: theme.danger, borderRadius: 14, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   deleteChoiceText: { color: theme.white, fontWeight: '800', fontSize: 17 },
   camera: { width: '100%', height: 360, borderRadius: 16, overflow: 'hidden', marginTop: 12, backgroundColor: '#111' },
