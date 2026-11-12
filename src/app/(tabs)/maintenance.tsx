@@ -62,6 +62,14 @@ export default function MaintenanceScreen() {
 
   useEffect(() => {
     const refresh = () => {
+      void loadCachedVehicles().then((saved) => {
+        if (!saved.length) return;
+        setVehicles((current) => {
+          const byId = new Map(current.map((item) => [item.id, item]));
+          for (const item of saved) if (!byId.has(item.id)) byId.set(item.id, item);
+          return current.length === byId.size ? current : [...byId.values()];
+        });
+      });
       void loadRentals().then(setRentals);
       void loadCovers().then(async (next) => {
         await Promise.all(next.map((cover) => warmDisplayUri(cover.localUri)));

@@ -3,6 +3,8 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput }
 import { useRouter } from 'expo-router';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { loadCachedVehicles, saveCachedVehicles } from '../../fleet-store';
+import { OfflineGate } from '../../components/offline-gate';
 import { theme } from '../../theme';
 
 export default function AddScreen() {
@@ -30,7 +32,17 @@ export default function AddScreen() {
         status: 'Available',
         createdAt: serverTimestamp(),
       });
-      router.replace({ pathname: '/vehicle', params: { id: ref.id } });
+      const vehicle = {
+        id: ref.id,
+        nickname: nickname.trim(),
+        yearMakeModel: yearMakeModel.trim(),
+        specs: specs.trim(),
+        vin: vin.trim().toUpperCase(),
+        status: 'Available',
+      };
+      const saved = await loadCachedVehicles();
+      await saveCachedVehicles([vehicle, ...saved.filter((item) => item.id !== vehicle.id)]);
+      router.replace('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save vehicle');
       setSaving(false);
@@ -38,6 +50,7 @@ export default function AddScreen() {
   };
 
   return (
+    <OfflineGate>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Add Vehicle</Text>
       <Text style={styles.label}>Nickname</Text>
@@ -53,6 +66,7 @@ export default function AddScreen() {
         {saving ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.saveText}>Save Vehicle</Text>}
       </Pressable>
     </ScrollView>
+    </OfflineGate>
   );
 }
 
