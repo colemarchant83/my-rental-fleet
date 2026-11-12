@@ -5,6 +5,7 @@ import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { loadCachedVehicles, loadCovers, loadRentals, saveCachedVehicles, subscribeFleet, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
+import { OfflineGate } from '../../components/offline-gate';
 import { theme } from '../../theme';
 
 type Vehicle = CachedVehicle;
@@ -72,6 +73,7 @@ export default function MaintenanceScreen() {
   }, []);
 
   return (
+    <OfflineGate>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Maintenance Log</Text>
       {ready ? <Text style={styles.count}>{vehicles.length} {vehicles.length === 1 ? 'machine' : 'machines'}</Text> : null}
@@ -110,7 +112,7 @@ export default function MaintenanceScreen() {
                   router.push({ pathname: '/maintenance-record', params: { vehicleId: vehicle.id } });
                 }}
               >
-                <Text style={styles.actionText}>Start maintenance record</Text>
+                <Text style={styles.actionText}>View maintenance records</Text>
               </Pressable>
               {waiting ? <Text style={styles.waiting}>Files are saved on this phone, so nothing will be lost. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.</Text> : null}
             </View>
@@ -118,6 +120,7 @@ export default function MaintenanceScreen() {
         );
       })}
     </ScrollView>
+    </OfflineGate>
   );
 }
 
