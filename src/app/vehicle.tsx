@@ -262,6 +262,9 @@ export default function VehicleDetail() {
       ) : null}
 
       <Text style={styles.section}>Rentals & inspections</Text>
+      <View style={styles.keepNotice}>
+        <Text style={styles.keepNoticeText}>Rental cards, photos, and videos are deleted after one year. Save a card to files if you need to keep it.</Text>
+      </View>
       <Pressable
         style={styles.save}
         onPress={() => router.push({ pathname: '/inspection', params: { vehicleId: id, type: out ? 'checkin' : 'checkout' } })}
@@ -338,6 +341,8 @@ const styles = StyleSheet.create({
   specValue: { color: theme.text, fontSize: 15, fontWeight: '700', marginTop: 2 },
   vin: { alignSelf: 'flex-start', backgroundColor: theme.input, color: theme.text, overflow: 'hidden', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, marginTop: 8 },
   muted: { color: theme.muted, marginTop: 12 },
+  keepNotice: { backgroundColor: '#f4e7d6', borderRadius: 12, padding: 12, marginTop: 10 },
+  keepNoticeText: { color: theme.ink, fontWeight: '700', lineHeight: 20 },
   badge: { alignSelf: 'flex-start', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 },
   badgeIn: { backgroundColor: theme.green },
   badgeOut: { backgroundColor: theme.rent },

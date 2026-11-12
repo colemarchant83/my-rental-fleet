@@ -168,6 +168,9 @@ export default function RentalHistory() {
 
       {rental.checkout.notes ? <Text style={styles.notes}>Checkout notes · {formatStamp(rental.checkout.notesAt)}{'\n'}{rental.checkout.notes}</Text> : null}
       {rental.checkin?.notes ? <Text style={styles.notes}>Return notes · {formatStamp(rental.checkin.notesAt)}{'\n'}{rental.checkin.notes}</Text> : null}
+      <View style={styles.keepNotice}>
+        <Text style={styles.keepNoticeText}>This card, its photos, and its videos are deleted after one year. Save it to files if you need to keep it.</Text>
+      </View>
       <Pressable
         style={[styles.save, saving && styles.saveWaiting]}
         disabled={saving}
@@ -472,6 +475,8 @@ const styles = StyleSheet.create({
   cancel: { marginTop: 8, paddingVertical: 10, alignItems: 'center' },
   cancelText: { color: theme.text, fontWeight: '700' },
   help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
+  keepNotice: { backgroundColor: '#f4e7d6', borderRadius: 12, padding: 12, marginTop: 18 },
+  keepNoticeText: { color: theme.ink, fontWeight: '700', lineHeight: 20 },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.45)', justifyContent: 'center', padding: 24 },
   modalCard: { backgroundColor: theme.card, borderRadius: 16, padding: 18 },
 });
