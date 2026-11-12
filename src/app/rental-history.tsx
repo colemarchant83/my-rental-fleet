@@ -39,9 +39,10 @@ export default function RentalHistory() {
         const found = await rentalByLocalId(localId);
         if (!found) {
           const remote = await fetchRentalByLocalId(localId).catch(() => undefined);
-          if (remote) {
-            openedVehicle.current = remote.vehicleId;
-            setRental(remote);
+          const stored = remote || await getDoc(doc(db, 'rentals', localId)).then((snap) => (snap.exists() ? fromRemote(localId, snap.data() as Record<string, unknown>) : undefined)).catch(() => undefined);
+          if (stored) {
+            openedVehicle.current = stored.vehicleId;
+            setRental(stored);
             return;
           }
           if (openedVehicle.current) router.replace({ pathname: '/vehicle', params: { id: openedVehicle.current } });

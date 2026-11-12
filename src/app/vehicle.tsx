@@ -30,7 +30,6 @@ export default function VehicleDetail() {
   const [shownCount, setShownCount] = useState(5);
   const [older, setOlder] = useState<LocalRental[]>([]);
   const [olderLoaded, setOlderLoaded] = useState(false);
-  const [loadingOlder, setLoadingOlder] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -74,16 +73,29 @@ export default function VehicleDetail() {
   }, [id]);
 
   useEffect(() => {
+    let live = true;
     const refresh = () => {
-      void loadRentals().then((all) => setRentals(all.filter((rental) => rental.vehicleId === id)));
+      void (async () => {
+        const local = (await loadRentals()).filter((rental) => rental.vehicleId === id);
+        if (!live) return;
+        setRentals(local);
+        const remote = await fetchVehicleRentals(id).catch(() => [] as LocalRental[]);
+        if (!live) return;
+        setOlder(remote);
+        setOlderLoaded(true);
+      })();
       void loadCovers().then(async (all) => {
         const found = all.find((item) => item.vehicleId === id);
         if (found) await warmDisplayUri(found.localUri);
-        setCover(found);
+        if (live) setCover(found);
       });
     };
     refresh();
-    return subscribeFleet(refresh);
+    const unsub = subscribeFleet(refresh);
+    return () => {
+      live = false;
+      unsub();
+    };
   }, [id]);
 
   useEffect(() => {
@@ -113,8 +125,8 @@ export default function VehicleDetail() {
   }, [showSpecs, vehicle?.vin, facts]);
 
   const open = rentals.find((rental) => rental.status === 'out');
-  const localIds = new Set(rentals.map((rental) => rental.localId));
-  const combined = [...rentals, ...older.filter((rental) => !localIds.has(rental.localId))];
+  const onPhone = new Set(rentals.flatMap((rental) => [rental.localId, rental.remoteId].filter((item): item is string => !!item)));
+  const combined = [...rentals, ...older.filter((rental) => !onPhone.has(rental.localId) && !(rental.remoteId && onPhone.has(rental.remoteId)))];
   const newestFirst = combined.sort((a, b) => {
     if (a.status === 'out' && b.status !== 'out') return -1;
     if (b.status === 'out' && a.status !== 'out') return 1;
@@ -122,8 +134,7 @@ export default function VehicleDetail() {
   });
   const visibleRentals = newestFirst.slice(0, shownCount);
   const hiddenRentals = newestFirst.length - visibleRentals.length;
-  const closedOnPhone = rentals.filter((rental) => rental.status === 'closed').length;
-  const showMore = hiddenRentals > 0 || (!olderLoaded && closedOnPhone >= 20);
+  const showMore = hiddenRentals > 0;
   const out = !!open;
   const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
   const display = useDisplayUri(cover?.localUri, cover?.remoteUrl || vehicle?.photoUrl);
@@ -272,7 +283,7 @@ export default function VehicleDetail() {
         <Text style={styles.saveText}>{out ? 'Start return inspection' : 'Start pre-rental inspection'}</Text>
       </Pressable>
 
-      {rentals.length === 0 ? <Text style={styles.muted}>No rentals yet.</Text> : visibleRentals.map((rental) => (
+      {newestFirst.length === 0 ? <Text style={styles.muted}>{olderLoaded ? 'No rentals yet.' : 'Loading rental files...'}</Text> : visibleRentals.map((rental) => (
         <Pressable key={rental.localId} style={styles.folder} onPress={() => router.push({ pathname: '/rental-history', params: { localId: rental.localId } })}>
           <View style={[styles.folderTab, rental.status !== 'closed' && styles.folderTabOpen]}>
             <Text style={styles.folderTabText} numberOfLines={1}>{rental.renterName || 'Renter'}</Text>
@@ -293,26 +304,11 @@ export default function VehicleDetail() {
       {showMore ? (
         <Pressable
           style={styles.more}
-          disabled={loadingOlder}
           onPress={() => {
-            if (hiddenRentals > 0) {
-              setShownCount((count) => count + 10);
-              return;
-            }
-            if (!olderLoaded && id) {
-              setLoadingOlder(true);
-              void fetchVehicleRentals(id)
-                .then((remote) => {
-                  setOlder(remote);
-                  setOlderLoaded(true);
-                  const known = new Set(rentals.map((rental) => rental.localId));
-                  if (remote.some((rental) => !known.has(rental.localId))) setShownCount((count) => count + 10);
-                })
-                .finally(() => setLoadingOlder(false));
-            }
+            setShownCount((count) => count + 10);
           }}
         >
-          <Text style={styles.ghostText}>{loadingOlder ? 'Loading...' : `Show the previous ${hiddenRentals > 0 ? Math.min(10, hiddenRentals) : 10}`}</Text>
+          <Text style={styles.ghostText}>{`Show the previous ${Math.min(10, hiddenRentals)}`}</Text>
         </Pressable>
       ) : null}
 
