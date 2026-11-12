@@ -802,6 +802,31 @@ export async function fetchVehicleRentals(vehicleId: string) {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+export async function deleteVehicleRecord(vehicleId: string) {
+  const remote = await fetchVehicleRentals(vehicleId).catch(() => [] as LocalRental[]);
+  const local = (await loadRentals()).filter((rental) => rental.vehicleId === vehicleId);
+  const seen = new Set<string>();
+  for (const rental of [...local, ...remote]) {
+    const key = rental.remoteId || rental.localId;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    await deleteRental(rental);
+  }
+  const covers = await loadCovers();
+  const cover = covers.find((item) => item.vehicleId === vehicleId);
+  if (cover) {
+    await deleteStoredFile(cover.localUri);
+    await deleteStoredObject(cover.remoteUrl);
+  }
+  await saveCovers(covers.filter((item) => item.vehicleId !== vehicleId));
+  const snap = await getDoc(doc(db, 'vehicles', vehicleId)).catch(() => null);
+  const photoUrl = snap?.exists() ? String(snap.get('photoUrl') || '') : '';
+  if (photoUrl) await deleteStoredObject(photoUrl);
+  await deleteDoc(doc(db, 'vehicles', vehicleId));
+  const cached = (await loadCachedVehicles()).filter((item) => item.id !== vehicleId);
+  await saveCachedVehicles(cached, true);
+}
+
 export async function fetchRentalByLocalId(localId: string) {
   const snap = await getDocs(query(collection(db, 'rentals'), where('localId', '==', localId)));
   const first = snap.docs[0];

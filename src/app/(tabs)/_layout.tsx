@@ -65,7 +65,7 @@ export default function TabLayout() {
         name="add"
         options={{
           title: 'My Rental Fleet',
-          tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Add Vehicle</PillLabel>,
+          tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Add/Delete Vehicle</PillLabel>,
           headerRight: () => <HeaderActions home />,
         }}
       />
