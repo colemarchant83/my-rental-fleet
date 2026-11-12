@@ -71,10 +71,6 @@ export function RefreshButton() {
       disabled={!online}
       onPress={() => {
         if (!online) return;
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.location.reload();
-          return;
-        }
         void syncAll();
       }}
     >
