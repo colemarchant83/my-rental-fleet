@@ -2,12 +2,32 @@ import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HomeButton, RefreshButton } from '../../components/back-link';
 import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { deleteVehicleRecord, loadCachedVehicles, saveCachedVehicles, type CachedVehicle } from '../../fleet-store';
 import { deleteMaintenance, loadMaintenance } from '../../maintenance-store';
 import { OfflineGate } from '../../components/offline-gate';
 import { theme } from '../../theme';
+
+function PageBar({ onBack }: { onBack?: () => void }) {
+  return (
+    <View style={styles.pageBar}>
+      {onBack ? (
+        <Pressable onPress={onBack} hitSlop={10}>
+          <Text style={styles.back}>Back</Text>
+        </Pressable>
+      ) : (
+        <View />
+      )}
+      <View style={styles.pageActions}>
+        <HomeButton />
+        <RefreshButton />
+      </View>
+    </View>
+  );
+}
 
 type Step = 'menu' | 'add' | 'delete' | 'plate' | 'barcode' | 'vin' | 'manual' | 'review';
 
@@ -49,6 +69,7 @@ async function readPlate(uri: string) {
 
 export default function AddScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const camera = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [step, setStep] = useState<Step>('menu');
@@ -180,14 +201,16 @@ export default function AddScreen() {
 
   const warned = vehicles.find((item) => item.id === warnId);
   const confirming = vehicles.find((item) => item.id === confirmId);
+  const goBack = () => {
+    setError('');
+    setStep(step === 'review' || step === 'vin' || step === 'manual' || step === 'plate' || step === 'barcode' ? 'add' : 'menu');
+  };
 
   return (
     <OfflineGate>
       {step === 'plate' || step === 'barcode' ? (
-        <View style={styles.scanScreen}>
-          <Pressable onPress={() => { setError(''); setStep('add'); }}>
-            <Text style={styles.back}>Back</Text>
-          </Pressable>
+        <View style={[styles.scanScreen, { paddingTop: insets.top + 8 }]}>
+          <PageBar onBack={goBack} />
           <Text style={styles.heading}>{step === 'plate' ? 'VIN plate' : 'VIN barcode'}</Text>
           <View style={styles.cameraFrame}>
             <CameraView
@@ -214,12 +237,8 @@ export default function AddScreen() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : (
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        {step !== 'menu' ? (
-          <Pressable onPress={() => { setError(''); setStep(step === 'review' || step === 'vin' || step === 'manual' ? 'add' : 'menu'); }}>
-            <Text style={styles.back}>Back</Text>
-          </Pressable>
-        ) : null}
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
+        <PageBar onBack={step === 'menu' ? undefined : goBack} />
 
         {step === 'menu' ? (
           <>
@@ -329,7 +348,9 @@ const styles = StyleSheet.create({
   scanScreen: { flex: 1, backgroundColor: theme.bg, padding: 16 },
   content: { padding: 16, paddingBottom: 48 },
   heading: { fontSize: 32, fontWeight: '800', color: theme.text, marginBottom: 8 },
-  back: { color: theme.accent, fontWeight: '800', fontSize: 16, marginBottom: 12 },
+  back: { color: theme.accent, fontWeight: '800', fontSize: 16 },
+  pageBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  pageActions: { flexDirection: 'row', alignItems: 'center', gap: 22 },
   help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
   label: { color: theme.text, fontWeight: '600', marginTop: 14, marginBottom: 6 },
   input: { backgroundColor: theme.input, color: theme.text, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16 },

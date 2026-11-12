@@ -67,9 +67,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="add"
         options={{
-          title: 'My Rental Fleet',
+          headerShown: false,
           tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Add/Delete Vehicle</PillLabel>,
-          headerRight: () => <HeaderActions home />,
         }}
       />
       <Tabs.Screen name="explore" options={{ href: null }} />
