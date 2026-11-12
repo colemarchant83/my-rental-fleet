@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeButton, RefreshButton } from '../../components/back-link';
 import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { deleteVehicleRecord, loadCachedVehicles, rememberCover, saveCachedVehicles, type CachedVehicle } from '../../fleet-store';
+import { deleteVehicleRecord, loadCachedVehicles, rememberCover, saveCachedVehicles, vehicleIdLine, type CachedVehicle } from '../../fleet-store';
 import { deleteMaintenance, loadMaintenance } from '../../maintenance-store';
 import { OfflineGate } from '../../components/offline-gate';
 import { theme } from '../../theme';
@@ -121,9 +121,18 @@ export default function AddScreen() {
   };
 
   const useVin = async (found: string) => {
-    const next = extractVin(found) || found.trim().toUpperCase();
+    const vinMatch = extractVin(found);
+    const next = vinMatch || found.trim().toUpperCase();
+    if (!next) {
+      setError('Enter a VIN or hull number.');
+      return;
+    }
     setVin(next);
     setError('');
+    if (!vinMatch) {
+      setStep('review');
+      return;
+    }
     setReading(true);
     const decoded = await decodeVin(next).catch(() => ({ yearMakeModel: '', specs: '' }));
     setReading(false);
@@ -291,17 +300,17 @@ export default function AddScreen() {
             <Text style={styles.heading}>Add vehicle</Text>
             <Pressable style={styles.choice} onPress={() => void openCamera('plate')}><Text style={styles.choiceText}>Scan VIN plate</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => void openCamera('barcode')}><Text style={styles.choiceText}>Scan VIN barcode</Text></Pressable>
-            <Pressable style={styles.choice} onPress={() => { setError(''); setStep('vin'); }}><Text style={styles.choiceText}>Enter VIN</Text></Pressable>
+            <Pressable style={styles.choice} onPress={() => { setError(''); setStep('vin'); }}><Text style={styles.choiceText}>Enter VIN or hull number</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('manual'); }}><Text style={styles.choiceText}>Enter year, make, and model</Text></Pressable>
           </>
         ) : null}
 
         {step === 'vin' ? (
           <>
-            <Text style={styles.heading}>Enter VIN</Text>
-            <TextInput style={styles.input} placeholder="17 character VIN" placeholderTextColor={theme.muted} value={vin} onChangeText={setVin} autoCapitalize="characters" />
+            <Text style={styles.heading}>Enter VIN or hull number</Text>
+            <TextInput style={styles.input} placeholder="VIN or hull number" placeholderTextColor={theme.muted} value={vin} onChangeText={setVin} autoCapitalize="characters" />
             <Pressable style={styles.choice} disabled={reading} onPress={() => void useVin(vin)}>
-              {reading ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.choiceText}>Use this VIN</Text>}
+              {reading ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.choiceText}>Use this number</Text>}
             </Pressable>
           </>
         ) : null}
@@ -313,7 +322,7 @@ export default function AddScreen() {
             <TextInput style={styles.input} placeholder="e.g. Dad's truck" placeholderTextColor={theme.muted} value={nickname} onChangeText={setNickname} />
             <Text style={styles.label}>Year, make, model</Text>
             <TextInput style={styles.input} placeholder="e.g. 2004 Dodge 3500" placeholderTextColor={theme.muted} value={yearMakeModel} onChangeText={setYearMakeModel} />
-            <Text style={styles.label}>VIN, if it has one</Text>
+            <Text style={styles.label}>VIN or hull number, if it has one</Text>
             <TextInput style={styles.input} placeholder="Optional" placeholderTextColor={theme.muted} value={vin} onChangeText={setVin} autoCapitalize="characters" />
             <Text style={styles.label}>Card photo</Text>
             {photoUri ? <Image source={{ uri: photoUri }} style={styles.preview} resizeMode="contain" /> : <Text style={styles.help}>Optional. This is the photo on the machine card.</Text>}
@@ -340,7 +349,7 @@ export default function AddScreen() {
                 <View style={styles.rowText}>
                   <Text style={styles.machine}>{vehicle.nickname || vehicle.yearMakeModel || 'Untitled'}</Text>
                   {vehicle.yearMakeModel && vehicle.nickname ? <Text style={styles.meta}>{vehicle.yearMakeModel}</Text> : null}
-                  {vehicle.vin ? <Text style={styles.meta}>VIN {vehicle.vin}</Text> : null}
+                  {vehicle.vin ? <Text style={styles.meta}>{vehicleIdLine(vehicle.vin)}</Text> : null}
                 </View>
                 <Pressable style={styles.delete} onPress={() => { setError(''); setWarnId(vehicle.id); }}>
                   <Text style={styles.deleteText}>Delete</Text>

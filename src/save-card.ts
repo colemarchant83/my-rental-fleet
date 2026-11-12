@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { SPOTS, clocksDisagree, formatDay, formatStamp, loadCachedVehicles, type InspectionSide, type LocalRental, type PhotoRef } from './fleet-store';
+import { SPOTS, clocksDisagree, formatDay, formatStamp, loadCachedVehicles, vehicleIdLine, type InspectionSide, type LocalRental, type PhotoRef } from './fleet-store';
 import { readStoredBlob } from './media';
 import { saveWithPhoneFiles } from './save-phone';
 
@@ -303,7 +303,7 @@ export async function buildRentalCard(rental: LocalRental, knownMachine?: { nick
 <body>
 <main>
   <h1>${esc(rental.renterName || 'Renter')}</h1>
-  <p>${esc(machineName)}${machine?.yearMakeModel ? ` · ${esc(machine.yearMakeModel)}` : ''}${machine?.vin ? ` · VIN ${esc(machine.vin)}` : ''}</p>
+  <p>${esc(machineName)}${machine?.yearMakeModel ? ` · ${esc(machine.yearMakeModel)}` : ''}${machine?.vin ? ` · ${esc(vehicleIdLine(machine.vin))}` : ''}</p>
   <p class="muted">Out ${esc(formatDay(rental.checkout.date))}${rental.checkin ? ` · Back ${esc(formatDay(rental.checkin.date))}` : ''}</p>
   <p class="note">If the inspection was done offline, the server time is recorded when the next internet connection was made.</p>
   <p class="note">The pictures on this page are smaller copies. The full photos and videos are in the check-out and check-in folders.</p>
@@ -393,7 +393,7 @@ export async function buildMaintenanceCard(
 <body>
 <main>
   <h1>${esc(record.work || 'Maintenance record')}</h1>
-  <p>${esc(machineName)}${machine?.yearMakeModel && machine.yearMakeModel !== machineName ? ` · ${esc(machine.yearMakeModel)}` : ''}${machine?.vin ? ` · VIN ${esc(machine.vin)}` : ''}</p>
+  <p>${esc(machineName)}${machine?.yearMakeModel && machine.yearMakeModel !== machineName ? ` · ${esc(machine.yearMakeModel)}` : ''}${machine?.vin ? ` · ${esc(vehicleIdLine(machine.vin))}` : ''}</p>
   <p class="muted">${esc(formatDay(record.date) || 'No date')}</p>
   <p class="note">If this record was saved before the server time was recorded, the server time is filled when the next internet connection was made.</p>
   <p class="note">The pictures on this page are smaller copies. The full photos are in the receipts folder.</p>

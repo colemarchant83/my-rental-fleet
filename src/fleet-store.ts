@@ -93,6 +93,14 @@ export type CachedVehicle = {
   photoAddedAt?: string;
 };
 
+export function vehicleIdLine(value?: string) {
+  const raw = (value || '').trim().toUpperCase();
+  if (!raw) return '';
+  const compact = raw.replace(/[^A-Z0-9]/g, '');
+  if (/^[A-HJ-NPR-Z0-9]{17}$/.test(compact)) return `VIN ${compact}`;
+  return `Hull ${raw}`;
+}
+
 async function readVehicleCache() {
   if (typeof caches === 'undefined') return [] as CachedVehicle[];
   const cache = await caches.open(VEHICLE_CACHE);

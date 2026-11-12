@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, rememberCover, saveCachedVehicles, subscribeFleet, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, rememberCover, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 
@@ -105,6 +105,8 @@ export default function VehicleDetail() {
 
   useEffect(() => {
     if (!showSpecs || !vehicle?.vin || facts) return;
+    const compact = vehicle.vin.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(compact)) return;
     let live = true;
     setFactsLoading(true);
     setFactsError('');
@@ -199,7 +201,7 @@ export default function VehicleDetail() {
 
       <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
       {vehicle.yearMakeModel ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}
-      {vehicle.vin ? <Text style={styles.vin}>VIN {vehicle.vin}</Text> : null}
+      {vehicle.vin ? <Text style={styles.vin}>{vehicleIdLine(vehicle.vin)}</Text> : null}
 
       <View style={[styles.badge, out ? styles.badgeOut : styles.badgeIn]}>
         <Text style={styles.badgeText}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
@@ -242,7 +244,7 @@ export default function VehicleDetail() {
               <Text style={styles.specValue}>{row.value}</Text>
             </View>
           ))}
-          {!vehicle.vin && !factsLoading ? <Text style={styles.specs}>{vehicle.specs || 'Add a VIN to look up specs.'}</Text> : null}
+          {!/^[A-HJ-NPR-Z0-9]{17}$/.test((vehicle.vin || '').toUpperCase().replace(/[^A-Z0-9]/g, '')) && !factsLoading ? <Text style={styles.specs}>{vehicle.vin ? 'Specs lookup is for a VIN. The hull number is saved on the card.' : vehicle.specs || 'Add a VIN to look up specs.'}</Text> : null}
         </View>
       ) : null}
       {editing ? (

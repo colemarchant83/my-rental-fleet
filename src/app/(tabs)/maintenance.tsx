@@ -3,7 +3,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { loadCachedVehicles, loadCovers, loadRentals, saveCachedVehicles, subscribeFleet, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { OfflineGate } from '../../components/offline-gate';
 import { theme } from '../../theme';
@@ -111,7 +111,7 @@ export default function MaintenanceScreen() {
                   {out && renter ? <Text style={styles.renter}>{renter}</Text> : null}
                 </View>
               ) : null}
-              {vehicle.vin ? <Text style={styles.vin}>VIN {vehicle.vin}</Text> : null}
+              {vehicle.vin ? <Text style={styles.vin}>{vehicleIdLine(vehicle.vin)}</Text> : null}
               {savedIds.includes(vehicle.id) ? <Text style={styles.offline}>Saved on this phone for offline use.</Text> : null}
               <Pressable
                 style={styles.action}

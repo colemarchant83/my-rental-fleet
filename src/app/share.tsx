@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { VideoPreview } from '../components/inspection-form';
-import { SPOTS, formatDay, formatStamp, type InspectionSide, type LocalRental } from '../fleet-store';
+import { SPOTS, formatDay, formatStamp, vehicleIdLine, type InspectionSide, type LocalRental } from '../fleet-store';
 import { buildMaintenanceCard, buildRentalCard, deliverRentalFile } from '../save-card';
 import { isMaintenanceShare, loadSharedCard, type SharedCard, type SharedMaintenance } from '../share-link';
 import { OfflineGate } from '../components/offline-gate';
@@ -152,7 +152,7 @@ function SharedRental() {
           <Text style={styles.machine}>
             {card.machineName}
             {card.yearMakeModel && card.yearMakeModel !== card.machineName ? ` · ${card.yearMakeModel}` : ''}
-            {card.vin ? ` · VIN ${card.vin}` : ''}
+            {card.vin ? ` · ${vehicleIdLine(card.vin)}` : ''}
           </Text>
           <Text style={styles.muted}>{formatDay(card.date)}</Text>
           <Text style={styles.muted}>Miles {card.miles || '—'} · Hours {card.hours || '—'} · {card.cost?.trim() ? (card.cost.trim().startsWith('$') ? card.cost.trim() : `$${card.cost.trim()}`) : 'No cost'}</Text>
@@ -172,7 +172,7 @@ function SharedRental() {
       <Text style={styles.machine}>
         {card.machineName}
         {card.yearMakeModel && card.yearMakeModel !== card.machineName ? ` · ${card.yearMakeModel}` : ''}
-        {card.vin ? ` · VIN ${card.vin}` : ''}
+        {card.vin ? ` · ${vehicleIdLine(card.vin)}` : ''}
       </Text>
       <Text style={styles.muted}>
         Out {formatDay(card.checkout.date)}
