@@ -30,7 +30,7 @@ function PageBar({ onBack }: { onBack?: () => void }) {
   );
 }
 
-type Step = 'menu' | 'add' | 'delete' | 'plate' | 'barcode' | 'vin' | 'manual' | 'review';
+type Step = 'menu' | 'add' | 'delete' | 'plate' | 'barcode' | 'vin' | 'hull' | 'manual' | 'review';
 
 function extractVin(text: string) {
   const compact = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -121,23 +121,29 @@ export default function AddScreen() {
   };
 
   const useVin = async (found: string) => {
-    const vinMatch = extractVin(found);
-    const next = vinMatch || found.trim().toUpperCase();
+    const next = extractVin(found) || found.trim().toUpperCase();
     if (!next) {
-      setError('Enter a VIN or hull number.');
+      setError('Enter a VIN.');
       return;
     }
     setVin(next);
     setError('');
-    if (!vinMatch) {
-      setStep('review');
-      return;
-    }
     setReading(true);
     const decoded = await decodeVin(next).catch(() => ({ yearMakeModel: '', specs: '' }));
     setReading(false);
     if (decoded.yearMakeModel) setYearMakeModel(decoded.yearMakeModel);
     if (decoded.specs) setSpecs(decoded.specs);
+    setStep('review');
+  };
+
+  const useHull = (found: string) => {
+    const next = found.trim().toUpperCase();
+    if (!next) {
+      setError('Enter a hull number.');
+      return;
+    }
+    setVin(next);
+    setError('');
     setStep('review');
   };
 
@@ -239,7 +245,7 @@ export default function AddScreen() {
   const confirming = vehicles.find((item) => item.id === confirmId);
   const goBack = () => {
     setError('');
-    setStep(step === 'review' || step === 'vin' || step === 'manual' || step === 'plate' || step === 'barcode' ? 'add' : 'menu');
+    setStep(step === 'review' || step === 'vin' || step === 'hull' || step === 'manual' || step === 'plate' || step === 'barcode' ? 'add' : 'menu');
   };
 
   return (
@@ -300,17 +306,28 @@ export default function AddScreen() {
             <Text style={styles.heading}>Add vehicle</Text>
             <Pressable style={styles.choice} onPress={() => void openCamera('plate')}><Text style={styles.choiceText}>Scan VIN plate</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => void openCamera('barcode')}><Text style={styles.choiceText}>Scan VIN barcode</Text></Pressable>
-            <Pressable style={styles.choice} onPress={() => { setError(''); setStep('vin'); }}><Text style={styles.choiceText}>Enter VIN or hull number</Text></Pressable>
+            <Pressable style={styles.choice} onPress={() => { setError(''); setStep('vin'); }}><Text style={styles.choiceText}>Enter VIN</Text></Pressable>
+            <Pressable style={styles.choice} onPress={() => { setError(''); setStep('hull'); }}><Text style={styles.choiceText}>Enter hull number</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('manual'); }}><Text style={styles.choiceText}>Enter year, make, and model</Text></Pressable>
           </>
         ) : null}
 
         {step === 'vin' ? (
           <>
-            <Text style={styles.heading}>Enter VIN or hull number</Text>
-            <TextInput style={styles.input} placeholder="VIN or hull number" placeholderTextColor={theme.muted} value={vin} onChangeText={setVin} autoCapitalize="characters" />
+            <Text style={styles.heading}>Enter VIN</Text>
+            <TextInput style={styles.input} placeholder="17 character VIN" placeholderTextColor={theme.muted} value={vin} onChangeText={setVin} autoCapitalize="characters" />
             <Pressable style={styles.choice} disabled={reading} onPress={() => void useVin(vin)}>
-              {reading ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.choiceText}>Use this number</Text>}
+              {reading ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.choiceText}>Use this VIN</Text>}
+            </Pressable>
+          </>
+        ) : null}
+
+        {step === 'hull' ? (
+          <>
+            <Text style={styles.heading}>Enter hull number</Text>
+            <TextInput style={styles.input} placeholder="Hull number" placeholderTextColor={theme.muted} value={vin} onChangeText={setVin} autoCapitalize="characters" />
+            <Pressable style={styles.choice} onPress={() => useHull(vin)}>
+              <Text style={styles.choiceText}>Use this hull number</Text>
             </Pressable>
           </>
         ) : null}
