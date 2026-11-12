@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
 import { syncAll, watchConnection } from '../fleet-store';
@@ -69,6 +69,18 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
 
 export default function RootLayout() {
   const router = useRouter();
+  const pathname = usePathname();
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const browser = window.location.pathname.replace(/\/$/, '') || '/';
+    const here = (pathname || '/').replace(/\/$/, '') || '/';
+    if (browser === here) document.getElementById('boot-cover-style')?.remove();
+  }, [pathname]);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const timer = window.setTimeout(() => document.getElementById('boot-cover-style')?.remove(), 2500);
+    return () => window.clearTimeout(timer);
+  }, []);
   useEffect(() => {
     if (typeof navigator === 'undefined' || navigator.onLine !== false) {
       router.prefetch('/inspection');

@@ -26,9 +26,12 @@ function HeaderActions({ home }: { home?: boolean }) {
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const bottom = Math.max(insets.bottom, 12) + 36;
+  const path = typeof window === 'undefined' ? '/' : window.location.pathname;
+  const initialRouteName = path.includes('/maintenance') ? 'maintenance' : path.includes('/add') ? 'add' : 'index';
 
   return (
     <Tabs
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerStyle: { backgroundColor: theme.bg },
         headerTintColor: theme.text,
