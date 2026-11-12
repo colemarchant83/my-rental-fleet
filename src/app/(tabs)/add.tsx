@@ -15,14 +15,14 @@ function PageBar({ onBack }: { onBack?: () => void }) {
   return (
     <View style={styles.pageBar}>
       {onBack ? (
-        <Pressable onPress={onBack} hitSlop={10}>
-          <Text style={styles.back}>Back</Text>
+        <Pressable onPress={onBack} hitSlop={10} style={styles.pageSlot}>
+          <Text style={styles.back}>‹ Back</Text>
         </Pressable>
       ) : (
-        <View />
+        <View style={styles.pageSlot} />
       )}
-      <View style={styles.pageActions}>
-        <HomeButton />
+      <HomeButton />
+      <View style={[styles.pageSlot, styles.pageSlotEnd]}>
         <RefreshButton />
       </View>
     </View>
@@ -350,7 +350,8 @@ const styles = StyleSheet.create({
   heading: { fontSize: 32, fontWeight: '800', color: theme.text, marginBottom: 8 },
   back: { color: theme.accent, fontWeight: '800', fontSize: 16 },
   pageBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  pageActions: { flexDirection: 'row', alignItems: 'center', gap: 22 },
+  pageSlot: { flex: 1 },
+  pageSlotEnd: { alignItems: 'flex-end' },
   help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
   label: { color: theme.text, fontWeight: '600', marginTop: 14, marginBottom: 6 },
   input: { backgroundColor: theme.input, color: theme.text, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16 },
