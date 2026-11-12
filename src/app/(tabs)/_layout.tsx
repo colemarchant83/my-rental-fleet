@@ -9,7 +9,7 @@ enableFreeze(false);
 
 function PillLabel({ focused, children }: { focused: boolean; children: string }) {
   return (
-    <View style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 18, paddingHorizontal: 10, paddingVertical: 8, maxWidth: '100%' }}>
+    <View style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 16, paddingHorizontal: 8, paddingVertical: 6, maxWidth: '100%' }}>
       <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72} style={{ color: focused ? theme.white : theme.text, fontSize: 13, fontWeight: '800', textAlign: 'center', lineHeight: 16 }}>
         {children}
       </Text>
@@ -28,7 +28,7 @@ function HeaderActions({ home }: { home?: boolean }) {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const bottom = Math.max(insets.bottom, 12) + 36;
+  const bottom = Math.max(insets.bottom, 12) + 20;
 
   return (
     <Tabs
@@ -43,14 +43,14 @@ export default function TabLayout() {
         headerRight: () => <HeaderActions />,
         headerRightContainerStyle: { paddingRight: 16 },
         tabBarIcon: () => null,
-        tabBarIconStyle: { width: 0, height: 0 },
-        tabBarItemStyle: { paddingHorizontal: 2, paddingTop: 0 },
+        tabBarIconStyle: { width: 0, height: 0, display: 'none' },
+        tabBarItemStyle: { paddingHorizontal: 2, paddingTop: 0, justifyContent: 'center' },
         tabBarStyle: {
           backgroundColor: theme.card,
           borderTopColor: theme.line,
           borderTopWidth: 1,
-          height: 44 + bottom,
-          paddingTop: 4,
+          height: 58 + bottom,
+          paddingTop: 8,
           paddingBottom: bottom,
         },
         sceneStyle: { backgroundColor: theme.bg },
