@@ -66,19 +66,18 @@ export function HomeButton() {
 export function RefreshButton() {
   const online = useOnline();
   const [label, setLabel] = useState('Refresh');
+  const [flash, setFlash] = useState(false);
   return (
     <Pressable
       hitSlop={8}
       disabled={!online || label !== 'Refresh'}
       onPress={() => {
         if (!online || label !== 'Refresh') return;
-        if (Platform.OS === 'web' && typeof document !== 'undefined') {
-          const flash = document.createElement('div');
-          flash.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:2147483646;pointer-events:none;opacity:0.9';
-          document.body.appendChild(flash);
-          setTimeout(() => flash.remove(), 160);
-        }
-        setLabel('Refreshing...');
+        setFlash(true);
+        setTimeout(() => {
+          setFlash(false);
+          setLabel('Refreshing...');
+        }, 180);
         const started = Date.now();
         void syncAll().finally(() => {
           const wait = Math.max(0, 700 - (Date.now() - started));
@@ -86,7 +85,7 @@ export function RefreshButton() {
         });
       }}
     >
-      <Text style={{ color: online ? theme.accent : theme.muted, fontSize: 16, fontWeight: '700' }}>{label}</Text>
+      <Text style={{ color: !online ? theme.muted : flash ? theme.white : theme.accent, fontSize: 16, fontWeight: '700' }}>{label}</Text>
     </Pressable>
   );
 }
