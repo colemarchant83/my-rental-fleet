@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { clocksDisagree, formatStamp, loadCachedVehicles, todayIso, type CachedVehicle } from '../fleet-store';
-import { loadMaintenanceRecord, saveMaintenance } from '../maintenance-store';
+import { clocksDisagree, formatDay, formatStamp, loadCachedVehicles, todayIso, type CachedVehicle } from '../fleet-store';
+import { deleteMaintenance, loadMaintenanceRecord, saveMaintenance } from '../maintenance-store';
+import { OfflineGate } from '../components/offline-gate';
 import { theme } from '../theme';
 
 export default function MaintenanceEntryScreen() {
@@ -20,6 +21,8 @@ export default function MaintenanceEntryScreen() {
   const [serverSavedAt, setServerSavedAt] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     void loadCachedVehicles().then((vehicles) => {
@@ -56,25 +59,41 @@ export default function MaintenanceEntryScreen() {
       .finally(() => setSaving(false));
   };
 
+  const saved = !!localId;
+
+  const remove = () => {
+    if (!localId) return;
+    setDeleting(true);
+    setError('');
+    void deleteMaintenance(localId)
+      .then(() => router.back())
+      .catch(() => {
+        setDeleting(false);
+        setError('Could not delete this record.');
+      });
+  };
+
   const name = vehicle?.nickname || vehicle?.yearMakeModel || 'This machine';
 
   return (
+    <OfflineGate>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.kicker}>{name}</Text>
-      <Text style={styles.heading}>{localId ? 'Maintenance record' : 'New maintenance record'}</Text>
+      <Text style={styles.heading}>{saved ? 'Maintenance record' : 'New maintenance record'}</Text>
       <Text style={styles.label}>Date</Text>
-      <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" placeholderTextColor={theme.muted} />
+      <TextInput style={styles.input} value={date} onChangeText={setDate} editable={!saved} placeholder="YYYY-MM-DD" placeholderTextColor={theme.muted} />
       <Text style={styles.label}>What was done</Text>
-      <TextInput style={styles.input} value={work} onChangeText={setWork} placeholder="Oil change, tire repair..." placeholderTextColor={theme.muted} />
+      <TextInput style={styles.input} value={work} onChangeText={setWork} editable={!saved} placeholder="Oil change, tire repair..." placeholderTextColor={theme.muted} />
       <Text style={styles.label}>Miles</Text>
-      <TextInput style={styles.input} value={miles} onChangeText={setMiles} placeholder="Miles" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
+      <TextInput style={styles.input} value={miles} onChangeText={setMiles} editable={!saved} placeholder="Miles" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
       <Text style={styles.label}>Hours</Text>
-      <TextInput style={styles.input} value={hours} onChangeText={setHours} placeholder="Hours" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
+      <TextInput style={styles.input} value={hours} onChangeText={setHours} editable={!saved} placeholder="Hours" placeholderTextColor={theme.muted} keyboardType="decimal-pad" />
       <Text style={styles.label}>Notes</Text>
       <TextInput
         style={[styles.input, styles.notes]}
         value={notes}
         onChangeText={setNotes}
+        editable={!saved}
         placeholder="Detailed description of work performed"
         placeholderTextColor={theme.muted}
         multiline
@@ -89,10 +108,34 @@ export default function MaintenanceEntryScreen() {
       ) : null}
       {clocksDisagree(savedAt, serverSavedAt) ? <Text style={styles.error}>Phone time does not match the server.</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Pressable style={styles.save} disabled={saving} onPress={save}>
-        <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save record'}</Text>
-      </Pressable>
+      {saved ? (
+        <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
+          <Text style={styles.deleteText}>Delete this record</Text>
+        </Pressable>
+      ) : (
+        <Pressable style={styles.save} disabled={saving} onPress={save}>
+          <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save record'}</Text>
+        </Pressable>
+      )}
+      <Modal visible={confirming} transparent animationType="fade" onRequestClose={() => setConfirming(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.spotTitle}>Delete this record?</Text>
+            <Text style={styles.help}>
+              This permanently deletes the {work.trim() || 'maintenance'} record from {formatDay(date)}. Nothing from this record is kept. This cannot be undone.
+            </Text>
+            <Pressable style={styles.delete} disabled={deleting} onPress={remove}>
+              <Text style={styles.deleteText}>{deleting ? 'Deleting...' : 'Delete record'}</Text>
+            </Pressable>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Pressable style={styles.cancel} onPress={() => setConfirming(false)} disabled={deleting}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
+    </OfflineGate>
   );
 }
 
@@ -108,4 +151,12 @@ const styles = StyleSheet.create({
   error: { color: theme.danger, marginTop: 12 },
   save: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 18 },
   saveText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
+  delete: { marginTop: 22, backgroundColor: theme.danger, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  deleteText: { color: theme.white, fontWeight: '800' },
+  cancel: { marginTop: 8, paddingVertical: 10, alignItems: 'center' },
+  cancelText: { color: theme.text, fontWeight: '700' },
+  help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
+  spotTitle: { fontWeight: '800', color: theme.text, marginBottom: 8 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.45)', justifyContent: 'center', padding: 24 },
+  modalCard: { backgroundColor: theme.card, borderRadius: 16, padding: 18 },
 });

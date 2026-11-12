@@ -47,6 +47,11 @@ export async function loadMaintenance(vehicleId: string) {
     .sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
 }
 
+export async function deleteMaintenance(localId: string) {
+  const records = await readAll();
+  await writeAll(records.filter((record) => record.localId !== localId));
+}
+
 export async function loadMaintenanceRecord(localId: string) {
   const records = await readAll();
   return records.find((record) => record.localId === localId) ?? null;
