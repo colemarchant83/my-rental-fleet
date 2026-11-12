@@ -25,7 +25,7 @@ function HeaderActions({ home }: { home?: boolean }) {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const bottom = Math.max(insets.bottom, 12) + 18;
+  const bottom = Math.max(insets.bottom, 12) + 36;
 
   return (
     <Tabs
@@ -37,7 +37,7 @@ export default function TabLayout() {
         headerRight: () => <HeaderActions />,
         headerRightContainerStyle: { paddingRight: 16 },
         tabBarIcon: () => null,
-        tabBarItemStyle: { paddingHorizontal: 2, paddingTop: 4 },
+        tabBarItemStyle: { paddingHorizontal: 2 },
         tabBarStyle: {
           backgroundColor: theme.card,
           borderTopColor: theme.line,
