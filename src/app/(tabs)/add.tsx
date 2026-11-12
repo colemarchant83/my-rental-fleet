@@ -238,7 +238,14 @@ export default function AddScreen() {
         </View>
       ) : (
       <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
-        <PageBar onBack={step === 'menu' ? undefined : goBack} />
+        {step === 'menu' ? (
+          <View style={styles.menuBar}>
+            <Text style={styles.brand}>My Rental Fleet</Text>
+            <RefreshButton />
+          </View>
+        ) : (
+          <PageBar onBack={goBack} />
+        )}
 
         {step === 'menu' ? (
           <>
@@ -352,6 +359,8 @@ const styles = StyleSheet.create({
   pageBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   pageSlot: { flex: 1 },
   pageSlotEnd: { alignItems: 'flex-end' },
+  menuBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, marginBottom: 8 },
+  brand: { color: theme.text, fontSize: 17, fontWeight: '700' },
   help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
   label: { color: theme.text, fontWeight: '600', marginTop: 14, marginBottom: 6 },
   input: { backgroundColor: theme.input, color: theme.text, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16 },
