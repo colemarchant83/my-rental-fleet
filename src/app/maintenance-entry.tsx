@@ -94,8 +94,10 @@ export default function MaintenanceEntryScreen() {
                 <Text style={styles.factValue}>{hours || '—'}</Text>
               </View>
             </View>
-            <Text style={styles.factLabel}>Notes</Text>
-            <Text style={styles.noteBody}>{notes.trim() || 'No notes'}</Text>
+            <View style={styles.noteBox}>
+              <Text style={styles.factLabel}>Notes</Text>
+              <Text style={styles.noteBody}>{notes.trim() || 'No notes'}</Text>
+            </View>
             {savedAt ? <Text style={styles.stamp}>Recorded on this phone {formatStamp(savedAt)}</Text> : null}
             {savedAt ? (
               <Text style={styles.stamp}>
@@ -174,6 +176,7 @@ const styles = StyleSheet.create({
   fact: { flex: 1, backgroundColor: theme.bg, borderRadius: 12, padding: 12 },
   factLabel: { color: theme.muted, fontWeight: '700', fontSize: 13 },
   factValue: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 2 },
+  noteBox: { backgroundColor: theme.bg, borderRadius: 12, padding: 12 },
   noteBody: { color: theme.text, marginTop: 6, fontSize: 16, lineHeight: 22 },
   label: { color: theme.muted, fontWeight: '700', marginTop: 16 },
   input: { backgroundColor: theme.input, borderRadius: 12, padding: 14, marginTop: 8, color: theme.text },
