@@ -196,8 +196,8 @@ export default function AddScreen() {
             <Pressable style={styles.choice} onPress={() => { resetForm(); setStep('add'); }}>
               <Text style={styles.choiceText}>Add vehicle</Text>
             </Pressable>
-            <Pressable style={styles.choiceAlt} onPress={() => { setError(''); setStep('delete'); }}>
-              <Text style={styles.choiceAltText}>Delete vehicle</Text>
+            <Pressable style={styles.deleteChoice} onPress={() => { setError(''); setStep('delete'); }}>
+              <Text style={styles.deleteChoiceText}>Delete vehicle</Text>
             </Pressable>
           </>
         ) : null}
@@ -330,6 +330,8 @@ const styles = StyleSheet.create({
   choiceText: { color: theme.ink, fontWeight: '800', fontSize: 17 },
   choiceAlt: { backgroundColor: theme.card, borderRadius: 14, borderWidth: 1, borderColor: theme.line, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   choiceAltText: { color: theme.text, fontWeight: '800', fontSize: 17 },
+  deleteChoice: { backgroundColor: theme.danger, borderRadius: 14, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
+  deleteChoiceText: { color: theme.white, fontWeight: '800', fontSize: 17 },
   camera: { width: '100%', height: 360, borderRadius: 16, overflow: 'hidden', marginTop: 12, backgroundColor: '#111' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 14, marginTop: 12 },
   rowText: { flex: 1 },
