@@ -1,4 +1,4 @@
-const CACHE = 'fleet-shell-v6';
+const CACHE = 'fleet-shell-v7';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -31,7 +31,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     try {
-      const response = await fetch(request);
+      const response = await fetch(request, request.mode === 'navigate' ? { cache: 'no-store' } : undefined);
       if (response && response.ok) void cache.put(request, response.clone());
       return response;
     } catch {
