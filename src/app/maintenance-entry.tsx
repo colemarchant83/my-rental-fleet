@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { clocksDisagree, formatDay, formatStamp, keepPhoto, loadCachedVehicles, todayIso, type CachedVehicle, type PhotoRef } from '../fleet-store';
 import { deleteMaintenance, loadMaintenanceRecord, saveMaintenance } from '../maintenance-store';
+import { buildMaintenanceCard, deliverRentalFile } from '../save-card';
+import { maintenanceReadyToShare, publishMaintenanceShare } from '../share-link';
 import { deleteStoredFile, useDisplayUri } from '../media';
 import { deleteStoredObject } from '../r2';
 import { ZoomModal } from '../components/zoom-modal';
@@ -22,6 +24,7 @@ export default function MaintenanceEntryScreen() {
   const [hours, setHours] = useState('');
   const [cost, setCost] = useState('');
   const [notes, setNotes] = useState('');
+  const [notesAt, setNotesAt] = useState('');
   const [photos, setPhotos] = useState<PhotoRef[]>([]);
   const [savedAt, setSavedAt] = useState('');
   const [serverSavedAt, setServerSavedAt] = useState('');
@@ -31,6 +34,12 @@ export default function MaintenanceEntryScreen() {
   const [deleting, setDeleting] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [fileSaving, setFileSaving] = useState(false);
+  const [fileReady, setFileReady] = useState(false);
+  const [fileNote, setFileNote] = useState('');
+  const [linking, setLinking] = useState(false);
+  const [linkNote, setLinkNote] = useState('');
+  const builtFile = useRef<File | null>(null);
 
   useEffect(() => {
     void loadCachedVehicles().then((vehicles) => {
@@ -45,6 +54,7 @@ export default function MaintenanceEntryScreen() {
       setHours(record.hours || '');
       setCost(record.cost || '');
       setNotes(record.notes);
+      setNotesAt(record.notesAt || '');
       setPhotos(record.photos ?? []);
       setSavedAt(record.savedAt);
       setServerSavedAt(record.serverSavedAt || '');
@@ -213,6 +223,80 @@ export default function MaintenanceEntryScreen() {
       {saved ? (
         <>
           {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Pressable
+            style={[styles.fileSave, fileSaving && styles.saveWaiting]}
+            disabled={fileSaving}
+            onPress={() => {
+              const openSave = (file: File) => {
+                void deliverRentalFile(file).then((method) => {
+                  if (method === 'cancelled') return;
+                  if (method === 'blocked') {
+                    setFileReady(true);
+                    setFileNote('');
+                    return;
+                  }
+                  setFileReady(false);
+                  setFileNote('');
+                });
+              };
+              if (builtFile.current) {
+                openSave(builtFile.current);
+                return;
+              }
+              setFileSaving(true);
+              setFileReady(false);
+              setFileNote('');
+              void buildMaintenanceCard(
+                { work, date, notes, notesAt, miles, hours, cost, savedAt, serverSavedAt, photos },
+                vehicle ? { nickname: vehicle.nickname, yearMakeModel: vehicle.yearMakeModel, vin: vehicle.vin } : undefined,
+              )
+                .then(({ file, missing }) => {
+                  builtFile.current = file;
+                  setFileNote(missing.length ? 'Some photos could not be included because they are not on this phone right now.' : '');
+                  openSave(file);
+                })
+                .catch((err: unknown) => setFileNote(err instanceof Error ? err.message : 'Could not save this card.'))
+                .finally(() => setFileSaving(false));
+            }}
+          >
+            <Text style={styles.fileSaveText}>{fileSaving ? 'Preparing photos...' : fileReady ? 'Ready. Tap to save' : 'Save to files'}</Text>
+          </Pressable>
+          {fileNote ? <Text style={styles.help}>{fileNote}</Text> : null}
+          <Pressable
+            style={[styles.fileLink, linking && styles.saveWaiting]}
+            disabled={linking}
+            onPress={() => {
+              if (!maintenanceReadyToShare(photos)) {
+                setLinkNote('Wait until the photos finish uploading. Then this link can include them.');
+                return;
+              }
+              setLinking(true);
+              setLinkNote('');
+              void publishMaintenanceShare(
+                { work, date, notes, notesAt, miles, hours, cost, savedAt, serverSavedAt, photos },
+                vehicle ? { nickname: vehicle.nickname, yearMakeModel: vehicle.yearMakeModel, vin: vehicle.vin } : undefined,
+              )
+                .then(async (url) => {
+                  if (typeof navigator !== 'undefined' && navigator.share) {
+                    await navigator.share({
+                      title: `${work.trim() || 'Maintenance'} record`,
+                      text: 'Open this link to view the maintenance record and save the photos.',
+                      url,
+                    });
+                    return;
+                  }
+                  setLinkNote(url);
+                })
+                .catch((err: unknown) => {
+                  if (err instanceof Error && err.name === 'AbortError') return;
+                  setLinkNote(err instanceof Error ? err.message : 'Could not make the link.');
+                })
+                .finally(() => setLinking(false));
+            }}
+          >
+            <Text style={styles.fileLinkText}>{linking ? 'Making the link...' : 'Text or email this card'}</Text>
+          </Pressable>
+          {linkNote ? <Text style={styles.help}>{linkNote}</Text> : null}
           <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
             <Text style={styles.deleteText}>Delete this record</Text>
           </Pressable>
@@ -292,6 +376,11 @@ const styles = StyleSheet.create({
   error: { color: theme.danger, marginTop: 12 },
   save: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 18 },
   saveText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
+  fileSave: { marginTop: 22, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  fileSaveText: { color: theme.white, fontWeight: '800' },
+  fileLink: { marginTop: 10, marginBottom: 28, backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.line, paddingVertical: 14, alignItems: 'center' },
+  fileLinkText: { color: theme.text, fontWeight: '800' },
+  saveWaiting: { opacity: 0.55 },
   delete: { marginTop: 22, backgroundColor: theme.danger, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   deleteText: { color: theme.white, fontWeight: '800' },
   cancel: { marginTop: 8, paddingVertical: 10, alignItems: 'center' },

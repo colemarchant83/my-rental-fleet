@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { SPOTS, clocksDisagree, formatDay, formatStamp, loadCachedVehicles, type InspectionSide, type LocalRental } from './fleet-store';
+import { SPOTS, clocksDisagree, formatDay, formatStamp, loadCachedVehicles, type InspectionSide, type LocalRental, type PhotoRef } from './fleet-store';
 import { readStoredBlob } from './media';
 import { saveWithPhoneFiles } from './save-phone';
 
@@ -318,6 +318,102 @@ export async function buildRentalCard(rental: LocalRental, knownMachine?: { nick
 </html>`;
   files.unshift({ name: `${folderName}/Rental card.html`, data: new TextEncoder().encode(html) });
 
+  const file = new File([zipStore(files)], `${folderName}.zip`, { type: 'application/zip' });
+  return { file, missing };
+}
+
+export async function buildMaintenanceCard(
+  record: {
+    work: string;
+    date: string;
+    notes: string;
+    notesAt?: string;
+    miles: string;
+    hours: string;
+    cost: string;
+    savedAt?: string;
+    serverSavedAt?: string;
+    photos: PhotoRef[];
+  },
+  machine?: { nickname?: string; yearMakeModel?: string; vin?: string },
+) {
+  if (typeof document === 'undefined') throw new Error('Saving a card to files works from the web app.');
+  const machineName = machine?.nickname || machine?.yearMakeModel || 'Machine';
+  const files: SavedFile[] = [];
+  const shown = new Map<string, string>();
+  const missing: string[] = [];
+  const folderName = `${safeName(record.work || 'Maintenance')} - ${safeName(formatDay(record.date))}`;
+  const cost = record.cost.trim() ? (record.cost.trim().startsWith('$') ? record.cost.trim() : `$${record.cost.trim()}`) : '—';
+
+  for (let index = 0; index < record.photos.length; index += 1) {
+    const photo = record.photos[index];
+    const filename = `Receipt ${index + 1} ${clockName(photo.addedAt, photo.serverAddedAt, record.serverSavedAt)}`;
+    const blob = await mediaBlob(photo.localUri, photo.remoteUrl);
+    if (!blob) {
+      if (photo.localUri || photo.remoteUrl) missing.push(filename);
+      continue;
+    }
+    const data = await asBytes(blob);
+    const storedName = `${filename}.${extFor(blob, 'jpg')}`;
+    const when = photo.addedAt ? new Date(photo.addedAt) : undefined;
+    files.push({ name: `${folderName}/receipts/${storedName}`, data, modified: when && !Number.isNaN(when.getTime()) ? when : undefined });
+    const preview = await previewUrl(blob);
+    shown.set(String(index), preview || encodeURI(`receipts/${storedName}`));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  const figures = record.photos
+    .map((photo, index) => {
+      const src = shown.get(String(index));
+      if (!src) return '';
+      const file = photo.sha256 ? photo.sha256.slice(0, 8) : '';
+      return `<figure><img src="${src}" alt="Receipt ${index + 1}">${clockLines(photo.addedAt, photo.serverAddedAt, record.serverSavedAt, file)}</figure>`;
+    })
+    .join('');
+
+  const html = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${esc(record.work || 'Maintenance')} · ${esc(machineName)}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #e4d9c8; color: #1c1917; margin: 0; padding: 20px; }
+    main { max-width: 760px; margin: 0 auto; }
+    h1 { margin-bottom: 0; }
+    section { background: #fffdf8; border-radius: 16px; padding: 14px; margin-top: 12px; }
+    img { width: 100%; border-radius: 10px; }
+    figure { margin: 8px 0; }
+    .muted, .stamp { color: #6f6a63; font-size: 13px; }
+    .warn { color: #b42318; font-weight: 700; }
+    .note { font-weight: 700; }
+    ul { padding-left: 18px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>${esc(record.work || 'Maintenance record')}</h1>
+  <p>${esc(machineName)}${machine?.yearMakeModel && machine.yearMakeModel !== machineName ? ` · ${esc(machine.yearMakeModel)}` : ''}${machine?.vin ? ` · VIN ${esc(machine.vin)}` : ''}</p>
+  <p class="muted">${esc(formatDay(record.date) || 'No date')}</p>
+  <p class="note">If this record was saved before the server time was recorded, the server time is filled when the next internet connection was made.</p>
+  <p class="note">The pictures on this page are smaller copies. The full photos are in the receipts folder.</p>
+  ${missing.length ? `<p class="warn">These files were not on this phone and could not be included: ${esc(missing.join(', '))}</p>` : ''}
+  <section>
+    <ul>
+      <li>Miles: ${esc(record.miles || '—')}</li>
+      <li>Hours: ${esc(record.hours || '—')}</li>
+      <li>Cost: ${esc(cost)}</li>
+    </ul>
+    <p>${esc(record.notes.trim() || 'No notes')}${record.notesAt ? ` · ${esc(formatStamp(record.notesAt))}` : ''}</p>
+    <p class="stamp">Phone ${esc(formatStamp(record.savedAt) || '—')}</p>
+    <p class="stamp">${esc(record.serverSavedAt ? `Server ${formatStamp(record.serverSavedAt)}` : 'No server time')}</p>
+    ${clocksDisagree(record.savedAt, record.serverSavedAt) ? '<p class="warn">Phone time does not match the server.</p>' : ''}
+    ${figures || '<p>No photos</p>'}
+  </section>
+</main>
+</body>
+</html>`;
+  files.unshift({ name: `${folderName}/Maintenance record.html`, data: new TextEncoder().encode(html) });
   const file = new File([zipStore(files)], `${folderName}.zip`, { type: 'application/zip' });
   return { file, missing };
 }

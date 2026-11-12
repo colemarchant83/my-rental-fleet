@@ -3,8 +3,9 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { useLocalSearchParams } from 'expo-router';
 import { VideoPreview } from '../components/inspection-form';
 import { SPOTS, formatDay, formatStamp, type InspectionSide, type LocalRental } from '../fleet-store';
-import { buildRentalCard, deliverRentalFile } from '../save-card';
-import { loadSharedCard, type SharedCard } from '../share-link';
+import { buildMaintenanceCard, buildRentalCard, deliverRentalFile } from '../save-card';
+import { isMaintenanceShare, loadSharedCard, type SharedCard, type SharedMaintenance } from '../share-link';
+import { OfflineGate } from '../components/offline-gate';
 import { theme } from '../theme';
 
 function SidePhotos({ title, side }: { title: string; side?: InspectionSide }) {
@@ -39,10 +40,10 @@ function SidePhotos({ title, side }: { title: string; side?: InspectionSide }) {
   );
 }
 
-export default function SharedRental() {
+function SharedRental() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const token = Array.isArray(params.id) ? params.id[0] : params.id;
-  const [card, setCard] = useState<SharedCard | null>(null);
+  const [card, setCard] = useState<SharedCard | SharedMaintenance | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [ready, setReady] = useState(false);
@@ -75,6 +76,33 @@ export default function SharedRental() {
     };
     if (built.current) {
       openSave(built.current);
+      return;
+    }
+    if (isMaintenanceShare(card)) {
+      setSaving(true);
+      setReady(false);
+      setNote('');
+      void buildMaintenanceCard(
+        {
+          work: card.work,
+          date: card.date,
+          notes: card.notes,
+          notesAt: card.notesAt,
+          miles: card.miles,
+          hours: card.hours,
+          cost: card.cost,
+          savedAt: card.savedAt,
+          serverSavedAt: card.serverSavedAt,
+          photos: card.photos,
+        },
+        { nickname: card.machineName, yearMakeModel: card.yearMakeModel, vin: card.vin },
+      )
+        .then(({ file }) => {
+          built.current = file;
+          openSave(file);
+        })
+        .catch((reason: unknown) => setNote(reason instanceof Error ? reason.message : 'Could not save the files.'))
+        .finally(() => setSaving(false));
       return;
     }
     const rental: LocalRental = {
@@ -118,6 +146,28 @@ export default function SharedRental() {
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+      {isMaintenanceShare(card) ? (
+        <>
+          <Text style={styles.title}>{card.work || 'Maintenance record'}</Text>
+          <Text style={styles.machine}>
+            {card.machineName}
+            {card.yearMakeModel && card.yearMakeModel !== card.machineName ? ` · ${card.yearMakeModel}` : ''}
+            {card.vin ? ` · VIN ${card.vin}` : ''}
+          </Text>
+          <Text style={styles.muted}>{formatDay(card.date)}</Text>
+          <Text style={styles.muted}>Miles {card.miles || '—'} · Hours {card.hours || '—'} · {card.cost?.trim() ? (card.cost.trim().startsWith('$') ? card.cost.trim() : `$${card.cost.trim()}`) : 'No cost'}</Text>
+          {card.notes?.trim() ? <Text style={styles.note}>{card.notes}</Text> : null}
+          <Pressable style={styles.save} disabled={saving} onPress={save}>
+            <Text style={styles.saveText}>{saving ? 'Preparing the files...' : ready ? 'Ready. Tap to save' : 'Save to files'}</Text>
+          </Pressable>
+          {note ? <Text style={styles.muted}>{note}</Text> : null}
+          <Text style={styles.muted}>This saves the record and the receipt photos onto this phone or computer.</Text>
+          {card.photos.map((photo) => (
+            <Image key={photo.id || photo.remoteUrl} source={{ uri: photo.remoteUrl }} style={styles.photo} resizeMode="cover" />
+          ))}
+        </>
+      ) : (
+        <>
       <Text style={styles.title}>{card.renterName || 'Rental'}</Text>
       <Text style={styles.machine}>
         {card.machineName}
@@ -135,6 +185,8 @@ export default function SharedRental() {
       <Text style={styles.muted}>This saves the card, the photos, and the videos onto this phone or computer.</Text>
       <SidePhotos title="Check out" side={card.checkout} />
       <SidePhotos title="Check in" side={card.checkin} />
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -154,3 +206,11 @@ const styles = StyleSheet.create({
   photo: { width: '100%', height: 220, borderRadius: 12, marginTop: 10, backgroundColor: theme.input },
   note: { color: theme.text, marginTop: 8 },
 });
+
+export default function SharedRentalScreen() {
+  return (
+    <OfflineGate>
+      <SharedRental />
+    </OfflineGate>
+  );
+}
