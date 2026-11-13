@@ -1,12 +1,17 @@
 import { useRef, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { signOutAccount } from '../account';
+import { deleteAccount } from '../delete-account';
 import { theme } from '../theme';
 
 export function BrandMenu() {
   const anchor = useRef<View>(null);
   const [open, setOpen] = useState(false);
   const [spot, setSpot] = useState({ x: 16, y: 64 });
+  const [warn, setWarn] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
 
   const toggle = () => {
     if (open) {
@@ -23,6 +28,19 @@ export function BrandMenu() {
       return;
     }
     show(16, 52, 24);
+  };
+
+  const remove = async () => {
+    setDeleting(true);
+    setError('');
+    try {
+      await deleteAccount();
+      setConfirm(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete the account.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -42,8 +60,55 @@ export function BrandMenu() {
             >
               <Text style={styles.itemText}>Sign out</Text>
             </Pressable>
+            <Pressable
+              style={styles.item}
+              onPress={() => {
+                setOpen(false);
+                setError('');
+                setWarn(true);
+              }}
+            >
+              <Text style={styles.deleteItem}>Delete account</Text>
+            </Pressable>
           </View>
         </Pressable>
+      </Modal>
+
+      <Modal visible={warn && !confirm} transparent animationType="fade" onRequestClose={() => setWarn(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete this account?</Text>
+            <Text style={styles.help}>Deleting will erase all machines, rental cards, maintenance records, photos, and video. Any necessary files should be saved to files on the phone or computer before deleting.</Text>
+            <Pressable
+              style={styles.deleteWide}
+              onPress={() => {
+                setWarn(false);
+                setConfirm(true);
+              }}
+            >
+              <Text style={styles.deleteText}>Continue</Text>
+            </Pressable>
+            <Pressable style={styles.cancel} onPress={() => setWarn(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={confirm} transparent animationType="fade" onRequestClose={() => { if (!deleting) setConfirm(false); }}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Confirm delete</Text>
+            <Text style={styles.help}>This permanently deletes the account and everything stored with it. The same email can be used again later, but it will be a new empty account.</Text>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
+            <Pressable style={styles.deleteWide} disabled={deleting} onPress={() => void remove()}>
+              {deleting ? <ActivityIndicator color={theme.white} /> : <Text style={styles.deleteText}>Confirm delete</Text>}
+            </Pressable>
+            <Pressable style={styles.cancel} disabled={deleting} onPress={() => setConfirm(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -58,7 +123,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: theme.line,
-    minWidth: 160,
+    minWidth: 180,
     paddingVertical: 4,
     shadowColor: '#1c1917',
     shadowOpacity: 0.16,
@@ -68,4 +133,14 @@ const styles = StyleSheet.create({
   },
   item: { paddingHorizontal: 16, paddingVertical: 12 },
   itemText: { color: theme.text, fontWeight: '800', fontSize: 16 },
+  deleteItem: { color: theme.danger, fontWeight: '800', fontSize: 16 },
+  help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
+  error: { color: theme.danger, marginTop: 12, lineHeight: 20 },
+  deleteWide: { marginTop: 16, backgroundColor: theme.danger, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  deleteText: { color: theme.white, fontWeight: '800' },
+  cancel: { marginTop: 8, paddingVertical: 10, alignItems: 'center' },
+  cancelText: { color: theme.text, fontWeight: '700' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.45)', justifyContent: 'center', padding: 24 },
+  modalCard: { backgroundColor: theme.card, borderRadius: 16, padding: 18 },
+  modalTitle: { fontWeight: '800', color: theme.text, fontSize: 20 },
 });
