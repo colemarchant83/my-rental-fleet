@@ -1,6 +1,7 @@
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   type User,
@@ -32,6 +33,10 @@ export async function signInAccount(email: string, password: string) {
   return credential.user;
 }
 
+export async function resetPassword(email: string) {
+  await sendPasswordResetEmail(auth, email.trim());
+}
+
 export async function signOutAccount() {
   await signOut(auth);
 }
@@ -50,7 +55,7 @@ export async function claimExistingRecords(uid: string) {
 
 export function accountError(error: unknown) {
   const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
-  if (code === 'auth/invalid-email') return 'Enter a valid email address.';
+  if (code === 'auth/invalid-email' || code === 'auth/missing-email') return 'Enter a valid email address.';
   if (code === 'auth/email-already-in-use') return 'That email already has an account. Sign in instead.';
   if (code === 'auth/weak-password') return 'Use a password of at least 6 characters.';
   if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return 'That email or password is not right.';
