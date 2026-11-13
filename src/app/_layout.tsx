@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
-import { SignInScreen } from '../components/sign-in';
-import { claimExistingRecords, watchAccount } from '../account';
+import { SignInScreen, VerifyEmailScreen } from '../components/sign-in';
+import { claimExistingRecords, needsEmailVerification, watchAccount } from '../account';
+import { auth } from '../firebase';
 import { syncAll, watchConnection } from '../fleet-store';
 import { OfflineWall } from '../components/offline-gate';
 import { theme } from '../theme';
@@ -74,30 +75,45 @@ export default function RootLayout() {
   const path = usePathname();
   const [accountReady, setAccountReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
+  const [verified, setVerified] = useState(false);
   const sharing = path.startsWith('/share');
   const claimed = useRef('');
+  const openAccount = useCallback((uid: string) => {
+    setSignedIn(true);
+    setVerified(true);
+    if (claimed.current === uid) {
+      setAccountReady(true);
+      return;
+    }
+    claimed.current = uid;
+    setAccountReady(false);
+    void claimExistingRecords(uid).finally(() => setAccountReady(true));
+  }, []);
+  const finishVerification = useCallback(() => {
+    const uid = auth.currentUser?.uid;
+    if (uid) openAccount(uid);
+  }, [openAccount]);
   useEffect(() => {
     return watchAccount((user) => {
       if (!user) {
         claimed.current = '';
         setSignedIn(false);
+        setVerified(false);
         setAccountReady(true);
         return;
       }
-      if (claimed.current === user.uid) {
+      if (needsEmailVerification(user)) {
         setSignedIn(true);
+        setVerified(false);
         setAccountReady(true);
         return;
       }
-      claimed.current = user.uid;
-      setAccountReady(false);
-      setSignedIn(true);
-      void claimExistingRecords(user.uid).finally(() => setAccountReady(true));
+      openAccount(user.uid);
     });
-  }, []);
+  }, [openAccount]);
   useEffect(() => {
-    if (signedIn || sharing) void syncAll();
-  }, [signedIn, sharing]);
+    if ((signedIn && verified) || sharing) void syncAll();
+  }, [signedIn, verified, sharing]);
   useEffect(() => {
     if (typeof navigator === 'undefined' || navigator.onLine !== false) {
       router.prefetch('/inspection');
@@ -160,7 +176,7 @@ export default function RootLayout() {
     };
   }, [router]);
 
-  const showApp = sharing || (accountReady && signedIn);
+  const showApp = sharing || (accountReady && signedIn && verified);
   return (
     <View style={{ flex: 1 }}>
     {showApp ? (
@@ -184,6 +200,8 @@ export default function RootLayout() {
     </Stack>
     <OfflineWall />
     </View>
+    ) : signedIn && accountReady && !verified ? (
+      <VerifyEmailScreen onVerified={finishVerification} />
     ) : !accountReady ? (
       <View style={{ flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={theme.accent} />
