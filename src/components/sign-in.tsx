@@ -7,14 +7,22 @@ import { theme } from '../theme';
 const RESET_NOTE =
   'If that email has an account, a reset link is on the way. Check the inbox and the spam folder, set a new password, then sign in here.';
 
+type Mode = 'in' | 'up' | 'reset';
+
 export function SignInScreen() {
   const insets = useSafeAreaInsets();
-  const [mode, setMode] = useState<'in' | 'up'>('in');
+  const [mode, setMode] = useState<Mode>('in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+
+  const go = (next: Mode) => {
+    setMode(next);
+    setError('');
+    setNotice('');
+  };
 
   const submit = async () => {
     if (!email.trim() || !password) {
@@ -56,13 +64,12 @@ export function SignInScreen() {
     }
   };
 
+  const heading = mode === 'up' ? 'Create your account' : mode === 'reset' ? 'Reset password' : 'Sign in';
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 28 }]}>
       <Text style={styles.brand}>My Rental Fleet</Text>
-      <Text style={styles.heading}>{mode === 'up' ? 'Create your account' : 'Sign in'}</Text>
-      <Text style={styles.help}>
-        Machines, rental cards, and maintenance records stay with this account. They are still there on a new phone when you sign in.
-      </Text>
+      <Text style={styles.heading}>{heading}</Text>
       <TextInput
         style={styles.input}
         value={email}
@@ -73,34 +80,39 @@ export function SignInScreen() {
         autoCorrect={false}
         keyboardType="email-address"
       />
-      <TextInput
-        style={styles.input}
-        value={password}
-        onChangeText={setPassword}
-        placeholder="Password"
-        placeholderTextColor={theme.muted}
-        secureTextEntry
-      />
+      {mode === 'reset' ? null : (
+        <TextInput
+          style={styles.input}
+          value={password}
+          onChangeText={setPassword}
+          placeholder="Password"
+          placeholderTextColor={theme.muted}
+          secureTextEntry
+        />
+      )}
       {mode === 'in' ? (
-        <Pressable onPress={() => void forgot()} disabled={busy} hitSlop={8}>
+        <Pressable onPress={() => go('reset')} disabled={busy} hitSlop={8}>
           <Text style={styles.forgot}>Forgot password</Text>
         </Pressable>
       ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-      <Pressable style={styles.button} disabled={busy} onPress={() => void submit()}>
-        {busy ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.buttonText}>{mode === 'up' ? 'Create account' : 'Sign in'}</Text>}
+      <Pressable style={styles.button} disabled={busy} onPress={() => void (mode === 'reset' ? forgot() : submit())}>
+        {busy ? (
+          <ActivityIndicator color={theme.ink} />
+        ) : (
+          <Text style={styles.buttonText}>{mode === 'up' ? 'Create account' : mode === 'reset' ? 'Send reset email' : 'Sign in'}</Text>
+        )}
       </Pressable>
-      <Pressable
-        onPress={() => {
-          setMode(mode === 'up' ? 'in' : 'up');
-          setError('');
-          setNotice('');
-        }}
-        hitSlop={8}
-      >
-        <Text style={styles.switch}>{mode === 'up' ? 'I already have an account' : 'Create an account'}</Text>
-      </Pressable>
+      {mode === 'reset' ? (
+        <Pressable onPress={() => go('in')} hitSlop={8}>
+          <Text style={styles.switch}>Back to sign in</Text>
+        </Pressable>
+      ) : (
+        <Pressable onPress={() => go(mode === 'up' ? 'in' : 'up')} hitSlop={8}>
+          <Text style={styles.switch}>{mode === 'up' ? 'I already have an account' : 'Create an account'}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -108,8 +120,7 @@ export function SignInScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg, padding: 20 },
   brand: { color: theme.text, fontSize: 17, fontWeight: '700' },
-  heading: { color: theme.text, fontSize: 32, fontWeight: '800', marginTop: 18 },
-  help: { color: theme.muted, fontSize: 16, lineHeight: 22, marginTop: 10, marginBottom: 18 },
+  heading: { color: theme.text, fontSize: 32, fontWeight: '800', marginTop: 18, marginBottom: 18 },
   input: { backgroundColor: theme.card, borderRadius: 14, borderWidth: 1, borderColor: theme.line, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: theme.text, marginBottom: 10 },
   forgot: { color: theme.accent, fontWeight: '800', fontSize: 16, marginBottom: 8 },
   button: { backgroundColor: theme.action, borderRadius: 16, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
