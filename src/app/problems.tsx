@@ -72,7 +72,7 @@ export default function ProblemsScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: theme.bg }} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}>
       <Text style={{ color: theme.text, fontSize: 28, fontWeight: '800' }}>Problem reports</Text>
       <Text style={{ color: theme.muted, marginTop: 8, marginBottom: 16, lineHeight: 20 }}>
-        These are problems users hit in the app. A short notice also goes to cole@my-rental-fleet.com.
+        These are problems users hit in the app. A short notice also goes to support@my-rental-fleet.com.
       </Text>
       <Pressable onPress={() => void sendTest()} disabled={busy} style={{ backgroundColor: theme.action, borderRadius: 14, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}>
         {busy ? <ActivityIndicator color={theme.ink} /> : <Text style={{ color: theme.ink, fontWeight: '800' }}>Send a test problem</Text>}

@@ -17,7 +17,7 @@ async function pingOwner() {
   const now = Date.now();
   if (now - mailedAt < 15 * 60 * 1000) return;
   mailedAt = now;
-  await fetch('https://formsubmit.co/ajax/cole@my-rental-fleet.com', {
+  await fetch('https://formsubmit.co/ajax/support@my-rental-fleet.com', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
