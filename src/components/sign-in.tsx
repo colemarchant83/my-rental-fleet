@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { accountError, createAccount, resetPassword, signInAccount } from '../account';
+import { accountError, createAccount, emailIsVerified, resetPassword, sendVerificationEmail, signedInEmail, signInAccount, signOutAccount } from '../account';
 import { theme } from '../theme';
 
 const RESET_NOTE =
@@ -117,14 +117,98 @@ export function SignInScreen() {
   );
 }
 
+export function VerifyEmailScreen({ onVerified }: { onVerified: () => void }) {
+  const insets = useSafeAreaInsets();
+  const email = signedInEmail();
+  const [busy, setBusy] = useState<'check' | 'send' | ''>('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    const key = `fleet-verify-sent:${email}`;
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key) === '1') return;
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1');
+    void sendVerificationEmail()
+      .then(() => setNotice(`A confirmation link was sent to ${email || 'your email'}. Check the inbox and the spam folder.`))
+      .catch((err) => {
+        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(key);
+        setError(accountError(err));
+      });
+  }, [email]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onBack = () => {
+      if (document.visibilityState !== 'visible') return;
+      void emailIsVerified().then((ok) => {
+        if (ok) onVerified();
+      });
+    };
+    document.addEventListener('visibilitychange', onBack);
+    return () => document.removeEventListener('visibilitychange', onBack);
+  }, [onVerified]);
+
+  const resend = async () => {
+    setBusy('send');
+    setError('');
+    setNotice('');
+    try {
+      await sendVerificationEmail();
+      setNotice(`A confirmation link was sent to ${email || 'your email'}. Check the inbox and the spam folder.`);
+    } catch (err) {
+      setError(accountError(err));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const check = async () => {
+    setBusy('check');
+    setError('');
+    try {
+      const ok = await emailIsVerified();
+      if (ok) onVerified();
+      else setError('That email is not confirmed yet. Open the link in the message, then tap this again.');
+    } catch (err) {
+      setError(accountError(err));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <View style={[styles.screen, { paddingTop: insets.top + 28 }]}>
+      <Text style={styles.brand}>My Rental Fleet</Text>
+      <Text style={styles.heading}>Confirm your email</Text>
+      <Text style={styles.body}>
+        A link was sent to {email || 'your email'}. Tap it once so the account is tied to the right address. Signing in after that will not ask again.
+      </Text>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+      <Pressable style={styles.button} disabled={busy !== ''} onPress={() => void check()}>
+        {busy === 'check' ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.buttonText}>I tapped the link</Text>}
+      </Pressable>
+      <Pressable style={styles.ghost} disabled={busy !== ''} onPress={() => void resend()}>
+        {busy === 'send' ? <ActivityIndicator color={theme.text} /> : <Text style={styles.ghostText}>Send the email again</Text>}
+      </Pressable>
+      <Pressable onPress={() => void signOutAccount()} hitSlop={8}>
+        <Text style={styles.switch}>Use a different email</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg, padding: 20 },
   brand: { color: theme.text, fontSize: 17, fontWeight: '700' },
   heading: { color: theme.text, fontSize: 32, fontWeight: '800', marginTop: 18, marginBottom: 18 },
+  body: { color: theme.text, fontSize: 16, lineHeight: 22, marginBottom: 16 },
   input: { backgroundColor: theme.card, borderRadius: 14, borderWidth: 1, borderColor: theme.line, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: theme.text, marginBottom: 10 },
   forgot: { color: theme.accent, fontWeight: '800', fontSize: 16, marginBottom: 8 },
   button: { backgroundColor: theme.action, borderRadius: 16, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
   buttonText: { color: theme.ink, fontWeight: '800', fontSize: 17 },
+  ghost: { borderRadius: 16, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 10, borderWidth: 1, borderColor: theme.line, backgroundColor: theme.card },
+  ghostText: { color: theme.text, fontWeight: '800', fontSize: 17 },
   switch: { color: theme.accent, fontWeight: '800', fontSize: 16, marginTop: 18 },
   error: { color: theme.danger, marginBottom: 8, lineHeight: 20 },
   notice: { color: theme.text, marginBottom: 8, lineHeight: 22 },
