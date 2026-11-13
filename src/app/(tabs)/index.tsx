@@ -90,7 +90,7 @@ export default function VehicleListScreen() {
 
   return (
     <ScrollView key={visit} style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>Rental Log</Text>
+      <Text style={styles.heading}>Rentals</Text>
       {ready ? <Text style={styles.count}>{vehicles.length} {vehicles.length === 1 ? 'machine' : 'machines'}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {!ready && !error ? <Text style={styles.intro}>Loading machines...</Text> : null}

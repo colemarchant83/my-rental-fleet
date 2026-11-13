@@ -62,14 +62,14 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'My Rental Fleet',
-          tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Rental Log</PillLabel>,
+          tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Rentals</PillLabel>,
         }}
       />
       <Tabs.Screen
         name="maintenance"
         options={{
           title: 'My Rental Fleet',
-          tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Maintenance Log</PillLabel>,
+          tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Maintenance</PillLabel>,
         }}
       />
       <Tabs.Screen
