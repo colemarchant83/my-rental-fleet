@@ -9,7 +9,7 @@ const RESET_NOTE =
 
 export function SignInScreen() {
   const insets = useSafeAreaInsets();
-  const [mode, setMode] = useState<'in' | 'up'>('up');
+  const [mode, setMode] = useState<'in' | 'up'>('in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
