@@ -4,7 +4,7 @@ import { auth, db } from './firebase';
 const OPERATORS = new Set(['colemarchant3@gmail.com', 'colemarchant@ymail.com']);
 
 const SKIP =
-  /leave this screen open|page unavailable offline|not confirmed yet|enter an email|enter a valid email|already has an account|at least 6 characters|email or password is not right|too many tries|connection is needed to sign in|opening your account/i;
+  /leave this screen open|still on this phone|will be sent again|nothing was deleted|over 100 ?mb|100 ?mb|page unavailable offline|not confirmed yet|enter an email|enter a valid email|already has an account|at least 6 characters|email or password is not right|too many tries|connection is needed to sign in|opening your account/i;
 
 const recent = new Map<string, number>();
 let mailedAt = 0;
