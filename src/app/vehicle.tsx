@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { currentOwnerId } from '../account';
 import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, rememberCover, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
@@ -50,7 +51,12 @@ export default function VehicleDetail() {
         setMissing(true);
         return;
       }
-      const data = snap.data() as Omit<Vehicle, 'id'>;
+      const data = snap.data() as Omit<Vehicle, 'id'> & { ownerId?: string };
+      if (data.ownerId && data.ownerId !== currentOwnerId()) {
+        setVehicle(null);
+        setMissing(true);
+        return;
+      }
       const next = { id: snap.id, ...data };
       setVehicle(next);
       if (!editingRef.current) setNickname(data.nickname || '');

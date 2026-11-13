@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { collection, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { currentOwnerId } from '../../account';
 import { loadCachedVehicles, loadCovers, loadRentals, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
@@ -23,9 +24,10 @@ export default function VehicleListScreen() {
   useEffect(() => {
     let live = true;
     void loadCachedVehicles().then((saved) => {
-      if (!live || !saved.length) return;
-      setVehicles(saved);
-      setSavedIds(saved.map((item) => item.id));
+      const mine = saved.filter((item) => item.ownerId === currentOwnerId());
+      if (!live || !mine.length) return;
+      setVehicles(mine);
+      setSavedIds(mine.map((item) => item.id));
       setReady(true);
     });
     const show = (snapshot: { metadata?: { fromCache?: boolean }; docs: { id: string; data: () => Omit<Vehicle, 'id'> }[] }) => {
@@ -38,7 +40,8 @@ export default function VehicleListScreen() {
         if (next.length) setSavedIds(next.map((item) => item.id));
       });
     };
-    void getDocs(collection(db, 'vehicles')).then(show).catch((err: unknown) => {
+    const owned = query(collection(db, 'vehicles'), where('ownerId', '==', currentOwnerId()));
+    void getDocs(owned).then(show).catch((err: unknown) => {
       if (!live) return;
       setReady(true);
       void loadCachedVehicles().then((saved) => {
@@ -46,7 +49,7 @@ export default function VehicleListScreen() {
       });
     });
     const unsub = onSnapshot(
-      collection(db, 'vehicles'),
+      owned,
       show,
       () => {
         setReady(true);

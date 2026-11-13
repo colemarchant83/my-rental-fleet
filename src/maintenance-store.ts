@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
+import { currentOwnerId } from './account';
 import { proofTimes, type PhotoRef } from './fleet-store';
 import { contentTypeFor, deleteStoredFile } from './media';
 import { beginUpload, deleteStoredObject } from './r2';
@@ -79,6 +80,7 @@ async function pushRecord(record: MaintenanceRecord) {
   await setDoc(doc(db, 'maintenance', record.localId), {
     localId: record.localId,
     vehicleId: record.vehicleId,
+    ownerId: currentOwnerId(),
     date: record.date,
     work: record.work,
     notes: record.notes,
@@ -93,8 +95,11 @@ async function pushRecord(record: MaintenanceRecord) {
 }
 
 async function pullRecords(vehicleId: string) {
+  const uid = currentOwnerId();
   const snap = await getDocs(query(collection(db, 'maintenance'), where('vehicleId', '==', vehicleId)));
-  return snap.docs.map((item) => fromCloud(item.id, item.data() as Record<string, unknown>));
+  return snap.docs
+    .filter((item) => !item.get('ownerId') || item.get('ownerId') === uid)
+    .map((item) => fromCloud(item.id, item.data() as Record<string, unknown>));
 }
 
 /** The phone time stays as it was. A missing server time is filled the next time there is a connection. */

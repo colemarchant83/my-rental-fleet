@@ -5,8 +5,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeButton, RefreshButton } from '../../components/back-link';
-import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { currentOwnerId, signOutAccount } from '../../account';
 import { deleteVehicleRecord, loadCachedVehicles, rememberCover, saveCachedVehicles, vehicleIdLine, type CachedVehicle } from '../../fleet-store';
 import { deleteMaintenance, loadMaintenance } from '../../maintenance-store';
 import { OfflineGate } from '../../components/offline-gate';
@@ -79,7 +80,7 @@ export default function AddScreen() {
 
   const loadVehicles = useCallback(() => {
     void loadCachedVehicles().then(setVehicles);
-    void getDocs(collection(db, 'vehicles')).then((snap) => {
+    void getDocs(query(collection(db, 'vehicles'), where('ownerId', '==', currentOwnerId()))).then((snap) => {
       const next = snap.docs.map((item) => ({ id: item.id, ...item.data() }) as CachedVehicle);
       if (next.length) setVehicles(next);
     }).catch(() => undefined);
@@ -150,6 +151,7 @@ export default function AddScreen() {
         specs: specs.trim(),
         vin: vin.trim().toUpperCase(),
         status: 'Available',
+        ownerId: currentOwnerId(),
         createdAt: serverTimestamp(),
       });
       const vehicle = {
@@ -261,6 +263,9 @@ export default function AddScreen() {
             </Pressable>
             <Pressable style={styles.deleteChoice} onPress={() => { setError(''); setStep('delete'); }}>
               <Text style={styles.deleteChoiceText}>Delete vehicle</Text>
+            </Pressable>
+            <Pressable onPress={() => void signOutAccount()} hitSlop={8}>
+              <Text style={styles.signOut}>Sign out</Text>
             </Pressable>
           </>
         ) : null}
@@ -398,6 +403,7 @@ const styles = StyleSheet.create({
   choiceText: { color: theme.ink, fontWeight: '800', fontSize: 17 },
   deleteChoice: { backgroundColor: theme.danger, borderRadius: 14, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   deleteChoiceText: { color: theme.white, fontWeight: '800', fontSize: 17 },
+  signOut: { color: theme.muted, fontWeight: '700', fontSize: 15, textAlign: 'center', marginTop: 22 },
   cameraFrame: { width: '100%', height: 420, borderRadius: 16, overflow: 'hidden', marginTop: 12, backgroundColor: '#111' },
   cameraFill: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 14, marginTop: 12 },

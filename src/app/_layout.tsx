@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
-import { Pressable, Text, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
+import { SignInScreen } from '../components/sign-in';
+import { claimExistingRecords, watchAccount } from '../account';
 import { syncAll, watchConnection } from '../fleet-store';
 import { OfflineWall } from '../components/offline-gate';
 import { theme } from '../theme';
@@ -69,13 +71,39 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
 
 export default function RootLayout() {
   const router = useRouter();
+  const path = usePathname();
+  const [accountReady, setAccountReady] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const sharing = path.startsWith('/share');
+  const claimed = useRef('');
+  useEffect(() => {
+    return watchAccount((user) => {
+      if (!user) {
+        claimed.current = '';
+        setSignedIn(false);
+        setAccountReady(true);
+        return;
+      }
+      if (claimed.current === user.uid) {
+        setSignedIn(true);
+        setAccountReady(true);
+        return;
+      }
+      claimed.current = user.uid;
+      setAccountReady(false);
+      setSignedIn(true);
+      void claimExistingRecords(user.uid).finally(() => setAccountReady(true));
+    });
+  }, []);
+  useEffect(() => {
+    if (signedIn || sharing) void syncAll();
+  }, [signedIn, sharing]);
   useEffect(() => {
     if (typeof navigator === 'undefined' || navigator.onLine !== false) {
       router.prefetch('/inspection');
       router.prefetch('/vehicle');
       router.prefetch('/rental-history');
     }
-    void syncAll();
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -132,7 +160,10 @@ export default function RootLayout() {
     };
   }, [router]);
 
+  const showApp = sharing || (accountReady && signedIn);
   return (
+    <View style={{ flex: 1 }}>
+    {showApp ? (
     <View style={{ flex: 1 }}>
     <Stack
       screenOptions={{
@@ -152,6 +183,15 @@ export default function RootLayout() {
       <Stack.Screen name="share" options={{ title: 'Rental card', headerBackVisible: false }} />
     </Stack>
     <OfflineWall />
+    </View>
+    ) : !accountReady ? (
+      <View style={{ flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={theme.accent} />
+        <Text style={{ color: theme.muted, marginTop: 12 }}>Opening your account...</Text>
+      </View>
+    ) : (
+      <SignInScreen />
+    )}
     </View>
   );
 }

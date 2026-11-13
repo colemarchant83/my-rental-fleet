@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
+import { currentOwnerId } from './account';
 import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
 import { beginUpload, deleteStoredObject } from './r2';
 
@@ -87,6 +88,7 @@ export type CachedVehicle = {
   yearMakeModel?: string;
   specs?: string;
   vin?: string;
+  ownerId?: string;
   status?: string;
   renterName?: string;
   photoUrl?: string;
@@ -407,6 +409,7 @@ async function noteLargeVideo(bytes: number, folder: string) {
     kind: 'video-over-100mb',
     bytes,
     folder,
+    ownerId: currentOwnerId(),
     createdAt: serverTimestamp(),
   }).catch(() => undefined);
 }
@@ -592,7 +595,7 @@ async function pushRental(passed: LocalRental) {
   let remoteId = rental.remoteId ?? beforeWrite?.remoteId;
   let serverReceivedAt = rental.serverReceivedAt ?? beforeWrite?.serverReceivedAt;
   if (!remoteId) {
-    const created = await addDoc(collection(db, 'rentals'), { ...payload, createdAt: serverTimestamp(), serverReceivedAt: serverTimestamp() });
+    const created = await addDoc(collection(db, 'rentals'), { ...payload, ownerId: currentOwnerId(), createdAt: serverTimestamp(), serverReceivedAt: serverTimestamp() });
     remoteId = created.id;
     const snap = await getDoc(created);
     serverReceivedAt = createdMillis(snap.get('serverReceivedAt')) || serverReceivedAt;
@@ -675,6 +678,11 @@ let queued = false;
 export async function syncAll() {
   if (syncing) {
     queued = true;
+    return;
+  }
+  try {
+    currentOwnerId();
+  } catch {
     return;
   }
   syncing = true;
@@ -804,9 +812,14 @@ function rentalFromDoc(remoteId: string, data: Record<string, unknown>): LocalRe
 }
 
 export async function fetchVehicleRentals(vehicleId: string) {
+  const uid = currentOwnerId();
   const snap = await getDocs(query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId)));
   return snap.docs
     .map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>))
+    .filter((item, index) => {
+      const owner = snap.docs[index]?.get('ownerId');
+      return !owner || owner === uid;
+    })
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -836,7 +849,8 @@ export async function deleteVehicleRecord(vehicleId: string) {
 }
 
 export async function fetchRentalByLocalId(localId: string) {
+  const uid = currentOwnerId();
   const snap = await getDocs(query(collection(db, 'rentals'), where('localId', '==', localId)));
-  const first = snap.docs[0];
+  const first = snap.docs.find((item) => !item.get('ownerId') || item.get('ownerId') === uid);
   return first ? rentalFromDoc(first.id, first.data() as Record<string, unknown>) : undefined;
 }
