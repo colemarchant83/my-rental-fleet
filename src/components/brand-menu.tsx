@@ -91,7 +91,9 @@ export function BrandMenu() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Delete this account?</Text>
-            <Text style={styles.help}>Deleting will erase all machines, rental cards, maintenance records, photos, and video. Any necessary files should be saved to files on the phone or computer before deleting.</Text>
+            <Text style={styles.help}>
+              Deleting will erase all machines, rental cards, maintenance records, photos, and video. Any necessary files should be saved to files on the phone or computer before deleting. Deleting this account <Text style={styles.bold}>does not</Text> cancel your subscription. If you wish to cancel, you must do so through your phone settings or the app stores.
+            </Text>
             <Pressable
               style={styles.deleteWide}
               onPress={() => {
@@ -112,7 +114,9 @@ export function BrandMenu() {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Confirm delete</Text>
-            <Text style={styles.help}>This permanently deletes the account and everything stored with it. The same email can be used again later, but it will be a new empty account.</Text>
+            <Text style={styles.help}>
+              This permanently deletes the account and everything stored with it. The same email can be used again later, but it will be a new empty account. Deleting this account <Text style={styles.bold}>does not</Text> cancel your subscription. If you wish to cancel, you must do so through your phone settings or the app stores.
+            </Text>
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Pressable style={styles.deleteWide} disabled={deleting} onPress={() => void remove()}>
               {deleting ? <ActivityIndicator color={theme.white} /> : <Text style={styles.deleteText}>Confirm delete</Text>}
@@ -148,6 +152,7 @@ const styles = StyleSheet.create({
   itemText: { color: theme.text, fontWeight: '800', fontSize: 16 },
   deleteItem: { color: theme.danger, fontWeight: '800', fontSize: 16 },
   help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
+  bold: { fontWeight: '800', color: theme.text },
   error: { color: theme.danger, marginTop: 12, lineHeight: 20 },
   deleteWide: { marginTop: 16, backgroundColor: theme.danger, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   deleteText: { color: theme.white, fontWeight: '800' },
