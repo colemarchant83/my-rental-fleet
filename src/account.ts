@@ -54,7 +54,7 @@ export function accountError(error: unknown) {
   if (code === 'auth/email-already-in-use') return 'That email already has an account. Sign in instead.';
   if (code === 'auth/weak-password') return 'Use a password of at least 6 characters.';
   if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') return 'That email or password is not right.';
-  if (code === 'auth/operation-not-allowed') return 'Email sign-in is not turned on yet. In Firebase, open Authentication, then Sign-in method, and turn on Email/Password.';
+  if (code === 'auth/operation-not-allowed' || code === 'auth/configuration-not-found') return 'Email sign-in is not turned on yet. In Firebase, open Authentication, click Get started if you see it, then open Sign-in method and turn on Email/Password.';
   if (code === 'auth/network-request-failed') return 'A connection is needed to sign in the first time.';
   if (code === 'auth/too-many-requests') return 'Too many tries. Wait a few minutes and try again.';
   return error instanceof Error ? error.message : 'Could not sign in.';
