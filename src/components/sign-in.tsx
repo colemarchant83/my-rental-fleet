@@ -7,6 +7,10 @@ import { theme } from '../theme';
 const RESET_NOTE =
   'If that email has an account, a reset link is on the way. Check the inbox and the spam folder, set a new password, then sign in here.';
 
+function confirmationNote(email: string) {
+  return `A confirmation link was sent to ${email || 'your email'}. Check the inbox and the spam folder and tap the link.`;
+}
+
 type Mode = 'in' | 'up' | 'reset';
 
 export function SignInScreen() {
@@ -122,18 +126,15 @@ export function VerifyEmailScreen({ onVerified }: { onVerified: () => void }) {
   const email = signedInEmail();
   const [busy, setBusy] = useState<'check' | 'send' | ''>('');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     const key = `fleet-verify-sent:${email}`;
     if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(key) === '1') return;
     if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key, '1');
-    void sendVerificationEmail()
-      .then(() => setNotice(`A confirmation link was sent to ${email || 'your email'}. Check the inbox and the spam folder.`))
-      .catch((err) => {
-        if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(key);
-        setError(accountError(err));
-      });
+    void sendVerificationEmail().catch((err) => {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(key);
+      setError(accountError(err));
+    });
   }, [email]);
 
   useEffect(() => {
@@ -151,10 +152,8 @@ export function VerifyEmailScreen({ onVerified }: { onVerified: () => void }) {
   const resend = async () => {
     setBusy('send');
     setError('');
-    setNotice('');
     try {
       await sendVerificationEmail();
-      setNotice(`A confirmation link was sent to ${email || 'your email'}. Check the inbox and the spam folder.`);
     } catch (err) {
       setError(accountError(err));
     } finally {
@@ -180,11 +179,8 @@ export function VerifyEmailScreen({ onVerified }: { onVerified: () => void }) {
     <View style={[styles.screen, { paddingTop: insets.top + 28 }]}>
       <Text style={styles.brand}>My Rental Fleet</Text>
       <Text style={styles.heading}>Confirm your email</Text>
-      <Text style={styles.body}>
-        A link was sent to {email || 'your email'}. Tap it once so the account is tied to the right address. Signing in after that will not ask again.
-      </Text>
+      <Text style={styles.body}>{confirmationNote(email)}</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       <Pressable style={styles.button} disabled={busy !== ''} onPress={() => void check()}>
         {busy === 'check' ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.buttonText}>I tapped the link</Text>}
       </Pressable>
