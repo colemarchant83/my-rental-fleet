@@ -38,13 +38,11 @@ export function watchAccount(onChange: (user: User | null) => void) {
 
 export async function createAccount(email: string, password: string) {
   const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-  await claimExistingRecords(credential.user.uid);
   return credential.user;
 }
 
 export async function signInAccount(email: string, password: string) {
   const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-  await claimExistingRecords(credential.user.uid);
   return credential.user;
 }
 
