@@ -1,6 +1,7 @@
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
@@ -11,10 +12,24 @@ import { auth, db } from './firebase';
 
 const OWNED = ['vehicles', 'rentals', 'maintenance', 'uploadAlerts'];
 
+/** Accounts created before this confirmation was added stay signed in without it. */
+const VERIFY_AFTER = Date.parse('2026-11-13T19:00:00.000Z');
+
 export function currentOwnerId() {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('Sign in before saving.');
   return uid;
+}
+
+export function signedInEmail() {
+  return auth.currentUser?.email ?? '';
+}
+
+export function needsEmailVerification(user: User) {
+  if (user.emailVerified) return false;
+  const created = Date.parse(user.metadata.creationTime || '');
+  if (!Number.isFinite(created)) return true;
+  return created >= VERIFY_AFTER;
 }
 
 export function watchAccount(onChange: (user: User | null) => void) {
@@ -35,6 +50,28 @@ export async function signInAccount(email: string, password: string) {
 
 export async function resetPassword(email: string) {
   await sendPasswordResetEmail(auth, email.trim());
+}
+
+export async function sendVerificationEmail() {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in before confirming the email.');
+  try {
+    await sendEmailVerification(user, {
+      url: 'https://my-rental-fleet.com',
+      handleCodeInApp: false,
+    });
+  } catch (error) {
+    const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+    if (code !== 'auth/unauthorized-continue-uri') throw error;
+    await sendEmailVerification(user);
+  }
+}
+
+export async function emailIsVerified() {
+  const user = auth.currentUser;
+  if (!user) return false;
+  await user.reload();
+  return user.emailVerified;
 }
 
 export async function signOutAccount() {
