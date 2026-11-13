@@ -5,9 +5,10 @@ import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeButton, RefreshButton } from '../../components/back-link';
+import { BrandMenu } from '../../components/brand-menu';
 import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '../../firebase';
-import { currentOwnerId, signOutAccount } from '../../account';
+import { currentOwnerId } from '../../account';
 import { deleteVehicleRecord, loadCachedVehicles, rememberCover, saveCachedVehicles, vehicleIdLine, type CachedVehicle } from '../../fleet-store';
 import { deleteMaintenance, loadMaintenance } from '../../maintenance-store';
 import { OfflineGate } from '../../components/offline-gate';
@@ -248,7 +249,7 @@ export default function AddScreen() {
       <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
         {step === 'menu' ? (
           <View style={styles.menuBar}>
-            <Text style={styles.brand}>My Rental Fleet</Text>
+            <BrandMenu />
             <RefreshButton />
           </View>
         ) : (
@@ -263,9 +264,6 @@ export default function AddScreen() {
             </Pressable>
             <Pressable style={styles.deleteChoice} onPress={() => { setError(''); setStep('delete'); }}>
               <Text style={styles.deleteChoiceText}>Delete vehicle</Text>
-            </Pressable>
-            <Pressable onPress={() => void signOutAccount()} hitSlop={8}>
-              <Text style={styles.signOut}>Sign out</Text>
             </Pressable>
           </>
         ) : null}
@@ -391,7 +389,6 @@ const styles = StyleSheet.create({
   pageSlot: { flex: 1 },
   pageSlotEnd: { alignItems: 'flex-end' },
   menuBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, marginBottom: 8 },
-  brand: { color: theme.text, fontSize: 17, fontWeight: '700' },
   help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
   label: { color: theme.text, fontWeight: '600', marginTop: 14, marginBottom: 6 },
   input: { backgroundColor: theme.input, color: theme.text, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16 },
@@ -403,7 +400,6 @@ const styles = StyleSheet.create({
   choiceText: { color: theme.ink, fontWeight: '800', fontSize: 17 },
   deleteChoice: { backgroundColor: theme.danger, borderRadius: 14, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   deleteChoiceText: { color: theme.white, fontWeight: '800', fontSize: 17 },
-  signOut: { color: theme.muted, fontWeight: '700', fontSize: 15, textAlign: 'center', marginTop: 22 },
   cameraFrame: { width: '100%', height: 420, borderRadius: 16, overflow: 'hidden', marginTop: 12, backgroundColor: '#111' },
   cameraFill: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 14, marginTop: 12 },

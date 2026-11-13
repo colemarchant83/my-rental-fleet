@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { enableFreeze } from 'react-native-screens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RefreshButton, HomeButton } from '../../components/back-link';
+import { BrandMenu } from '../../components/brand-menu';
 import { theme } from '../../theme';
 
 enableFreeze(false);
@@ -39,7 +40,8 @@ export default function TabLayout() {
         headerStyle: { backgroundColor: theme.bg },
         headerTintColor: theme.text,
         headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '700' },
+        headerTitleAlign: 'left',
+        headerTitle: () => <BrandMenu />,
         headerRight: () => <HeaderActions />,
         headerRightContainerStyle: { paddingRight: 16 },
         tabBarIcon: () => null,
