@@ -147,7 +147,7 @@ function CoverImage({ localUri, remoteUrl }: { localUri?: string; remoteUrl?: st
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg },
   content: { padding: 16, paddingBottom: 40 },
-  heading: { fontSize: 32, fontWeight: '800', color: theme.text },
+  heading: { fontSize: 38, fontWeight: '800', color: theme.text, textAlign: 'center' },
   intro: { color: theme.muted, marginTop: 8, fontSize: 16, lineHeight: 22 },
   count: { color: theme.text, marginTop: 16, marginBottom: 10, fontWeight: '600' },
   error: { color: theme.danger, marginBottom: 8 },
