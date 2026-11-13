@@ -63,7 +63,7 @@ export async function deleteAccount() {
     }
   }
 
-  await AsyncStorage.multiRemove(LOCAL_KEYS);
+  await AsyncStorage.multiRemove([...LOCAL_KEYS, `fleet.vehicles.v1.${uid}`]);
   try {
     await deleteUser(user);
   } catch (err) {

@@ -66,10 +66,11 @@ export default function MaintenanceScreen() {
   useEffect(() => {
     const refresh = () => {
       void loadCachedVehicles().then((saved) => {
-        if (!saved.length) return;
+        const mine = saved.filter((item) => item.ownerId === currentOwnerId());
+        if (!mine.length) return;
         setVehicles((current) => {
           const byId = new Map(current.map((item) => [item.id, item]));
-          for (const item of saved) if (!byId.has(item.id)) byId.set(item.id, item);
+          for (const item of mine) if (!byId.has(item.id)) byId.set(item.id, item);
           return current.length === byId.size ? current : [...byId.values()];
         });
       });

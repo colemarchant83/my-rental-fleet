@@ -80,10 +80,12 @@ export default function AddScreen() {
   const locked = useRef(false);
 
   const loadVehicles = useCallback(() => {
-    void loadCachedVehicles().then(setVehicles);
-    void getDocs(query(collection(db, 'vehicles'), where('ownerId', '==', currentOwnerId()))).then((snap) => {
+    const uid = currentOwnerId();
+    void loadCachedVehicles().then((saved) => setVehicles(saved.filter((item) => item.ownerId === uid)));
+    void getDocs(query(collection(db, 'vehicles'), where('ownerId', '==', uid))).then((snap) => {
       const next = snap.docs.map((item) => ({ id: item.id, ...item.data() }) as CachedVehicle);
-      if (next.length) setVehicles(next);
+      setVehicles(next);
+      void saveCachedVehicles(next, true);
     }).catch(() => undefined);
   }, []);
 
@@ -162,6 +164,7 @@ export default function AddScreen() {
         specs: specs.trim(),
         vin: vin.trim().toUpperCase(),
         status: 'Available',
+        ownerId: currentOwnerId(),
       };
       const saved = await loadCachedVehicles();
       await saveCachedVehicles([vehicle, ...saved.filter((item) => item.id !== vehicle.id)]);

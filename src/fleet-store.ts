@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import { currentOwnerId } from './account';
 import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
 import { beginUpload, deleteStoredObject } from './r2';
@@ -103,31 +103,50 @@ export function vehicleIdLine(value?: string) {
   return `Hull ${raw}`;
 }
 
-async function readVehicleCache() {
+async function readVehicleCache(url = VEHICLE_CACHE_URL) {
   if (typeof caches === 'undefined') return [] as CachedVehicle[];
   const cache = await caches.open(VEHICLE_CACHE);
-  const response = await cache.match(VEHICLE_CACHE_URL);
+  const response = await cache.match(url);
   if (!response) return [] as CachedVehicle[];
   const data = (await response.json()) as CachedVehicle[];
   return Array.isArray(data) ? data : [];
 }
 
-async function writeVehicleCache(vehicles: CachedVehicle[]) {
+async function writeVehicleCache(vehicles: CachedVehicle[], url = VEHICLE_CACHE_URL) {
   if (typeof caches === 'undefined') return;
   const cache = await caches.open(VEHICLE_CACHE);
-  await cache.put(VEHICLE_CACHE_URL, new Response(JSON.stringify(vehicles), { headers: { 'Content-Type': 'application/json' } }));
+  await cache.put(url, new Response(JSON.stringify(vehicles), { headers: { 'Content-Type': 'application/json' } }));
+}
+
+function vehicleCacheKey() {
+  const uid = auth.currentUser?.uid;
+  return uid ? `${VEHICLES_KEY}.${uid}` : '';
 }
 
 export async function loadCachedVehicles() {
-  const stored = await readJson<CachedVehicle[]>(VEHICLES_KEY, []);
-  const cached = await readVehicleCache().catch(() => [] as CachedVehicle[]);
-  return cached.length >= stored.length ? cached : stored;
+  const uid = auth.currentUser?.uid;
+  const key = vehicleCacheKey();
+  if (!uid || !key) return [];
+  const url = `${VEHICLE_CACHE_URL}?owner=${uid}`;
+  const stored = await readJson<CachedVehicle[]>(key, []);
+  const cached = await readVehicleCache(url).catch(() => [] as CachedVehicle[]);
+  const scoped = (cached.length >= stored.length ? cached : stored).filter((item) => item.ownerId === uid);
+  if (scoped.length) return scoped;
+  const legacyStored = await readJson<CachedVehicle[]>(VEHICLES_KEY, []);
+  const legacyCached = await readVehicleCache().catch(() => [] as CachedVehicle[]);
+  const legacy = (legacyCached.length >= legacyStored.length ? legacyCached : legacyStored).filter((item) => item.ownerId === uid);
+  if (legacy.length) await saveCachedVehicles(legacy);
+  return legacy;
 }
 
 export async function saveCachedVehicles(vehicles: CachedVehicle[], allowEmpty = false) {
-  if (!vehicles.length && !allowEmpty) return;
-  await AsyncStorage.setItem(VEHICLES_KEY, JSON.stringify(vehicles));
-  await writeVehicleCache(vehicles).catch(() => undefined);
+  const uid = auth.currentUser?.uid;
+  const key = vehicleCacheKey();
+  if (!uid || !key) return;
+  const mine = vehicles.filter((item) => item.ownerId === uid);
+  if (!mine.length && !allowEmpty) return;
+  await AsyncStorage.setItem(key, JSON.stringify(mine));
+  await writeVehicleCache(mine, `${VEHICLE_CACHE_URL}?owner=${uid}`).catch(() => undefined);
   emit();
 }
 
