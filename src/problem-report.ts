@@ -13,20 +13,41 @@ export function isOperator(email?: string | null) {
   return OPERATORS.has((email || auth.currentUser?.email || '').trim().toLowerCase());
 }
 
-async function pingOwner() {
-  const now = Date.now();
-  if (now - mailedAt < 15 * 60 * 1000) return;
-  mailedAt = now;
-  await fetch('https://formsubmit.co/ajax/support@my-rental-fleet.com', {
+async function sendNotice(message: string) {
+  const response = await fetch('https://formsubmit.co/ajax/support@my-rental-fleet.com', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
       _subject: 'My Rental Fleet problem',
       _template: 'box',
       _captcha: 'false',
-      message: 'A user hit a problem. Open My Rental Fleet, tap the name at the top, then Problem reports.',
+      message,
     }),
-  }).catch(() => undefined);
+  });
+  if (!response.ok) throw new Error('The notice email did not send. Try again in a minute.');
+}
+
+async function pingOwner() {
+  const now = Date.now();
+  if (now - mailedAt < 15 * 60 * 1000) return;
+  mailedAt = now;
+  await sendNotice('A user hit a problem. Open My Rental Fleet, tap the name at the top, then Problem reports.').catch(() => undefined);
+}
+
+export async function sendTestProblem() {
+  const user = auth.currentUser;
+  const when = new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const text = `Test problem report from the owner account at ${when}.`;
+  const page = typeof window === 'undefined' ? '' : window.location.pathname.slice(0, 120);
+  await addDoc(collection(db, 'problems'), {
+    ownerId: user?.uid || '',
+    email: user?.email || '',
+    message: text,
+    where: 'test',
+    page,
+    createdAt: serverTimestamp(),
+  });
+  await sendNotice('Test notice. Open My Rental Fleet, tap the name at the top, then Problem reports.');
 }
 
 export async function reportProblem(message: string, where = 'app') {

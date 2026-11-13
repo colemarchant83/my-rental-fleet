@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-nati
 import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../firebase';
-import { isOperator, reportProblem } from '../problem-report';
+import { isOperator, sendTestProblem } from '../problem-report';
 import { theme } from '../theme';
 
 type Problem = {
@@ -50,7 +50,7 @@ export default function ProblemsScreen() {
     setBusy(true);
     setError('');
     try {
-      await reportProblem('Test problem report from the owner account.', 'test');
+      await sendTestProblem();
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send the test.');
