@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { signOutAccount } from '../account';
+import { isOperator } from '../problem-report';
 import { deleteAccount } from '../delete-account';
 import { theme } from '../theme';
 
@@ -51,6 +53,17 @@ export function BrandMenu() {
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           <View style={[styles.menu, { top: spot.y, left: spot.x }]}>
+            {isOperator() ? (
+              <Pressable
+                style={styles.item}
+                onPress={() => {
+                  setOpen(false);
+                  router.push('/problems');
+                }}
+              >
+                <Text style={styles.itemText}>Problem reports</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               style={styles.item}
               onPress={() => {

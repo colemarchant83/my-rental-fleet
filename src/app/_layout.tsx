@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
 import { SignInScreen, VerifyEmailScreen } from '../components/sign-in';
 import { claimExistingRecords, needsEmailVerification, watchAccount } from '../account';
+import { reportProblem } from '../problem-report';
 import { auth } from '../firebase';
 import { syncAll, watchConnection } from '../fleet-store';
 import { OfflineWall } from '../components/offline-gate';
@@ -27,6 +28,10 @@ function ScreenHeader() {
 
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
   const online = typeof navigator === 'undefined' || navigator.onLine;
+  useEffect(() => {
+    if (!online) return;
+    void reportProblem(error?.message || 'This page hit a problem.', 'screen');
+  }, [error, online]);
   const reload = () => {
     if (typeof window === 'undefined') {
       void retry();
@@ -139,6 +144,16 @@ export default function RootLayout() {
       window.location.reload();
     };
     window.addEventListener('online', refreshAfterReconnect);
+    const reportPageError = (event: ErrorEvent) => {
+      void reportProblem(event.message || 'This page hit a problem.', 'screen');
+    };
+    const reportRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message = reason instanceof Error ? reason.message : String(reason || 'A background task failed.');
+      void reportProblem(message, 'background');
+    };
+    window.addEventListener('error', reportPageError);
+    window.addEventListener('unhandledrejection', reportRejection);
     const stopWatching = watchConnection();
     let cover: HTMLDivElement | undefined;
     let updateCover: (() => void) | undefined;
@@ -167,6 +182,8 @@ export default function RootLayout() {
     }
     return () => {
       window.removeEventListener('online', refreshAfterReconnect);
+      window.removeEventListener('error', reportPageError);
+      window.removeEventListener('unhandledrejection', reportRejection);
       if (updateCover) {
         window.removeEventListener('orientationchange', updateCover);
         window.removeEventListener('resize', updateCover);
@@ -197,6 +214,7 @@ export default function RootLayout() {
       <Stack.Screen name="maintenance-record" options={{ header: () => <ScreenHeader /> }} />
       <Stack.Screen name="maintenance-entry" options={{ header: () => <ScreenHeader /> }} />
       <Stack.Screen name="share" options={{ title: 'Rental card', headerBackVisible: false }} />
+      <Stack.Screen name="problems" options={{ header: () => <ScreenHeader /> }} />
     </Stack>
     <OfflineWall />
     </View>

@@ -5,6 +5,7 @@ import { auth, db } from './firebase';
 import { currentOwnerId } from './account';
 import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
 import { beginUpload, deleteStoredObject } from './r2';
+import { reportProblem } from './problem-report';
 
 export const SPOTS = [
   { id: 'tires', label: 'Tires & wheels' },
@@ -648,6 +649,8 @@ async function pushRental(passed: LocalRental) {
       ? { ...item, checkout: storedCheckout, checkin: storedCheckin ?? item.checkin, status: finalStatus, remoteId, serverReceivedAt, sync: ready ? 'synced' as const : 'pending' as const, syncError: ready ? limitNote : readableSyncError(lastUploadError) || undefined }
       : item
   );
+  const note = ready ? limitNote : readableSyncError(lastUploadError);
+  if (note) void reportProblem(note, 'upload');
   await saveRentals(await prunePhoneRentals(next));
 }
 
@@ -725,6 +728,7 @@ export async function syncAll() {
           }
         } catch (error) {
           const message = readableSyncError(error instanceof Error ? error.message : 'Upload failed');
+          if (message) void reportProblem(message, 'upload');
           const latest = await loadRentals();
           await saveRentals(latest.map((item) => (item.localId === rental.localId ? { ...item, sync: message ? 'error' : 'pending', syncError: message || undefined } : item)));
           if (!tried.has(rental.localId)) {
