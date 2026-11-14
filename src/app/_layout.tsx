@@ -164,11 +164,11 @@ export default function RootLayout() {
       document.head.appendChild(manifest);
       const touch = document.createElement('link');
       touch.rel = 'apple-touch-icon';
-      touch.href = '/apple-touch-icon.png';
+      touch.href = '/apple-touch-icon.png?v=2';
       document.head.appendChild(touch);
       const favicon = document.createElement('link');
       favicon.rel = 'icon';
-      favicon.href = '/icon-192.png';
+      favicon.href = '/icon-192.png?v=2';
       document.head.appendChild(favicon);
       const phone = window.matchMedia('(pointer: coarse)').matches && Math.min(window.screen.width, window.screen.height) < 600;
       if (phone) {
