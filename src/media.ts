@@ -95,6 +95,22 @@ async function putStoredBlob(uri: string, blob: Blob) {
 }
 
 const displayUrls = new Map<string, string>();
+let thumbActive = 0;
+const thumbQueue: (() => void)[] = [];
+
+function scheduleThumb<T>(work: () => Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const start = () => {
+      thumbActive += 1;
+      work().then(resolve, reject).finally(() => {
+        thumbActive -= 1;
+        thumbQueue.shift()?.();
+      });
+    };
+    if (thumbActive < 2) start();
+    else thumbQueue.push(start);
+  });
+}
 
 function thumbUri(uri: string) {
   return `idb:thumb-${uri.slice(4)}`;
@@ -189,7 +205,7 @@ export function useDisplayUri(localUri?: string, remoteUrl?: string) {
       };
     }
     if (stored.startsWith('idb:')) {
-      void warmDisplayUri(stored).then(() => {
+      void scheduleThumb(() => warmDisplayUri(stored)).then(() => {
         if (live) setShown(displayUrls.get(stored) ?? '');
       });
       return () => {

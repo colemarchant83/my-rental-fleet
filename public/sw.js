@@ -1,4 +1,4 @@
-const CACHE = 'fleet-shell-v8';
+const CACHE = 'fleet-shell-v9';
 const PHOTO_CACHE = 'fleet-photos-v1';
 
 self.addEventListener('install', () => {
@@ -21,6 +21,7 @@ self.addEventListener('activate', (event) => {
       await caches.delete(key);
     }
     await self.clients.claim();
+    await caches.delete(PHOTO_CACHE);
   })());
 });
 
@@ -28,6 +29,7 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+  if (url.pathname.includes('/media/captures/') || url.pathname.includes('/media/rentals/') || url.pathname.includes('/media/maintenance/')) return;
   if (request.destination === 'image' && url.origin !== self.location.origin) {
     event.respondWith((async () => {
       const cache = await caches.open(PHOTO_CACHE);

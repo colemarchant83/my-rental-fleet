@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { createElement, useEffect, useRef, useState } from 'react';
+import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -331,9 +331,23 @@ function HistoryPhoto({ photo, style, onOpen, empty, compact }: { photo: Stamped
     return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
   }
   return (
-    <View style={compact ? styles.extraWrap : undefined}>
+    <View style={compact ? styles.extraWrap : styles.frame}>
       <Pressable onPress={() => onOpen(display.uri)}>
-        <Image source={{ uri: display.uri }} style={style} resizeMode="cover" onError={display.failRemote} />
+        {Platform.OS === 'web'
+          ? createElement('img', {
+              src: display.uri,
+              alt: '',
+              loading: 'lazy',
+              decoding: 'async',
+              onError: display.failRemote,
+              style: {
+                width: '100%',
+                height: compact ? 48 : 140,
+                objectFit: 'cover',
+                display: 'block',
+              },
+            })
+          : <Image source={{ uri: display.uri }} style={style} resizeMode="cover" onError={display.failRemote} />}
         {compact ? null : <Text pointerEvents="none" style={styles.enlarge}>Enlarge</Text>}
       </Pressable>
       {!compact && photo.addedAt ? <Text style={styles.photoStamp}>{formatStamp(photo.addedAt)}</Text> : null}
