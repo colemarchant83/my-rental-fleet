@@ -301,7 +301,22 @@ export function remoteMediaLoads(url: string, kind: 'image' | 'video') {
         const video = document.createElement('video');
         video.crossOrigin = 'anonymous';
         video.preload = 'metadata';
-        video.onloadedmetadata = () => done(true);
+        video.onloadedmetadata = () => {
+          if (Number.isFinite(video.duration) && video.duration > 0) {
+            done(true);
+            return;
+          }
+          const onTime = () => {
+            video.removeEventListener('timeupdate', onTime);
+            done(Number.isFinite(video.duration) && video.duration > 0);
+          };
+          video.addEventListener('timeupdate', onTime);
+          try {
+            video.currentTime = 1e101;
+          } catch {
+            done(false);
+          }
+        };
         video.onerror = () => done(false);
         video.src = url;
         return;

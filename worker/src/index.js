@@ -15,8 +15,9 @@ function cors(origin) {
   const allow = ALLOWED.has(origin) ? origin : 'https://my-rental-fleet.web.app';
   return {
     'Access-Control-Allow-Origin': allow,
-    'Access-Control-Allow-Methods': 'PUT, GET, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'PUT, GET, HEAD, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Range',
+    'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
     'Access-Control-Max-Age': '86400',
   };
 }
@@ -40,6 +41,19 @@ async function deleteOldRentalMedia(env) {
     } while (cursor && removed < 500);
   }
   return removed;
+}
+
+function byteRange(header, size) {
+  if (!header) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) return null;
+  const start = match[1] === '' ? undefined : Number(match[1]);
+  const end = match[2] === '' ? undefined : Number(match[2]);
+  if (start === undefined && end === undefined) return null;
+  if (start === undefined) return { suffix: Math.min(end, size) };
+  if (start >= size || (end !== undefined && end < start)) return 'unsatisfiable';
+  const last = end === undefined || end >= size ? size - 1 : end;
+  return { offset: start, length: last - start + 1 };
 }
 
 export default {
@@ -102,22 +116,37 @@ export default {
       });
     }
 
-    if ((request.method === 'GET' || request.method === 'DELETE') && url.pathname.startsWith('/media/')) {
+    if ((request.method === 'GET' || request.method === 'HEAD' || request.method === 'DELETE') && url.pathname.startsWith('/media/')) {
       const key = safeKey(url.pathname.slice('/media/'.length));
       if (!key) return new Response('Bad key', { status: 400, headers: cors(origin) });
       if (request.method === 'DELETE') {
         await env.BUCKET.delete(key);
         return new Response('Deleted', { status: 200, headers: cors(origin) });
       }
-      const object = await env.BUCKET.get(key);
+      const head = await env.BUCKET.head(key);
+      if (!head) return new Response('Not found', { status: 404, headers: cors(origin) });
+      const range = byteRange(request.headers.get('Range'), head.size);
+      if (range === 'unsatisfiable') {
+        return new Response(null, {
+          status: 416,
+          headers: { ...cors(origin), 'Content-Range': `bytes */${head.size}` },
+        });
+      }
+      const object = await env.BUCKET.get(key, range ? { range } : undefined);
       if (!object) return new Response('Not found', { status: 404, headers: cors(origin) });
-      return new Response(object.body, {
-        headers: {
-          ...cors(origin),
-          'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
-          'Cache-Control': 'public, max-age=86400',
-        },
-      });
+      const span = object.range;
+      const status = span ? 206 : 200;
+      const length = span ? span.length : object.size;
+      const headers = {
+        ...cors(origin),
+        'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
+        'Content-Length': String(length),
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=86400',
+      };
+      if (span) headers['Content-Range'] = `bytes ${span.offset}-${span.offset + span.length - 1}/${object.size}`;
+      if (request.method === 'HEAD') return new Response(null, { status, headers });
+      return new Response(object.body, { status, headers });
     }
 
     return new Response('Not found', { status: 404, headers: cors(origin) });

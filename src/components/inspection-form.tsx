@@ -496,13 +496,14 @@ export function VideoPreview({ uri }: { uri?: string }) {
     );
   }
   if (Platform.OS === 'web') {
+    const playable = src.startsWith('http') || src.startsWith('blob:') ? `${src.split('#')[0]}#t=0.001` : src;
     return (
       <View style={styles.videoFrame}>
         {createElement('video', {
-          src,
+          src: playable,
           controls: true,
           playsInline: true,
-          preload: 'none',
+          preload: 'metadata',
           style: { width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#1c1917' },
         })}
       </View>

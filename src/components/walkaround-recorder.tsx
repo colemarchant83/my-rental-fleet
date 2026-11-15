@@ -58,7 +58,11 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
     setError('');
     setSeconds(0);
     setRecording(true);
-    void session.current.start().catch(() => {
+    void session.current.start(() => {
+      setRecording(false);
+      setSaving(false);
+      setError('The camera stopped while the signal was changing. This video was not saved. Record it again.');
+    }).catch(() => {
       setRecording(false);
       setError('Recording could not start. Try again.');
     });
@@ -73,9 +77,9 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
       url = await session.current.finish();
       session.current.stop();
       await onRecorded(url);
-    } catch {
+    } catch (error) {
       setSaving(false);
-      setError('This video could not be saved on the device. Try again.');
+      setError(error instanceof Error && error.message.startsWith('This video') ? error.message : 'This video could not be saved on the device. Try again.');
     } finally {
       if (url) URL.revokeObjectURL(url);
     }
@@ -126,7 +130,7 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
 
 type WebSession = {
   preview: MediaStream;
-  start: () => Promise<void>;
+  start: (onInterrupted: (message: string) => void) => Promise<void>;
   finish: () => Promise<string>;
   stop: () => void;
 };
@@ -162,8 +166,12 @@ async function openWebCamera(): Promise<WebSession> {
   const capped = capAt1080(stream);
   let recorder: MediaRecorder | null = null;
   let chunks: Blob[] = [];
+  let stopping = false;
+  let interrupted = false;
+  let watch = 0;
 
   const stop = () => {
+    window.clearInterval(watch);
     capped.stop();
     if (recorder && recorder.state === 'recording') recorder.stop();
     stream.getTracks().forEach((item) => item.stop());
@@ -171,8 +179,11 @@ async function openWebCamera(): Promise<WebSession> {
 
   return {
     preview: stream,
-    start: async () => {
+    start: async (onInterrupted) => {
       chunks = [];
+      stopping = false;
+      interrupted = false;
+      window.clearInterval(watch);
       const output = await capped.ready;
       const mime = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find((type) => MediaRecorder.isTypeSupported(type));
       const options: MediaRecorderOptions = { videoBitsPerSecond: 4_000_000 };
@@ -181,7 +192,25 @@ async function openWebCamera(): Promise<WebSession> {
       recorder.ondataavailable = (event) => {
         if (event.data.size) chunks.push(event.data);
       };
-      recorder.start(1000);
+      const cutOff = () => {
+        if (stopping || interrupted) return;
+        interrupted = true;
+        stopping = true;
+        window.clearInterval(watch);
+        onInterrupted('The camera stopped while the signal was changing. This video was not saved. Record it again.');
+        if (recorder && recorder.state === 'recording') recorder.stop();
+      };
+      recorder.onerror = () => cutOff();
+      output.getVideoTracks().forEach((track) => {
+        track.addEventListener('ended', () => {
+          if (!stopping) cutOff();
+        });
+      });
+      watch = window.setInterval(() => {
+        if (capped.stalled()) cutOff();
+      }, 1000);
+      // One finished file when they press stop. A one-second slice leaves a file with no ending, which the iPhone plays as a live broadcast.
+      recorder.start();
     },
     finish: () =>
       new Promise((resolve, reject) => {
@@ -189,13 +218,21 @@ async function openWebCamera(): Promise<WebSession> {
           reject(new Error('not recording'));
           return;
         }
+        stopping = true;
+        window.clearInterval(watch);
         recorder.onstop = () => {
           const blob = new Blob(chunks, { type: recorder?.mimeType || 'video/mp4' });
-          if (!blob.size) {
-            reject(new Error('empty'));
+          if (interrupted || !blob.size) {
+            reject(new Error('This video was cut off before it finished saving. It was not kept. Record it again.'));
             return;
           }
-          resolve(URL.createObjectURL(blob));
+          void recordedVideoPlays(blob).then((ok) => {
+            if (!ok) {
+              reject(new Error('This video was cut off before it finished saving. It was not kept. Record it again.'));
+              return;
+            }
+            resolve(URL.createObjectURL(blob));
+          });
         };
         recorder.stop();
       }),
@@ -230,6 +267,9 @@ function capAt1080(source: MediaStream) {
   const context = canvas.getContext('2d');
   let drawing = true;
   let captured: MediaStream | null = null;
+  let seenFrame = false;
+  let lastTime = -1;
+  let lastMove = Date.now();
   const ready = new Promise<MediaStream>((resolve) => {
     const wait = () => {
       if (!drawing) return;
@@ -252,6 +292,11 @@ function capAt1080(source: MediaStream) {
       if (audio) captured.addTrack(audio);
       const draw = () => {
         if (!drawing || !context) return;
+        if (video.currentTime !== lastTime) {
+          seenFrame = true;
+          lastTime = video.currentTime;
+          lastMove = Date.now();
+        }
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         requestAnimationFrame(draw);
       };
@@ -262,11 +307,56 @@ function capAt1080(source: MediaStream) {
   });
   return {
     ready,
+    stalled: () => seenFrame && Date.now() - lastMove > 3000,
     stop: () => {
       drawing = false;
       captured?.getTracks().forEach((item) => item.stop());
     },
   };
+}
+
+function recordedVideoPlays(blob: Blob) {
+  return new Promise<boolean>((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const video = document.createElement('video');
+    video.preload = 'auto';
+    video.muted = true;
+    video.playsInline = true;
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      video.removeAttribute('src');
+      video.load();
+      resolve(ok);
+    };
+    const timer = window.setTimeout(() => finish(false), 15000);
+    const accept = () => {
+      window.clearTimeout(timer);
+      const visible = video.videoWidth > 0;
+      const timed = Number.isFinite(video.duration) && video.duration >= 0.4;
+      finish(visible && (timed || video.duration === Infinity));
+    };
+    video.onloadedmetadata = () => {
+      if (video.videoWidth > 0 && Number.isFinite(video.duration) && video.duration >= 0.4) {
+        accept();
+        return;
+      }
+      video.addEventListener('timeupdate', () => accept(), { once: true });
+      try {
+        video.currentTime = 1e101;
+      } catch {
+        accept();
+      }
+      window.setTimeout(accept, 1500);
+    };
+    video.onerror = () => {
+      window.clearTimeout(timer);
+      finish(false);
+    };
+    video.src = url;
+  });
 }
 
 function NativeRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
