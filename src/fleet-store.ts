@@ -6,6 +6,7 @@ import { currentOwnerId } from './account';
 import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
 import { beginUpload, deleteStoredObject } from './r2';
 import { reportProblem } from './problem-report';
+import { ONE_YEAR_MS, rentalPastOneYear } from './retention';
 
 export const SPOTS = [
   { id: 'tires', label: 'Tires & wheels' },
@@ -619,12 +620,18 @@ async function pushRental(passed: LocalRental) {
     remoteId = created.id;
     const snap = await getDoc(created);
     serverReceivedAt = createdMillis(snap.get('serverReceivedAt')) || serverReceivedAt;
+    if (serverReceivedAt) {
+      await updateDoc(doc(db, 'rentals', remoteId), { deleteAfter: serverReceivedAt + ONE_YEAR_MS }).catch(() => undefined);
+    }
   } else {
     await updateDoc(doc(db, 'rentals', remoteId), payload);
     if (!serverReceivedAt) {
       await updateDoc(doc(db, 'rentals', remoteId), { serverReceivedAt: serverTimestamp() });
       const snap = await getDoc(doc(db, 'rentals', remoteId));
       serverReceivedAt = createdMillis(snap.get('serverReceivedAt')) || undefined;
+      if (serverReceivedAt) {
+        await updateDoc(doc(db, 'rentals', remoteId), { deleteAfter: serverReceivedAt + ONE_YEAR_MS }).catch(() => undefined);
+      }
     }
   }
 
@@ -695,6 +702,26 @@ async function cacheProfilePhotos() {
 let syncing = false;
 let queued = false;
 
+async function purgeExpiredRentals() {
+  const stamp = await AsyncStorage.getItem('fleet-retention-checked').catch(() => null);
+  if (stamp && Date.now() - Number(stamp) < 12 * 60 * 60 * 1000) return;
+  const uid = currentOwnerId();
+  const snap = await getDocs(query(collection(db, 'rentals'), where('ownerId', '==', uid)));
+  const now = Date.now();
+  let failed = false;
+  for (const item of snap.docs) {
+    const started = createdMillis(item.get('serverReceivedAt')) || createdMillis(item.get('createdAt'));
+    if (!rentalPastOneYear(started, now)) continue;
+    try {
+      await deleteRental(rentalFromDoc(item.id, item.data() as Record<string, unknown>));
+    } catch (error) {
+      failed = true;
+      void reportProblem(error instanceof Error ? error.message : 'A one-year-old rental card could not be deleted.', 'retention');
+    }
+  }
+  if (!failed) await AsyncStorage.setItem('fleet-retention-checked', String(Date.now()));
+}
+
 export async function syncAll() {
   if (syncing) {
     queued = true;
@@ -736,6 +763,7 @@ export async function syncAll() {
         }
       }
       await prunePhoneRentals(await loadRentals());
+      await purgeExpiredRentals();
     } while (queued);
   } finally {
     syncing = false;

@@ -19,7 +19,31 @@ function cors(origin) {
   };
 }
 
+const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+
+async function deleteOldRentalMedia(env) {
+  const cutoff = new Date(Date.now() - YEAR_MS);
+  let removed = 0;
+  for (const prefix of ['rentals/', 'captures/']) {
+    let cursor;
+    do {
+      const listed = await env.BUCKET.list({ prefix, cursor, limit: 200 });
+      for (const object of listed.objects) {
+        if (object.uploaded < cutoff) {
+          await env.BUCKET.delete(object.key);
+          removed += 1;
+        }
+      }
+      cursor = listed.truncated ? listed.cursor : undefined;
+    } while (cursor && removed < 500);
+  }
+  return removed;
+}
+
 export default {
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(deleteOldRentalMedia(env));
+  },
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
     const url = new URL(request.url);
