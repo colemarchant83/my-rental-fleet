@@ -14,13 +14,16 @@ function useOnline() {
         setOnline(false);
         return;
       }
-      void fetch('/sw.js', { method: 'HEAD', cache: 'no-store' })
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 4000);
+      void fetch('/online.txt?t=' + Date.now(), { cache: 'no-store', signal: controller.signal })
         .then((response) => {
-          if (live) setOnline(response.ok);
+          if (live) setOnline(response.ok || navigator.onLine);
         })
         .catch(() => {
-          if (live) setOnline(false);
-        });
+          if (live) setOnline(navigator.onLine);
+        })
+        .finally(() => window.clearTimeout(timer));
     };
     const markOffline = () => setOnline(false);
     check();
@@ -69,8 +72,14 @@ export function RefreshButton() {
   const [flash, setFlash] = useState(false);
   return (
     <Pressable
-      hitSlop={8}
-      disabled={!online || label !== 'Refresh'}
+      hitSlop={16}
+      accessibilityRole="button"
+      style={({ pressed }) => ({
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        backgroundColor: pressed || flash ? theme.ink : 'transparent',
+      })}
       onPress={() => {
         if (!online || label !== 'Refresh') return;
         setFlash(true);
@@ -87,11 +96,7 @@ export function RefreshButton() {
     >
       <Text
         style={{
-          color: !online ? theme.muted : flash ? theme.white : theme.accent,
-          backgroundColor: flash ? theme.ink : 'transparent',
-          borderRadius: 8,
-          overflow: 'hidden',
-          paddingHorizontal: flash ? 8 : 0,
+          color: flash ? theme.white : online ? theme.accent : theme.muted,
           fontSize: 16,
           fontWeight: '700',
         }}
