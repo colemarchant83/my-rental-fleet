@@ -75,7 +75,7 @@ export function SignInScreen() {
       <Text style={styles.brand}>My Rental Fleet</Text>
       <Text style={styles.heading}>{heading}</Text>
       {mode === 'reset' ? null : (
-        <Text style={styles.offlineNote}>Sign in once on this phone while you have service. After that, the app can open with no service. A new sign-in cannot be completed offline.</Text>
+        <Text style={styles.offlineNote}>You must be logged into an account before using offline features. Sign in can only be completed with internet connection.</Text>
       )}
       <TextInput
         style={styles.input}
