@@ -78,6 +78,17 @@ export default function InspectionScreen() {
     }
   }, [vehicleId, mode]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const warn = (event: BeforeUnloadEvent) => {
+      if (saving) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [saving]);
+
   const save = async () => {
     if (!vehicleId) {
       setError('Missing machine');

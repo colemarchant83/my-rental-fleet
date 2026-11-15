@@ -195,9 +195,12 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
     <View>
       <Text style={styles.intro}>
         {isOut
-          ? 'Walk around the machine and record its condition before it goes out. Photos and video start sending while you finish the inspection. If you leave, sending continues the next time the app is opened.'
-          : 'Record the machine as it comes back. Checkout photos stay beside these so you can compare them. Photos and video start sending while you finish. If you leave, sending continues the next time the app is opened.'}
+          ? 'Walk around the machine and record its condition before it goes out.'
+          : 'Record the machine as it comes back. Checkout photos stay beside these so you can compare them.'}
       </Text>
+      <View style={styles.warnBox}>
+        <Text style={styles.warnText}>Save this inspection before you close the app. If you close it first, this inspection will not be saved.</Text>
+      </View>
 
       <Text style={styles.label}>Renter Name</Text>
       <TextInput
@@ -367,6 +370,9 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       {photoError ? <Text style={styles.error}>{photoError}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Text style={styles.help}>The save time is stamped automatically, along with each photo, video, and note.</Text>
+      <View style={styles.warnBox}>
+        <Text style={styles.warnText}>Save this inspection before you close the app. If you close it first, this inspection will not be saved.</Text>
+      </View>
       <Pressable style={styles.save} onPress={onSave} disabled={saving}>
         <Text style={styles.saveText}>
           {saving ? 'Saving...' : isOut ? 'Save & send out on rent' : 'Save & mark returned'}
@@ -632,6 +638,8 @@ export function freshInspection() {
 
 const styles = StyleSheet.create({
   intro: { color: theme.muted, fontSize: 15, lineHeight: 21, marginBottom: 8 },
+  warnBox: { backgroundColor: '#F8E7C8', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginTop: 10, marginBottom: 4 },
+  warnText: { color: '#6A4518', fontSize: 15, lineHeight: 21, fontWeight: '800' },
   label: { color: theme.text, fontWeight: '600', marginTop: 14, marginBottom: 6 },
   section: { color: theme.text, fontSize: 20, fontWeight: '700', marginTop: 26 },
   help: { color: theme.muted, marginTop: 4, marginBottom: 8, lineHeight: 20 },
