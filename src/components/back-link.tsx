@@ -18,10 +18,10 @@ function useOnline() {
       const timer = window.setTimeout(() => controller.abort(), 4000);
       void fetch('/online.txt?t=' + Date.now(), { cache: 'no-store', signal: controller.signal })
         .then((response) => {
-          if (live) setOnline(response.ok || navigator.onLine);
+          if (live) setOnline(response.ok);
         })
         .catch(() => {
-          if (live) setOnline(navigator.onLine);
+          if (live) setOnline(false);
         })
         .finally(() => window.clearTimeout(timer));
     };
