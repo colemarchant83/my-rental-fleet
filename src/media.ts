@@ -170,6 +170,7 @@ export function useDisplayUri(localUri?: string, remoteUrl?: string) {
   const stored = [localUri, remoteUrl].find((uri) => isStoredFile(uri));
   const [shown, setShown] = useState(() => (stored ? displayUrls.get(stored) ?? '' : ''));
   const [remoteFailed, setRemoteFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     setRemoteFailed(false);
@@ -217,7 +218,14 @@ export function useDisplayUri(localUri?: string, remoteUrl?: string) {
   const waitingOnPhone = !!stored?.startsWith('idb:') && !shown;
   return {
     uri: shown || (waitingOnPhone || remoteFailed ? '' : direct ?? ''),
-    failRemote: () => setRemoteFailed(true),
+    attempt,
+    failRemote: () => {
+      if (attempt < 1 && direct?.startsWith('http')) {
+        setAttempt(1);
+        return;
+      }
+      setRemoteFailed(true);
+    },
   };
 }
 

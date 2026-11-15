@@ -1,4 +1,5 @@
-const CACHE = 'fleet-shell-v7';
+const CACHE = 'fleet-shell-v8';
+const PHOTO_CACHE = 'fleet-photos-v1';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -9,7 +10,7 @@ self.addEventListener('activate', (event) => {
     const cache = await caches.open(CACHE);
     const keys = await caches.keys();
     for (const key of keys) {
-      if (key === CACHE) continue;
+      if (key === CACHE || key === PHOTO_CACHE) continue;
       const older = await caches.open(key);
       const requests = await older.keys();
       for (const request of requests) {
@@ -27,6 +28,21 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+  if (request.destination === 'image' && url.origin !== self.location.origin) {
+    event.respondWith((async () => {
+      const cache = await caches.open(PHOTO_CACHE);
+      const cached = await cache.match(request);
+      try {
+        const response = await fetch(request);
+        if (response && (response.ok || response.type === 'opaque')) void cache.put(request, response.clone());
+        return response;
+      } catch {
+        if (cached) return cached;
+        throw new Error('offline');
+      }
+    })());
+    return;
+  }
   if (url.origin !== self.location.origin || url.pathname === '/sw.js' || url.pathname === '/online.txt') return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);

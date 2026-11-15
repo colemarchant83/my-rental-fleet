@@ -139,7 +139,7 @@ export default function MaintenanceScreen() {
 function CoverImage({ localUri, remoteUrl }: { localUri?: string; remoteUrl?: string }) {
   const display = useDisplayUri(localUri, remoteUrl);
   if (!display.uri) return null;
-  return <Image source={{ uri: display.uri }} style={styles.photo} resizeMode="contain" onError={display.failRemote} />;
+  return <Image key={display.attempt} source={{ uri: display.uri }} style={styles.photo} resizeMode="contain" onError={display.failRemote} />;
 }
 
 const styles = StyleSheet.create({

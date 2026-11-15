@@ -1,6 +1,8 @@
 const ALLOWED = new Set([
   'https://my-rental-fleet.web.app',
   'https://my-rental-fleet.firebaseapp.com',
+  'https://my-rental-fleet.com',
+  'https://www.my-rental-fleet.com',
 ]);
 
 function safeKey(raw) {
