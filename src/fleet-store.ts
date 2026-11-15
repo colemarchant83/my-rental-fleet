@@ -322,10 +322,83 @@ async function prunePhoneRentals(rentals: LocalRental[]) {
   return next;
 }
 
+export function rentalIsReturned(rental: { status?: string; checkin?: unknown }) {
+  return rental.status === 'closed' || !!rental.checkin;
+}
+
+function rentalIds(rental: LocalRental) {
+  return [rental.localId, rental.remoteId].filter((item): item is string => !!item);
+}
+
+function sameRentalRecord(a: LocalRental, b: LocalRental) {
+  const ids = new Set(rentalIds(a));
+  return rentalIds(b).some((id) => ids.has(id));
+}
+
+function coveredByReturned(rental: LocalRental, others: LocalRental[]) {
+  if (rentalIsReturned(rental)) return false;
+  const name = rental.renterName.trim().toLowerCase();
+  const day = rental.checkout?.date || '';
+  if (!name || !day) return false;
+  return others.some((other) => other !== rental && rentalIsReturned(other) && other.renterName.trim().toLowerCase() === name && (other.checkout?.date || '') === day);
+}
+
+function preferRental(a: LocalRental, b: LocalRental): LocalRental {
+  const primary = rentalIsReturned(a) && !rentalIsReturned(b) ? a : rentalIsReturned(b) && !rentalIsReturned(a) ? b : a;
+  const secondary = primary === a ? b : a;
+  const checkout = primary.checkout?.videoUri || primary.checkout?.videoUrl || primary.checkout?.savedAt ? primary.checkout : secondary.checkout;
+  return {
+    ...secondary,
+    ...primary,
+    status: rentalIsReturned(a) || rentalIsReturned(b) ? 'closed' : primary.status,
+    remoteId: primary.remoteId || secondary.remoteId,
+    checkout,
+    checkin: primary.checkin ?? secondary.checkin,
+    serverReceivedAt: primary.serverReceivedAt || secondary.serverReceivedAt,
+    sync: primary.sync === 'pending' || secondary.sync === 'pending' ? 'pending' : primary.sync,
+  };
+}
+
+export function mergeRentalLists(local: LocalRental[], remote: LocalRental[]) {
+  const merged: LocalRental[] = [];
+  for (const rental of [...local, ...remote]) {
+    const index = merged.findIndex((item) => sameRentalRecord(item, rental));
+    if (index === -1) merged.push(rental);
+    else merged[index] = preferRental(merged[index], rental);
+  }
+  return merged.filter((rental) => !coveredByReturned(rental, merged));
+}
+
+async function adoptReturnedCopies() {
+  const local = await loadRentals();
+  const vehicleIds = [...new Set(local.map((rental) => rental.vehicleId))];
+  let next = local;
+  let changed = false;
+  for (const vehicleId of vehicleIds) {
+    const remote = await fetchVehicleRentals(vehicleId).catch(() => [] as LocalRental[]);
+    next = next.map((rental) => {
+      if (rental.vehicleId !== vehicleId || rentalIsReturned(rental)) return rental;
+      const match = remote.find((item) => sameRentalRecord(rental, item) && rentalIsReturned(item));
+      if (match) {
+        changed = true;
+        return {
+          ...rental,
+          status: 'closed' as const,
+          remoteId: rental.remoteId || match?.remoteId,
+          checkin: rental.checkin ?? match?.checkin,
+          serverReceivedAt: rental.serverReceivedAt || match?.serverReceivedAt,
+        };
+      }
+      return rental;
+    });
+  }
+  if (changed) await saveRentals(next);
+}
+
 export async function openRentalFor(vehicleId: string) {
   const rentals = await loadRentals();
   return rentals
-    .filter((rental) => rental.vehicleId === vehicleId && rental.status === 'out')
+    .filter((rental) => rental.vehicleId === vehicleId && !rentalIsReturned(rental))
     .sort((a, b) => b.createdAt - a.createdAt)[0];
 }
 
@@ -355,7 +428,7 @@ export async function deleteRental(target: LocalRental) {
   }
   const remaining = rentals.filter((rental) => rental.localId !== target.localId);
   await saveRentals(remaining);
-  const stillOut = remaining.some((rental) => rental.vehicleId === target.vehicleId && rental.status === 'out');
+  const stillOut = remaining.some((rental) => rental.vehicleId === target.vehicleId && !rentalIsReturned(rental));
   if (target.status === 'out' && !stillOut) {
     await updateDoc(doc(db, 'vehicles', target.vehicleId), {
       status: 'Available',
@@ -601,7 +674,7 @@ async function pushRental(passed: LocalRental) {
       await remember();
     });
   }
-  const status = beforeWrite?.status === 'closed' || rental.status === 'closed' ? 'closed' : rental.status;
+  const status = beforeWrite?.checkin || checkin || beforeWrite?.status === 'closed' || rental.status === 'closed' ? 'closed' : rental.status;
   const payload = {
     vehicleId: rental.vehicleId,
     localId: rental.localId,
@@ -763,6 +836,7 @@ export async function syncAll() {
         }
       }
       await prunePhoneRentals(await loadRentals());
+      await adoptReturnedCopies();
       await purgeExpiredRentals();
     } while (queued);
   } finally {

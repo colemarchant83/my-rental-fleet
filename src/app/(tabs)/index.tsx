@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { loadCachedVehicles, loadCovers, loadRentals, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 
@@ -97,7 +97,7 @@ export default function VehicleListScreen() {
       {!ready && !error ? <Text style={styles.intro}>Loading machines...</Text> : null}
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {vehicles.map((vehicle) => {
-        const open = rentals.find((rental) => rental.vehicleId === vehicle.id && rental.status === 'out');
+        const open = rentals.find((rental) => rental.vehicleId === vehicle.id && !rentalIsReturned(rental));
         const out = !!open;
         const shop = !out && (vehicle.status === 'In the shop' || vehicle.status === 'In Shop');
         const renter = open?.renterName || vehicle.renterName;

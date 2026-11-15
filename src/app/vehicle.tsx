@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { currentOwnerId } from '../account';
-import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, rememberCover, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, mergeRentalLists, rememberCover, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 
@@ -131,12 +131,13 @@ export default function VehicleDetail() {
     };
   }, [showSpecs, vehicle?.vin, facts]);
 
-  const open = rentals.find((rental) => rental.status === 'out');
-  const onPhone = new Set(rentals.flatMap((rental) => [rental.localId, rental.remoteId].filter((item): item is string => !!item)));
-  const combined = [...rentals, ...older.filter((rental) => !onPhone.has(rental.localId) && !(rental.remoteId && onPhone.has(rental.remoteId)))];
-  const newestFirst = combined.sort((a, b) => {
-    if (a.status === 'out' && b.status !== 'out') return -1;
-    if (b.status === 'out' && a.status !== 'out') return 1;
+  const combined = mergeRentalLists(rentals, older);
+  const open = combined.find((rental) => !rentalIsReturned(rental));
+  const newestFirst = [...combined].sort((a, b) => {
+    const aOpen = !rentalIsReturned(a);
+    const bOpen = !rentalIsReturned(b);
+    if (aOpen && !bOpen) return -1;
+    if (bOpen && !aOpen) return 1;
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
   const visibleRentals = newestFirst.slice(0, shownCount);
@@ -282,16 +283,16 @@ export default function VehicleDetail() {
 
       {newestFirst.length === 0 ? <Text style={styles.muted}>{olderLoaded ? 'No rentals yet.' : 'Loading rental files...'}</Text> : visibleRentals.map((rental) => (
         <Pressable key={rental.localId} style={styles.folder} onPress={() => router.push({ pathname: '/rental-history', params: { localId: rental.localId } })}>
-          <View style={[styles.folderTab, rental.status !== 'closed' && styles.folderTabOpen]}>
+          <View style={[styles.folderTab, !rentalIsReturned(rental) && styles.folderTabOpen]}>
             <Text style={styles.folderTabText} numberOfLines={1}>{rental.renterName || 'Renter'}</Text>
           </View>
-          <View style={[styles.folderBody, rental.status !== 'closed' && styles.folderBodyOpen]}>
+          <View style={[styles.folderBody, !rentalIsReturned(rental) && styles.folderBodyOpen]}>
             <View style={styles.folderMeta}>
               <Text style={styles.specs}>
                 Out {formatDay(rental.checkout?.date)}
                 {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
               </Text>
-              <Text style={styles.folderStatus}>{rental.status === 'closed' ? 'Returned' : 'Out'}</Text>
+              <Text style={styles.folderStatus}>{rentalIsReturned(rental) ? 'Returned' : 'Out'}</Text>
             </View>
             <Text style={styles.link}>Details</Text>
             {rental.sync !== 'synced' ? <Text style={styles.waiting}>{rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo/i.test(rental.syncError) ? rental.syncError : 'Files are saved on this phone, so nothing will be lost. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.'}</Text> : null}

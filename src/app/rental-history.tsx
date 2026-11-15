@@ -6,7 +6,7 @@ import { db } from '../firebase';
 import { ZoomModal } from '../components/zoom-modal';
 import { VideoPreview } from '../components/inspection-form';
 import { useDisplayUri } from '../media';
-import { SPOTS, clocksDisagree, deleteRental, fetchRentalByLocalId, formatDay, formatStamp, loadCachedVehicles, loadRentals, rentalByLocalId, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
+import { SPOTS, clocksDisagree, deleteRental, fetchRentalByLocalId, formatDay, formatStamp, loadCachedVehicles, loadRentals, rentalByLocalId, rentalIsReturned, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
 import { buildRentalCard, deliverRentalFile } from '../save-card';
 import { cardReadyToShare, publishShareLink } from '../share-link';
 import { theme } from '../theme';
@@ -80,7 +80,7 @@ export default function RentalHistory() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.titleRow}>
         <Text style={styles.renter}>{rental.renterName || 'Renter'}</Text>
-        <View style={styles.pill}><Text style={styles.pillText}>{rental.status === 'closed' ? 'Returned' : 'Out'}</Text></View>
+        <View style={styles.pill}><Text style={styles.pillText}>{rentalIsReturned(rental) ? 'Returned' : 'Out'}</Text></View>
       </View>
       <Text style={styles.muted}>
         Out {formatDay(rental.checkout?.date)}
@@ -100,14 +100,14 @@ export default function RentalHistory() {
             : 'Files are saved on this phone, so nothing will be lost. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.'}
         </Text>
       ) : rental.syncError ? <Text style={styles.waiting}>{rental.syncError}</Text> : null}
-      {rental.status === 'out' ? (
+      {rentalIsReturned(rental) ? null : (
         <Pressable
           style={styles.checkin}
           onPress={() => router.push({ pathname: '/inspection', params: { vehicleId: rental.vehicleId, type: 'checkin' } })}
         >
           <Text style={styles.checkinText}>Start return inspection</Text>
         </Pressable>
-      ) : null}
+      )}
 
       {rental.checkout.videoUri || rental.checkout.videoUrl ? (
         <View>
