@@ -141,10 +141,41 @@ export async function uploadFile(localUri: string, key: string, contentType: str
   return uploaded && uploaded.startsWith('http') ? uploaded : `${SIGNER}/media/${key}`;
 }
 
+function deleteOnce(remoteUrl: string) {
+  return new Promise<void>((resolve, reject) => {
+    const fail = () => reject(new Error('storage'));
+    if (typeof XMLHttpRequest === 'undefined') {
+      fetch(remoteUrl, { method: 'DELETE', cache: 'no-store' })
+        .then((response) => {
+          if (response.ok || response.status === 404) resolve();
+          else reject(new Error('Could not delete the stored photo.'));
+        })
+        .catch(fail);
+      return;
+    }
+    const xhr = new XMLHttpRequest();
+    xhr.open('DELETE', remoteUrl);
+    xhr.timeout = 20000;
+    xhr.onload = () => {
+      if (xhr.status === 200 || xhr.status === 204 || xhr.status === 404) resolve();
+      else reject(new Error('Could not delete the stored photo.'));
+    };
+    xhr.onerror = fail;
+    xhr.ontimeout = fail;
+    xhr.send();
+  });
+}
+
 export async function deleteStoredObject(remoteUrl?: string) {
   if (!remoteUrl || !SIGNER || !remoteUrl.startsWith(`${SIGNER}/media/`)) return;
-  const response = await fetch(remoteUrl, { method: 'DELETE' });
-  if (!response.ok && response.status !== 404) {
-    throw new Error('Could not delete the stored photo.');
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await deleteOnce(remoteUrl);
+      return;
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'storage') throw error;
+      await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
+    }
   }
+  throw new Error('This rental was not deleted. The phone could not reach storage. Check the connection and try again.');
 }

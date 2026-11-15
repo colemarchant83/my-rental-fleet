@@ -29,7 +29,26 @@ export default function RentalHistory() {
   const [saveNote, setSaveNote] = useState('');
   const [linking, setLinking] = useState(false);
   const [linkNote, setLinkNote] = useState('');
+  const pendingDelete = useRef<LocalRental | null>(null);
   const missingNote = useRef('');
+
+  useEffect(() => {
+    if (!deleting || !pendingDelete.current) return;
+    const target = pendingDelete.current;
+    const timer = setTimeout(() => {
+      void deleteRental(target)
+        .then(() => router.replace({ pathname: '/vehicle', params: { id: target.vehicleId } }))
+        .catch((error: unknown) => {
+          pendingDelete.current = null;
+          setDeleting(false);
+          const message = error instanceof Error ? error.message : '';
+          setDeleteError(/load failed|failed to fetch|network/i.test(message)
+            ? 'This rental was not deleted. The phone could not reach storage. Check the connection and try again.'
+            : message || 'Could not delete the stored photo.');
+        });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [deleting]);
   const builtFile = useRef<File | null>(null);
   const openedVehicle = useRef('');
 
@@ -114,7 +133,7 @@ export default function RentalHistory() {
           <Text style={styles.videoTitle}>Check out</Text>
           <Text style={styles.stampLine}>{formatStamp(rental.checkout.videoAddedAt)}{rental.checkout.videoSha256 ? ` · File ${rental.checkout.videoSha256.slice(0, 8)}` : ''}</Text>
           {rental.checkout.videoServerAddedAt || rental.serverReceivedAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(rental.checkout.videoServerAddedAt || receivedIso(rental.serverReceivedAt) || '')}</Text> : null}
-          <VideoPreview uri={rental.checkout.videoUri || rental.checkout.videoUrl} />
+          {deleting ? null : <VideoPreview uri={rental.checkout.videoUri || rental.checkout.videoUrl} />}
         </View>
       ) : null}
       {rental.checkin?.videoUri || rental.checkin?.videoUrl ? (
@@ -122,7 +141,7 @@ export default function RentalHistory() {
           <Text style={styles.videoTitle}>Check in</Text>
           <Text style={styles.stampLine}>{formatStamp(rental.checkin.videoAddedAt)}{rental.checkin.videoSha256 ? ` · File ${rental.checkin.videoSha256.slice(0, 8)}` : ''}</Text>
           {rental.checkin.videoServerAddedAt || rental.serverReceivedAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(rental.checkin.videoServerAddedAt || receivedIso(rental.serverReceivedAt) || '')}</Text> : null}
-          <VideoPreview uri={rental.checkin.videoUri || rental.checkin.videoUrl} />
+          {deleting ? null : <VideoPreview uri={rental.checkin.videoUri || rental.checkin.videoUrl} />}
         </View>
       ) : null}
 
@@ -261,14 +280,9 @@ export default function RentalHistory() {
               style={styles.delete}
               disabled={deleting}
               onPress={() => {
-                setDeleting(true);
                 setDeleteError('');
-                void deleteRental(rental)
-                  .then(() => router.replace({ pathname: '/vehicle', params: { id: rental.vehicleId } }))
-                  .catch((error: unknown) => {
-                    setDeleting(false);
-                    setDeleteError(error instanceof Error ? error.message : 'Could not delete the stored photo.');
-                  });
+                pendingDelete.current = rental;
+                setDeleting(true);
               }}
             >
               <Text style={styles.deleteText}>{deleting ? 'Deleting...' : 'Delete rental'}</Text>
