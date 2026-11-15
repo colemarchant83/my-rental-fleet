@@ -5,7 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ZoomModal } from '../components/zoom-modal';
 import { VideoPreview } from '../components/inspection-form';
-import { useDisplayUri } from '../media';
+import { useDisplayUri, useCardThumb } from '../media';
 import { SPOTS, clocksDisagree, deleteRental, fetchRentalByLocalId, formatDay, formatStamp, loadCachedVehicles, loadRentals, rentalByLocalId, rentalIsReturned, subscribeFleet, type InspectionSide, type LocalRental } from '../fleet-store';
 import { buildRentalCard, deliverRentalFile } from '../save-card';
 import { cardReadyToShare, publishShareLink } from '../share-link';
@@ -326,20 +326,25 @@ function labelStatus(status: string) {
 
 function HistoryPhoto({ photo, style, onOpen, empty, compact }: { photo: StampedPhoto; style: object; onOpen: (uri: string) => void; empty: string; compact?: boolean }) {
   const display = useDisplayUri(photo.localUri, photo.remoteUrl);
-  if (!display.uri) {
-    if (!empty) return null;
-    return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
+  const localThumb = display.uri.startsWith('blob:') || display.uri.startsWith('data:') ? display.uri : '';
+  const remoteThumb = useCardThumb(localThumb ? '' : photo.remoteUrl);
+  const shown = Platform.OS === 'web' ? localThumb || remoteThumb : display.uri;
+  const full = photo.remoteUrl?.startsWith('http') ? photo.remoteUrl : display.uri || shown;
+  if (!shown) {
+    if (!photo.localUri && !photo.remoteUrl) {
+      if (!empty) return null;
+      return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
+    }
+    return <View style={compact ? styles.extraWrap : styles.frame} />;
   }
   return (
     <View style={compact ? styles.extraWrap : styles.frame}>
-      <Pressable onPress={() => onOpen(display.uri)}>
+      <Pressable onPress={() => full && onOpen(full)}>
         {Platform.OS === 'web'
           ? createElement('img', {
-              src: display.uri,
+              src: shown,
               alt: '',
-              loading: 'lazy',
               decoding: 'async',
-              onError: display.failRemote,
               style: {
                 width: '100%',
                 height: compact ? 48 : 140,
@@ -347,7 +352,7 @@ function HistoryPhoto({ photo, style, onOpen, empty, compact }: { photo: Stamped
                 display: 'block',
               },
             })
-          : <Image source={{ uri: display.uri }} style={style} resizeMode="cover" onError={display.failRemote} />}
+          : <Image source={{ uri: shown }} style={style} resizeMode="cover" onError={display.failRemote} />}
         {compact ? null : <Text pointerEvents="none" style={styles.enlarge}>Enlarge</Text>}
       </Pressable>
       {!compact && photo.addedAt ? <Text style={styles.photoStamp}>{formatStamp(photo.addedAt)}</Text> : null}

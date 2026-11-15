@@ -116,6 +116,36 @@ function thumbUri(uri: string) {
   return `idb:thumb-${uri.slice(4)}`;
 }
 
+const remoteThumbs = new Map<string, string>();
+
+/** Small card preview. Full photos are not decoded until one is opened. */
+export function useCardThumb(remoteUrl?: string) {
+  const source = remoteUrl?.startsWith('http') ? remoteUrl : '';
+  const [thumb, setThumb] = useState(() => (source ? remoteThumbs.get(source) ?? '' : ''));
+  useEffect(() => {
+    if (!source || remoteThumbs.has(source)) return;
+    let live = true;
+    void scheduleThumb(async () => {
+      const cached = remoteThumbs.get(source);
+      if (cached) return cached;
+      const response = await fetch(source).catch(() => null);
+      if (!response?.ok) return '';
+      const blob = await response.blob();
+      const small = await scaleImage(blob, 640, 0.72);
+      if (!small) return '';
+      const url = URL.createObjectURL(small);
+      remoteThumbs.set(source, url);
+      return url;
+    }).then((url) => {
+      if (live && url) setThumb(url);
+    }).catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [source]);
+  return thumb;
+}
+
 async function scaleImage(blob: Blob, max: number, quality: number): Promise<Blob | null> {
   if (typeof document === 'undefined' || typeof createImageBitmap === 'undefined') return null;
   if (blob.type.startsWith('video')) return null;
