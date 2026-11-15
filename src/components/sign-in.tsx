@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg, padding: 20 },
   brand: { color: theme.text, fontSize: 17, fontWeight: '700' },
   heading: { color: theme.text, fontSize: 32, fontWeight: '800', marginTop: 18, marginBottom: 18 },
-  offlineNote: { color: theme.text, fontSize: 15, lineHeight: 21, marginTop: -6, marginBottom: 16 },
+  offlineNote: { color: theme.text, fontSize: 16, lineHeight: 22, fontWeight: '900', marginTop: -6, marginBottom: 16 },
   body: { color: theme.text, fontSize: 16, lineHeight: 22, marginBottom: 16 },
   input: { backgroundColor: theme.card, borderRadius: 14, borderWidth: 1, borderColor: theme.line, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16, color: theme.text, marginBottom: 10 },
   forgot: { color: theme.accent, fontWeight: '800', fontSize: 16, marginBottom: 8 },
