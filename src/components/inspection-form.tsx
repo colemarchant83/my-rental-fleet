@@ -38,6 +38,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const [photoError, setPhotoError] = useState('');
   const [videoOpen, setVideoOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
   const [online, setOnline] = useState(false);
   const [orientationKey, setOrientationKey] = useState(0);
   const sideRef = useRef(side);
@@ -90,7 +91,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
-    const open = photoChoice !== null || cancelOpen || librarySpot !== null;
+    const open = photoChoice !== null || cancelOpen || cancelConfirm || librarySpot !== null;
     if (!open) return;
     const html = document.documentElement;
     const body = document.body;
@@ -101,7 +102,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       html.style.overflow = previous.html;
       body.style.overflow = previous.body;
     };
-  }, [photoChoice, cancelOpen, librarySpot]);
+  }, [photoChoice, cancelOpen, cancelConfirm, librarySpot]);
 
   const publish = (next: InspectionSide) => {
     sideRef.current = next;
@@ -378,7 +379,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
           {saving ? 'Saving...' : isOut ? 'Save & send out on rent' : 'Save & mark returned'}
         </Text>
       </Pressable>
-      <Pressable onPress={() => setCancelOpen(true)} disabled={saving} style={styles.cancelInspection}>
+      <Pressable onPress={() => { setCancelConfirm(false); setCancelOpen(true); }} disabled={saving} style={styles.cancelInspection}>
         <Text style={styles.cancelInspectionText}>Cancel inspection</Text>
       </Pressable>
       <Modal key={`photos-${orientationKey}`} visible={photoChoice !== null} transparent animationType="fade" onRequestClose={() => setPhotoChoice(null)}>
@@ -414,22 +415,36 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
           </View>
         </View>
       </Modal>
-      <Modal key={`cancel-${orientationKey}`} visible={cancelOpen} transparent animationType="fade" onRequestClose={() => setCancelOpen(false)}>
+      <Modal key={`cancel-${orientationKey}`} visible={cancelOpen && !cancelConfirm} transparent animationType="fade" onRequestClose={() => setCancelOpen(false)}>
         <View style={[styles.modalBackdrop, webModalBackdrop]}>
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Cancel this inspection?</Text>
-            <Text style={styles.help}>It will not be saved. You will go back one page.</Text>
+            <Text style={styles.help}>Nothing from this inspection will be saved. The photos, video, and notes on this screen will be discarded.</Text>
+            <Pressable style={styles.cancelWide} onPress={() => { setCancelOpen(false); setCancelConfirm(true); }}>
+              <Text style={styles.saveText}>Continue</Text>
+            </Pressable>
+            <Pressable style={styles.ghost} onPress={() => setCancelOpen(false)}>
+              <Text style={styles.ghostText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Modal key={`cancel-confirm-${orientationKey}`} visible={cancelConfirm} transparent animationType="fade" onRequestClose={() => setCancelConfirm(false)}>
+        <View style={[styles.modalBackdrop, webModalBackdrop]}>
+          <View style={styles.modalCard}>
+            <Text style={styles.spotTitle}>Confirm cancel</Text>
+            <Text style={styles.help}>This inspection will not be saved. You will go back one page.</Text>
             <Pressable
-              style={styles.save}
+              style={styles.cancelWide}
               onPress={() => {
-                setCancelOpen(false);
+                setCancelConfirm(false);
                 onCancel();
               }}
             >
-              <Text style={styles.saveText}>Cancel inspection</Text>
+              <Text style={styles.saveText}>Confirm cancel</Text>
             </Pressable>
-            <Pressable style={styles.ghost} onPress={() => setCancelOpen(false)}>
-              <Text style={styles.ghostText}>Keep working</Text>
+            <Pressable style={styles.ghost} onPress={() => setCancelConfirm(false)}>
+              <Text style={styles.ghostText}>Cancel</Text>
             </Pressable>
           </View>
         </View>
@@ -692,6 +707,7 @@ const styles = StyleSheet.create({
   saveText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
   cancelInspection: { alignItems: 'center', marginTop: 14, paddingVertical: 8 },
   cancelInspectionText: { color: theme.danger, fontWeight: '700', fontSize: 15 },
+  cancelWide: { backgroundColor: theme.danger, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 18 },
   calendar: { backgroundColor: theme.card, borderRadius: 16, padding: 12, marginTop: 8, borderWidth: 1, borderColor: theme.line },
   calHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   calNav: { fontSize: 24, color: theme.accent, paddingHorizontal: 8 },
