@@ -269,7 +269,11 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
                   {checkoutPhoto ? <MediaImage uri={checkoutPhoto} style={styles.compareShot} onOpen={setZoom} /> : <View style={styles.compareFrame}><Text style={styles.blankText}>No checkout photo</Text></View>}
                   <ThumbRow photos={earlierPhotos.slice(1)} onOpen={setZoom} />
                   {earlier.note ? <Text style={styles.compareNote}>{earlier.note}</Text> : null}
-                  <Text style={styles.compareLabel}>{earlier.status === 'issue' ? 'Issue' : earlier.status === 'ok' ? 'OK' : '—'}</Text>
+                  {earlier.status === 'issue' ? (
+                    <Text style={styles.checkoutIssue}>Issue at checkout</Text>
+                  ) : (
+                    <Text style={styles.compareLabel}>{earlier.status === 'ok' ? 'OK' : '—'}</Text>
+                  )}
                 </View>
                 <View style={styles.compareCol}>
                   <Text style={styles.compareLabel}>Return</Text>
@@ -684,6 +688,7 @@ const styles = StyleSheet.create({
   compare: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'flex-start' },
   compareCol: { flex: 1, minWidth: 0 },
   compareLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', marginBottom: 4 },
+  checkoutIssue: { alignSelf: 'flex-start', marginTop: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#c2410c', color: '#fff', fontSize: 15, fontWeight: '800' },
   compareShot: { width: '100%', height: 150, borderRadius: 12, backgroundColor: theme.input },
   thumbRow: { flexDirection: 'row', gap: 6, marginTop: 6 },
   compareThumb: { width: 52, height: 52, borderRadius: 8, backgroundColor: theme.input },
