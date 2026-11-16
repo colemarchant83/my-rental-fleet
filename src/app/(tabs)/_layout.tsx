@@ -10,8 +10,8 @@ enableFreeze(false);
 
 function PillLabel({ focused, children }: { focused: boolean; children: string }) {
   return (
-    <View style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 16, paddingHorizontal: 8, paddingVertical: 6, maxWidth: '100%' }}>
-      <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.72} style={{ color: focused ? theme.white : theme.text, fontSize: 13, fontWeight: '800', textAlign: 'center', lineHeight: 16 }}>
+    <View style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 8, maxWidth: '100%' }}>
+      <Text numberOfLines={1} style={{ color: focused ? theme.white : theme.text, fontSize: 13, fontWeight: '800', textAlign: 'center', lineHeight: 16 }}>
         {children}
       </Text>
     </View>
@@ -76,7 +76,7 @@ export default function TabLayout() {
         name="add"
         options={{
           headerShown: false,
-          tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Add/Delete Vehicle</PillLabel>,
+          tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Add/Delete</PillLabel>,
         }}
       />
       <Tabs.Screen name="explore" options={{ href: null }} />
