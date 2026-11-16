@@ -117,18 +117,27 @@ function thumbUri(uri: string) {
 }
 
 const remoteThumbs = new Map<string, string>();
+const failedThumbs = new Set<string>();
 
 /** Small card preview. Full photos are not decoded until one is opened. */
 export function useCardThumb(remoteUrl?: string) {
   const source = remoteUrl?.startsWith('http') ? remoteUrl : '';
   const [thumb, setThumb] = useState(() => (source ? remoteThumbs.get(source) ?? '' : ''));
+  const [failed, setFailed] = useState(() => (source ? failedThumbs.has(source) : false));
   useEffect(() => {
     if (!source || remoteThumbs.has(source)) return;
+    if (failedThumbs.has(source)) {
+      setFailed(true);
+      return;
+    }
     let live = true;
     void scheduleThumb(async () => {
       const cached = remoteThumbs.get(source);
       if (cached) return cached;
-      const response = await fetch(source).catch(() => null);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 12000);
+      const response = await fetch(source, { signal: controller.signal }).catch(() => null);
+      clearTimeout(timer);
       if (!response?.ok) return '';
       const blob = await response.blob();
       const small = await scaleImage(blob, 640, 0.72);
@@ -137,13 +146,22 @@ export function useCardThumb(remoteUrl?: string) {
       remoteThumbs.set(source, url);
       return url;
     }).then((url) => {
-      if (live && url) setThumb(url);
-    }).catch(() => undefined);
+      if (!live) return;
+      if (url) setThumb(url);
+      else {
+        failedThumbs.add(source);
+        setFailed(true);
+      }
+    }).catch(() => {
+      if (!live) return;
+      failedThumbs.add(source);
+      setFailed(true);
+    });
     return () => {
       live = false;
     };
   }, [source]);
-  return thumb;
+  return { url: thumb, failed };
 }
 
 async function scaleImage(blob: Blob, max: number, quality: number): Promise<Blob | null> {

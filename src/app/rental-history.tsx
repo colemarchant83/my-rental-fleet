@@ -75,6 +75,8 @@ export default function RentalHistory() {
         }
         openedVehicle.current = found.vehicleId;
         setRental(found);
+        const remote = await fetchRentalByLocalId(localId).catch(() => undefined);
+        if (remote) setRental(withRemoteMedia(found, remote));
         return;
       }
       if (!remoteId) return;
@@ -335,6 +337,30 @@ export default function RentalHistory() {
 
 type StampedPhoto = { localUri?: string; remoteUrl?: string; addedAt?: string; serverAddedAt?: string };
 
+function withRemoteMedia(local: LocalRental, remote: LocalRental): LocalRental {
+  const fill = (side: InspectionSide, stored?: InspectionSide): InspectionSide => {
+    if (!stored) return side;
+    const spots = { ...side.spots };
+    for (const spot of SPOTS) {
+      const current = spots[spot.id] ?? { status: '' as const, note: '', photos: [] };
+      const saved = stored.spots[spot.id]?.photos ?? [];
+      const photos = current.photos.length ? current.photos.map((photo, index) => {
+        if (photo.remoteUrl?.startsWith('http')) return photo;
+        const match = saved.find((item) => item.sha256 && item.sha256 === photo.sha256) ?? saved[index];
+        return match?.remoteUrl ? { ...photo, remoteUrl: match.remoteUrl, serverAddedAt: photo.serverAddedAt || match.serverAddedAt } : photo;
+      }) : saved;
+      spots[spot.id] = { ...current, status: current.status || stored.spots[spot.id]?.status || '', photos };
+    }
+    return { ...side, videoUrl: side.videoUrl || stored.videoUrl, spots };
+  };
+  return {
+    ...local,
+    remoteId: local.remoteId || remote.remoteId,
+    checkout: fill(local.checkout, remote.checkout),
+    checkin: local.checkin ? fill(local.checkin, remote.checkin) : remote.checkin,
+  };
+}
+
 function receivedIso(value?: number | string) {
   if (!value) return undefined;
   const date = new Date(value);
@@ -361,15 +387,20 @@ function labelStatus(status: string) {
 function HistoryPhoto({ photo, style, onOpen, empty, compact }: { photo: StampedPhoto; style: object; onOpen: (uri: string) => void; empty: string; compact?: boolean }) {
   const display = useDisplayUri(photo.localUri, photo.remoteUrl);
   const localThumb = display.uri.startsWith('blob:') || display.uri.startsWith('data:') ? display.uri : '';
-  const remoteThumb = useCardThumb(localThumb ? '' : photo.remoteUrl);
-  const shown = Platform.OS === 'web' ? localThumb || remoteThumb : display.uri;
-  const full = photo.remoteUrl?.startsWith('http') ? photo.remoteUrl : display.uri || shown;
+  const remote = photo.remoteUrl?.startsWith('http') ? photo.remoteUrl : '';
+  const thumb = useCardThumb(localThumb ? '' : remote);
+  const shown = Platform.OS === 'web' ? localThumb || thumb.url || (thumb.failed ? remote : '') : display.uri;
+  const full = remote || display.uri || shown;
   if (!shown) {
-    if (!photo.localUri && !photo.remoteUrl) {
+    if (!photo.localUri && !remote) {
       if (!empty) return null;
       return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
     }
-    return <View style={compact ? styles.extraWrap : styles.frame} />;
+    return (
+      <View style={compact ? styles.extraWrap : styles.frame}>
+        {compact ? null : <Text style={styles.empty}>{thumb.failed ? 'Photo didn’t load' : 'Loading photo'}</Text>}
+      </View>
+    );
   }
   return (
     <View style={compact ? styles.extraWrap : styles.frame}>
