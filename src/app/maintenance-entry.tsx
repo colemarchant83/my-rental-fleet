@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { clocksDisagree, formatDay, formatStamp, keepPhoto, loadCachedVehicles, todayIso, type CachedVehicle, type PhotoRef } from '../fleet-store';
 import { deleteMaintenance, loadMaintenanceRecord, saveMaintenance } from '../maintenance-store';
-import { buildMaintenanceCard, deliverRentalFile } from '../save-card';
+import { buildMaintenanceCard, deliverRentalFile, downloadInBrowser } from '../save-card';
 import { maintenanceReadyToShare, publishMaintenanceShare } from '../share-link';
 import { deleteStoredFile, useDisplayUri } from '../media';
 import { deleteStoredObject } from '../r2';
@@ -227,20 +227,18 @@ export default function MaintenanceEntryScreen() {
             style={[styles.fileSave, fileSaving && styles.saveWaiting]}
             disabled={fileSaving}
             onPress={() => {
-              const openSave = (file: File) => {
-                void deliverRentalFile(file).then((method) => {
-                  if (method === 'cancelled') return;
-                  if (method === 'blocked') {
-                    setFileReady(true);
-                    setFileNote('');
-                    return;
-                  }
-                  setFileReady(false);
-                  setFileNote('');
-                });
-              };
               if (builtFile.current) {
-                openSave(builtFile.current);
+                if (Platform.OS === 'web') {
+                  downloadInBrowser(builtFile.current);
+                  setFileReady(false);
+                  setFileNote('The file is going to your Downloads folder.');
+                } else {
+                  void deliverRentalFile(builtFile.current).then((method) => {
+                    if (method === 'cancelled') return;
+                    setFileReady(false);
+                    setFileNote('');
+                  });
+                }
                 return;
               }
               setFileSaving(true);
@@ -252,8 +250,8 @@ export default function MaintenanceEntryScreen() {
               )
                 .then(({ file, missing }) => {
                   builtFile.current = file;
-                  setFileNote(missing.length ? 'Some photos could not be included because they are not on this phone right now.' : '');
-                  openSave(file);
+                  setFileNote(missing.length ? 'Some photos could not be included because they are not on this phone right now. Tap again to save it to your Downloads folder.' : 'Tap again to save it to your Downloads folder.');
+                  setFileReady(true);
                 })
                 .catch((err: unknown) => setFileNote(err instanceof Error ? err.message : 'Could not save this card.'))
                 .finally(() => setFileSaving(false));

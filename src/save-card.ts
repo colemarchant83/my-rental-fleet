@@ -429,6 +429,17 @@ async function saveOnPhone(file: File) {
   return saveWithPhoneFiles(file);
 }
 
+export function downloadInBrowser(file: File) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
+}
+
 export async function deliverRentalFile(file: File) {
   if (Platform.OS !== 'web') {
     try {
@@ -438,22 +449,6 @@ export async function deliverRentalFile(file: File) {
       throw error;
     }
   }
-  if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file] });
-      return 'shared' as const;
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') return 'cancelled' as const;
-      if (error instanceof Error && error.name === 'NotAllowedError') return 'blocked' as const;
-    }
-  }
-  const url = URL.createObjectURL(file);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = file.name;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  downloadInBrowser(file);
   return 'downloaded' as const;
 }

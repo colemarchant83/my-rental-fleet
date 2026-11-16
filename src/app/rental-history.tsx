@@ -26,6 +26,11 @@ export default function RentalHistory() {
   const [deleteError, setDeleteError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveReady, setSaveReady] = useState(false);
+  const [saveUrl, setSaveUrl] = useState('');
+  const saveUrlRef = useRef('');
+  useEffect(() => () => {
+    if (saveUrlRef.current) URL.revokeObjectURL(saveUrlRef.current);
+  }, []);
   const [saveNote, setSaveNote] = useState('');
   const [linking, setLinking] = useState(false);
   const [linkNote, setLinkNote] = useState('');
@@ -191,34 +196,62 @@ export default function RentalHistory() {
       <View style={styles.keepNotice}>
         <Text style={styles.keepNoticeText}>This card, its photos, and its videos are deleted after one year. Save it to files if you need to keep it.</Text>
       </View>
+      {Platform.OS === 'web' && saveReady && saveUrl ? (
+        createElement(
+          'a',
+          {
+            href: saveUrl,
+            download: builtFile.current?.name || 'rental-card.zip',
+            style: {
+              display: 'block',
+              marginTop: 22,
+              marginBottom: 10,
+              backgroundColor: theme.text,
+              color: theme.white,
+              borderRadius: 12,
+              padding: '14px 16px',
+              textAlign: 'center',
+              fontWeight: 800,
+              textDecoration: 'none',
+            },
+            onClick: () => setSaveNote(`${missingNote.current.trim()} The file is going to your Downloads folder.`.trim()),
+          },
+          'Ready. Tap to save',
+        )
+      ) : (
       <Pressable
         style={[styles.save, saving && styles.saveWaiting]}
         disabled={saving}
         onPress={() => {
-          const openSave = (file: File) => {
-            void deliverRentalFile(file).then((method) => {
+          if (builtFile.current) {
+            void deliverRentalFile(builtFile.current).then((method) => {
               if (method === 'cancelled') return;
-              if (method === 'blocked') {
-                setSaveReady(true);
-                setSaveNote('');
-                return;
-              }
               setSaveReady(false);
               setSaveNote(missingNote.current.trim());
             });
-          };
-          if (builtFile.current) {
-            openSave(builtFile.current);
             return;
           }
           setSaving(true);
           setSaveReady(false);
+          setSaveUrl('');
           setSaveNote('');
           void buildRentalCard(rental)
             .then(({ file, missing }) => {
               builtFile.current = file;
-              missingNote.current = missing.length ? ' Some files could not be included because they are not on this phone right now.' : '';
-              openSave(file);
+              missingNote.current = missing.length ? 'Some files could not be included because they are not on this phone right now.' : '';
+              if (Platform.OS === 'web') {
+                const url = URL.createObjectURL(file);
+                if (saveUrlRef.current) URL.revokeObjectURL(saveUrlRef.current);
+                saveUrlRef.current = url;
+                setSaveUrl(url);
+                setSaveReady(true);
+                setSaveNote('Tap again to save it to your Downloads folder.');
+                return;
+              }
+              return deliverRentalFile(file).then((method) => {
+                if (method === 'cancelled') return;
+                setSaveNote(missingNote.current.trim());
+              });
             })
             .catch((error: unknown) => {
               setSaveNote(error instanceof Error ? error.message : 'Could not save this card.');
@@ -226,8 +259,9 @@ export default function RentalHistory() {
             .finally(() => setSaving(false));
         }}
       >
-        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : saveReady ? 'Ready. Tap to save' : 'Save to files'}</Text>
+        <Text style={styles.saveText}>{saving ? 'Preparing photos and video...' : 'Save to files'}</Text>
       </Pressable>
+      )}
       {saveNote ? <Text style={styles.help}>{saveNote}</Text> : null}
       <Pressable
         style={[styles.link, linking && styles.saveWaiting]}

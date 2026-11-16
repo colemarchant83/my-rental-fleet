@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { VideoPreview } from '../components/inspection-form';
 import { SPOTS, formatDay, formatStamp, vehicleIdLine, type InspectionSide, type LocalRental } from '../fleet-store';
-import { buildMaintenanceCard, buildRentalCard, deliverRentalFile } from '../save-card';
+import { buildMaintenanceCard, buildRentalCard, deliverRentalFile, downloadInBrowser } from '../save-card';
 import { isMaintenanceShare, loadSharedCard, type SharedCard, type SharedMaintenance } from '../share-link';
 import { OfflineGate } from '../components/offline-gate';
 import { theme } from '../theme';
@@ -63,13 +63,14 @@ function SharedRental() {
   const save = () => {
     if (!card) return;
     const openSave = (file: File) => {
+      if (Platform.OS === 'web') {
+        downloadInBrowser(file);
+        setReady(false);
+        setNote('The file is going to your Downloads folder.');
+        return;
+      }
       void deliverRentalFile(file).then((method) => {
         if (method === 'cancelled') return;
-        if (method === 'blocked') {
-          setReady(true);
-          setNote('');
-          return;
-        }
         setReady(false);
         setNote('');
       });
@@ -99,7 +100,8 @@ function SharedRental() {
       )
         .then(({ file }) => {
           built.current = file;
-          openSave(file);
+          setReady(true);
+          setNote('Tap again to save it to your Downloads folder.');
         })
         .catch((reason: unknown) => setNote(reason instanceof Error ? reason.message : 'Could not save the files.'))
         .finally(() => setSaving(false));
@@ -122,7 +124,8 @@ function SharedRental() {
     void buildRentalCard(rental, { nickname: card.machineName, yearMakeModel: card.yearMakeModel, vin: card.vin })
       .then(({ file }) => {
         built.current = file;
-        openSave(file);
+        setReady(true);
+        setNote('Tap again to save it to your Downloads folder.');
       })
       .catch((reason: unknown) => setNote(reason instanceof Error ? reason.message : 'Could not save the files.'))
       .finally(() => setSaving(false));
