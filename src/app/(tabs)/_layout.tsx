@@ -10,8 +10,8 @@ enableFreeze(false);
 
 function PillLabel({ focused, children }: { focused: boolean; children: string }) {
   return (
-    <View style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 16, paddingHorizontal: 10, paddingVertical: 8, maxWidth: '100%' }}>
-      <Text numberOfLines={1} style={{ color: focused ? theme.white : theme.text, fontSize: 13, fontWeight: '800', textAlign: 'center', lineHeight: 16 }}>
+    <View style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 16, paddingHorizontal: 8, paddingVertical: 6, maxWidth: '100%' }}>
+      <Text numberOfLines={2} style={{ color: focused ? theme.white : theme.text, fontSize: 13, fontWeight: '800', textAlign: 'center', lineHeight: 16 }}>
         {children}
       </Text>
     </View>
@@ -29,11 +29,13 @@ function HeaderActions({ home }: { home?: boolean }) {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const bottom = Math.max(insets.bottom, 12) + 20;
+  const safeBottom = Math.max(insets.bottom, 10);
+  const labelSpace = 62;
 
   return (
     <Tabs
       detachInactiveScreens={false}
+      safeAreaInsets={{ top: insets.top, right: insets.right, bottom: 0, left: insets.left }}
       screenOptions={{
         freezeOnBlur: false,
         lazy: false,
@@ -44,16 +46,14 @@ export default function TabLayout() {
         headerTitle: () => <BrandMenu />,
         headerRight: () => <HeaderActions />,
         headerRightContainerStyle: { paddingRight: 16 },
-        tabBarIcon: () => null,
-        tabBarIconStyle: { width: 0, height: 0, display: 'none' },
-        tabBarItemStyle: { paddingHorizontal: 2, paddingTop: 0, justifyContent: 'center' },
+        tabBarItemStyle: { paddingHorizontal: 2, justifyContent: 'center', alignItems: 'center' },
         tabBarStyle: {
           backgroundColor: theme.card,
           borderTopColor: theme.line,
           borderTopWidth: 1,
-          height: 58 + bottom,
-          paddingTop: 8,
-          paddingBottom: bottom,
+          height: labelSpace + safeBottom,
+          paddingTop: 6,
+          paddingBottom: safeBottom,
         },
         sceneStyle: { backgroundColor: theme.bg },
       }}
@@ -76,7 +76,7 @@ export default function TabLayout() {
         name="add"
         options={{
           headerShown: false,
-          tabBarLabel: ({ focused }) => <PillLabel focused={focused}>Add/Delete</PillLabel>,
+          tabBarLabel: ({ focused }) => <PillLabel focused={focused}>{'Add/Delete\nVehicle'}</PillLabel>,
         }}
       />
       <Tabs.Screen name="explore" options={{ href: null }} />
