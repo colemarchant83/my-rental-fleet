@@ -4,7 +4,7 @@ import { Stack, usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
 import { SignInScreen, VerifyEmailScreen } from '../components/sign-in';
-import { claimExistingRecords, needsEmailVerification, watchAccount } from '../account';
+import { claimExistingRecords, consumeOpeningAccount, needsEmailVerification, watchAccount } from '../account';
 import { reportProblem } from '../problem-report';
 import { auth } from '../firebase';
 import { syncAll, watchConnection } from '../fleet-store';
@@ -83,7 +83,7 @@ export default function RootLayout() {
   const [verified, setVerified] = useState(false);
   const sharing = path.startsWith('/share');
   const claimed = useRef('');
-  const openAccount = useCallback((uid: string) => {
+  const openAccount = useCallback((uid: string, justSignedIn: boolean) => {
     setSignedIn(true);
     setVerified(true);
     if (claimed.current === uid) {
@@ -91,15 +91,16 @@ export default function RootLayout() {
       return;
     }
     claimed.current = uid;
-    setAccountReady(false);
+    setAccountReady(!justSignedIn);
     void claimExistingRecords(uid).finally(() => setAccountReady(true));
   }, []);
   const finishVerification = useCallback(() => {
     const uid = auth.currentUser?.uid;
-    if (uid) openAccount(uid);
+    if (uid) openAccount(uid, false);
   }, [openAccount]);
   useEffect(() => {
     return watchAccount((user) => {
+      const justSignedIn = consumeOpeningAccount();
       if (!user) {
         claimed.current = '';
         setSignedIn(false);
@@ -113,7 +114,7 @@ export default function RootLayout() {
         setAccountReady(true);
         return;
       }
-      openAccount(user.uid);
+      openAccount(user.uid, justSignedIn);
     });
   }, [openAccount]);
   useEffect(() => {
@@ -231,7 +232,7 @@ export default function RootLayout() {
     ) : !accountReady ? (
       <View style={{ flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={theme.accent} />
-        <Text style={{ color: theme.muted, marginTop: 12 }}>Opening your account...</Text>
+        {signedIn ? <Text style={{ color: theme.muted, marginTop: 12, fontSize: 16 }}>Opening your account...</Text> : null}
       </View>
     ) : (
       <SignInScreen />

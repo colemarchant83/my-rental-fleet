@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { accountError, createAccount, emailIsVerified, resetPassword, sendVerificationEmail, signedInEmail, signInAccount, signOutAccount } from '../account';
+import { accountError, consumeOpeningAccount, createAccount, emailIsVerified, markOpeningAccount, resetPassword, sendVerificationEmail, signedInEmail, signInAccount, signOutAccount } from '../account';
 import { theme } from '../theme';
 
 const RESET_NOTE =
@@ -37,10 +37,12 @@ export function SignInScreen() {
     setBusy(true);
     setError('');
     setNotice('');
+    markOpeningAccount();
     try {
       if (mode === 'up') await createAccount(email, password);
       else await signInAccount(email, password);
     } catch (err) {
+      consumeOpeningAccount();
       setError(accountError(err));
     } finally {
       setBusy(false);

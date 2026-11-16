@@ -36,6 +36,18 @@ export function watchAccount(onChange: (user: User | null) => void) {
   return onAuthStateChanged(auth, onChange);
 }
 
+let openingAccount = false;
+
+export function markOpeningAccount() {
+  openingAccount = true;
+}
+
+export function consumeOpeningAccount() {
+  const opening = openingAccount;
+  openingAccount = false;
+  return opening;
+}
+
 export async function createAccount(email: string, password: string) {
   const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
   return credential.user;
