@@ -423,9 +423,16 @@ export async function deleteRental(target: LocalRental) {
   const rentals = await loadRentals();
   await discardSideFiles(target.checkout);
   await discardSideFiles(target.checkin);
-  if (target.remoteId) {
-    await deleteDoc(doc(db, 'rentals', target.remoteId)).catch(() => undefined);
+  const removals: Promise<unknown>[] = [];
+  if (target.remoteId) removals.push(deleteDoc(doc(db, 'rentals', target.remoteId)).catch(() => undefined));
+  if (target.localId) {
+    removals.push(
+      getDocs(query(collection(db, 'rentals'), where('localId', '==', target.localId)))
+        .then((snap) => Promise.all(snap.docs.map((item) => deleteDoc(item.ref).catch(() => undefined))))
+        .catch(() => undefined),
+    );
   }
+  await Promise.all(removals);
   const remaining = rentals.filter((rental) => rental.localId !== target.localId);
   await saveRentals(remaining);
   const stillOut = remaining.some((rental) => rental.vehicleId === target.vehicleId && !rentalIsReturned(rental));
@@ -772,6 +779,34 @@ async function cacheProfilePhotos() {
   if (changed) await saveCovers(covers);
 }
 
+export async function forgetRentalsRemovedElsewhere(vehicleId: string, remote: LocalRental[]) {
+  const remoteIds = new Set<string>();
+  for (const rental of remote) {
+    remoteIds.add(rental.localId);
+    if (rental.remoteId) remoteIds.add(rental.remoteId);
+  }
+  const local = await loadRentals();
+  const next = local.filter((rental) => {
+    if (rental.vehicleId !== vehicleId) return true;
+    if (!rental.remoteId && rental.sync !== 'synced') return true;
+    return remoteIds.has(rental.localId) || (!!rental.remoteId && remoteIds.has(rental.remoteId));
+  });
+  if (next.length !== local.length) await saveRentals(next);
+}
+
+async function dropRentalsDeletedElsewhere() {
+  const local = await loadRentals();
+  const vehicleIds = [...new Set(local.filter((rental) => rental.remoteId || rental.sync === 'synced').map((rental) => rental.vehicleId))];
+  for (const vehicleId of vehicleIds) {
+    try {
+      const remote = await fetchVehicleRentals(vehicleId);
+      await forgetRentalsRemovedElsewhere(vehicleId, remote);
+    } catch {
+      // Leave this phone's cards alone until the server can be reached.
+    }
+  }
+}
+
 let syncing = false;
 let queued = false;
 
@@ -837,6 +872,7 @@ export async function syncAll() {
       }
       await prunePhoneRentals(await loadRentals());
       await adoptReturnedCopies();
+      await dropRentalsDeletedElsewhere();
       await purgeExpiredRentals();
     } while (queued);
   } finally {

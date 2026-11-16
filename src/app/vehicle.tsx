@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { currentOwnerId } from '../account';
-import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, mergeRentalLists, rememberCover, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, mergeRentalLists, rememberCover, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 
@@ -84,10 +84,17 @@ export default function VehicleDetail() {
         const local = (await loadRentals()).filter((rental) => rental.vehicleId === id);
         if (!live) return;
         setRentals(local);
-        const remote = await fetchVehicleRentals(id).catch(() => [] as LocalRental[]);
-        if (!live) return;
-        setOlder(remote);
-        setOlderLoaded(true);
+        try {
+          const remote = await fetchVehicleRentals(id);
+          if (!live) return;
+          await forgetRentalsRemovedElsewhere(id, remote);
+          if (!live) return;
+          setRentals((await loadRentals()).filter((rental) => rental.vehicleId === id));
+          setOlder(remote);
+        } catch {
+          // Keep the cards already on this phone when the server cannot be reached.
+        }
+        if (live) setOlderLoaded(true);
       })();
       void loadCovers().then(async (all) => {
         const found = all.find((item) => item.vehicleId === id);
