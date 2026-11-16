@@ -30,7 +30,7 @@ function HeaderActions({ home }: { home?: boolean }) {
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const safeBottom = Math.max(insets.bottom, 10);
-  const labelSpace = 62;
+  const labelSpace = 52;
 
   return (
     <Tabs
@@ -46,13 +46,15 @@ export default function TabLayout() {
         headerTitle: () => <BrandMenu />,
         headerRight: () => <HeaderActions />,
         headerRightContainerStyle: { paddingRight: 16 },
-        tabBarItemStyle: { paddingHorizontal: 2, justifyContent: 'center', alignItems: 'center' },
+        tabBarIcon: () => <View />,
+        tabBarIconStyle: { width: 0, height: 0, display: 'none', overflow: 'hidden' },
+        tabBarItemStyle: { paddingHorizontal: 2, paddingTop: 2, justifyContent: 'flex-start', alignItems: 'center' },
         tabBarStyle: {
           backgroundColor: theme.card,
           borderTopColor: theme.line,
           borderTopWidth: 1,
           height: labelSpace + safeBottom,
-          paddingTop: 6,
+          paddingTop: 2,
           paddingBottom: safeBottom,
         },
         sceneStyle: { backgroundColor: theme.bg },
