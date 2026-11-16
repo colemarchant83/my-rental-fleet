@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { signOutAccount } from '../account';
+import { signedInEmail, signOutAccount } from '../account';
 import { isOperator } from '../problem-report';
 import { deleteAccount } from '../delete-account';
 import { theme } from '../theme';
@@ -64,6 +64,17 @@ export function BrandMenu() {
                 <Text style={styles.itemText}>Problem reports</Text>
               </Pressable>
             ) : null}
+            <Pressable
+              style={styles.item}
+              onPress={() => {
+                setOpen(false);
+                const account = signedInEmail();
+                const body = account ? `Account: ${account}\n\n` : '';
+                void Linking.openURL(`mailto:support@my-rental-fleet.com?subject=${encodeURIComponent('My Rental Fleet support')}&body=${encodeURIComponent(body)}`);
+              }}
+            >
+              <Text style={styles.itemText}>Support</Text>
+            </Pressable>
             <Pressable
               style={styles.item}
               onPress={() => {

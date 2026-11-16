@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { accountError, createAccount, emailIsVerified, resetPassword, sendVerificationEmail, signedInEmail, signInAccount, signOutAccount } from '../account';
 import { theme } from '../theme';
@@ -120,6 +120,16 @@ export function SignInScreen() {
           <Text style={styles.switch}>{mode === 'up' ? 'I already have an account' : 'Create an account'}</Text>
         </Pressable>
       )}
+      <Pressable
+        onPress={() => {
+          const account = email.trim();
+          const body = account ? `Account: ${account}\n\n` : '';
+          void Linking.openURL(`mailto:support@my-rental-fleet.com?subject=${encodeURIComponent('My Rental Fleet support')}&body=${encodeURIComponent(body)}`);
+        }}
+        hitSlop={8}
+      >
+        <Text style={styles.switch}>Support</Text>
+      </Pressable>
     </View>
   );
 }
