@@ -105,8 +105,8 @@ export default function MaintenanceScreen() {
             <View style={styles.cardBody}>
               <View style={styles.titleRow}>
                 <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
-                <View style={[styles.badge, out ? styles.badgeOut : styles.badgeIn]}>
-                  <Text style={styles.badgeText}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
+                <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>
+                  <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
                 </View>
               </View>
               {vehicle.yearMakeModel || (out && renter) ? (
@@ -164,6 +164,8 @@ const styles = StyleSheet.create({
   waiting: { color: theme.rent, marginTop: 8, fontSize: 13 },
   badge: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
   badgeIn: { backgroundColor: theme.green },
+  badgeShop: { backgroundColor: '#eab308' },
   badgeOut: { backgroundColor: theme.rent },
   badgeText: { color: theme.white, fontWeight: '700', fontSize: 12 },
+  badgeShopText: { color: '#1c1917' },
 });

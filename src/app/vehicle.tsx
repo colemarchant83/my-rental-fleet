@@ -210,17 +210,18 @@ export default function VehicleDetail() {
       {vehicle.yearMakeModel ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}
       {vehicle.vin ? <Text style={styles.vin}>{vehicleIdLine(vehicle.vin)}</Text> : null}
 
-      <View style={[styles.badge, out ? styles.badgeOut : styles.badgeIn]}>
-        <Text style={styles.badgeText}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
+      <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>
+        <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
       </View>
 
       <View style={styles.statusRow}>
         {['Available', 'Out on rent', 'In the shop'].map((status) => {
           const current = out ? 'Out on rent' : shop ? 'In the shop' : 'Available';
           const selected = status === current;
+          const shopSelected = selected && status === 'In the shop';
           return (
-            <Pressable key={status} style={[styles.statusBtn, selected && styles.statusOn]} onPress={() => void setStatus(status)}>
-              <Text style={[styles.statusText, selected && styles.statusTextOn]}>{status}</Text>
+            <Pressable key={status} style={[styles.statusBtn, selected && styles.statusOn, shopSelected && styles.statusShop]} onPress={() => void setStatus(status)}>
+              <Text style={[styles.statusText, selected && styles.statusTextOn, shopSelected && styles.statusShopText]}>{status}</Text>
             </Pressable>
           );
         })}
@@ -334,13 +335,17 @@ const styles = StyleSheet.create({
   keepNoticeText: { color: theme.ink, fontWeight: '700', lineHeight: 20 },
   badge: { alignSelf: 'flex-start', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 },
   badgeIn: { backgroundColor: theme.green },
+  badgeShop: { backgroundColor: '#eab308' },
   badgeOut: { backgroundColor: theme.rent },
   badgeText: { color: theme.white, fontWeight: '700' },
+  badgeShopText: { color: '#1c1917' },
   statusRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   statusBtn: { flex: 1, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   statusOn: { backgroundColor: theme.ink, borderColor: theme.ink },
+  statusShop: { backgroundColor: '#eab308', borderColor: '#eab308' },
   statusText: { color: theme.text, fontWeight: '700', fontSize: 12 },
   statusTextOn: { color: theme.white },
+  statusShopText: { color: '#1c1917' },
   pair: { flexDirection: 'row', gap: 8, marginTop: 8 },
   ghost: { flex: 1, borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 10, backgroundColor: theme.card },
   ghostText: { color: theme.text, fontWeight: '700' },
