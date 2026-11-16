@@ -157,13 +157,14 @@ async function openWebCamera(): Promise<WebSession> {
   const track = stream.getVideoTracks()[0];
   if (track) {
     await track.applyConstraints({
-      width: { ideal: 1920, max: 1920 },
-      height: { ideal: 1920, max: 1920 },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
       frameRate: { ideal: 30, max: 30 },
     }).catch(() => undefined);
   }
-
-  const capped = capAt1080(stream);
+  const settings = track?.getSettings() ?? {};
+  const longSide = Math.max(settings.width || 0, settings.height || 0);
+  const capped = longSide > 1920 ? capAt1080(stream) : directCapture(stream);
   let recorder: MediaRecorder | null = null;
   let chunks: Blob[] = [];
   let stopping = false;
@@ -185,7 +186,13 @@ async function openWebCamera(): Promise<WebSession> {
       interrupted = false;
       window.clearInterval(watch);
       const output = await capped.ready;
-      const mime = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find((type) => MediaRecorder.isTypeSupported(type));
+      const mime = [
+        'video/mp4;codecs=avc1',
+        'video/mp4',
+        'video/webm;codecs=h264',
+        'video/webm;codecs=vp8',
+        'video/webm',
+      ].find((type) => MediaRecorder.isTypeSupported(type));
       const options: MediaRecorderOptions = { videoBitsPerSecond: 4_000_000 };
       if (mime) options.mimeType = mime;
       recorder = new MediaRecorder(output, options);
@@ -240,11 +247,24 @@ async function openWebCamera(): Promise<WebSession> {
   };
 }
 
+function directCapture(source: MediaStream) {
+  let lastLive = Date.now();
+  const track = source.getVideoTracks()[0];
+  const watch = window.setInterval(() => {
+    if (track && track.readyState === 'live' && !track.muted) lastLive = Date.now();
+  }, 500);
+  return {
+    ready: Promise.resolve(source),
+    stalled: () => Date.now() - lastLive > 3000,
+    stop: () => window.clearInterval(watch),
+  };
+}
+
 function cameraConstraints(): MediaTrackConstraints {
   return {
     facingMode: { ideal: 'environment' },
-    width: { ideal: 1920, max: 1920 },
-    height: { ideal: 1920, max: 1920 },
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
     frameRate: { ideal: 30, max: 30 },
   };
 }
