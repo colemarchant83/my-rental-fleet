@@ -21,6 +21,7 @@ export default function RentalHistory() {
   const router = useRouter();
   const [rental, setRental] = useState<LocalRental | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [warned, setWarned] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -302,15 +303,31 @@ export default function RentalHistory() {
         <Text style={styles.linkText}>{linking ? 'Making the link...' : 'Text or email this card'}</Text>
       </Pressable>
       {linkNote ? <Text style={styles.help}>{linkNote}</Text> : null}
-      <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
+      <Pressable style={styles.delete} onPress={() => setWarned(true)}>
         <Text style={styles.deleteText}>Delete this rental</Text>
       </Pressable>
-      <Modal visible={confirming} transparent animationType="fade" onRequestClose={() => setConfirming(false)}>
+      <Modal visible={warned && !confirming} transparent animationType="fade" onRequestClose={() => setWarned(false)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Delete this rental?</Text>
             <Text style={styles.help}>
-              This permanently deletes {rental.renterName || 'this renter'}'s rental from {formatDay(rental.checkout.date)}, including the notes and every photo and video stored for this rental. Nothing from this card is kept. This cannot be undone.
+              This permanently deletes {rental.renterName || 'this renter'}'s rental from {formatDay(rental.checkout.date)}, including the notes and every photo and video stored for this rental. Save the card to files first if you need to keep it. Nothing from this card is kept.
+            </Text>
+            <Pressable style={styles.delete} onPress={() => { setWarned(false); setConfirming(true); }}>
+              <Text style={styles.deleteText}>Continue</Text>
+            </Pressable>
+            <Pressable style={styles.cancel} onPress={() => setWarned(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={confirming} transparent animationType="fade" onRequestClose={() => { if (!deleting) setConfirming(false); }}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.spotTitle}>Confirm delete</Text>
+            <Text style={styles.help}>
+              This permanently deletes {rental.renterName || 'this renter'}'s rental and everything stored with it. This cannot be undone.
             </Text>
             <Pressable
               style={styles.delete}
@@ -321,7 +338,7 @@ export default function RentalHistory() {
                 setDeleting(true);
               }}
             >
-              <Text style={styles.deleteText}>{deleting ? 'Deleting...' : 'Delete rental'}</Text>
+              <Text style={styles.deleteText}>{deleting ? 'Deleting...' : 'Confirm delete'}</Text>
             </Pressable>
             {deleteError ? <Text style={styles.deleteError}>{deleteError}</Text> : null}
             <Pressable style={styles.cancel} onPress={() => setConfirming(false)} disabled={deleting}>
