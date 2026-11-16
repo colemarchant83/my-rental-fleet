@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
   preview: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   note: { color: '#fff', textAlign: 'center', marginBottom: 8, fontWeight: '700' },
   timer: { color: '#fff', textAlign: 'center', fontSize: 28, fontWeight: '800', marginBottom: 8 },
-  error: { color: '#fecaca', textAlign: 'center', marginHorizontal: 24, marginBottom: 8 },
+  error: { color: '#fff', textAlign: 'center', marginHorizontal: 20, marginBottom: 14, fontSize: 18, fontWeight: '700', lineHeight: 24 },
   controls: { alignItems: 'center', paddingBottom: 36, gap: 16 },
   record: { backgroundColor: theme.danger, borderRadius: 28, paddingVertical: 16, paddingHorizontal: 36 },
   recordText: { color: '#fff', fontWeight: '800', fontSize: 18 },
