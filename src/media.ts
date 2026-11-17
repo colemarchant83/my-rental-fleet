@@ -163,36 +163,34 @@ export function useCardThumb(remoteUrl?: string) {
   return { url: thumb, failed };
 }
 
+let decodeLock: Promise<void> = Promise.resolve();
+
+function decodeOne<T>(work: () => Promise<T>): Promise<T> {
+  const run = decodeLock.then(work, work);
+  decodeLock = run.then(() => undefined, () => undefined);
+  return run;
+}
+
 async function scaleImage(blob: Blob, max: number, quality: number): Promise<Blob | null> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), 4000);
-    drawScaled(blob, max, quality).then((next) => {
-      clearTimeout(timer);
-      resolve(next);
-    }, () => {
-      clearTimeout(timer);
-      resolve(null);
-    });
-  });
+  if (blob.type.startsWith('video')) return null;
+  return decodeOne(() => drawScaled(blob, max, quality));
 }
 
 async function drawScaled(blob: Blob, max: number, quality: number): Promise<Blob | null> {
   if (typeof document === 'undefined' || typeof createImageBitmap === 'undefined') return null;
-  if (blob.type.startsWith('video')) return null;
   let bitmap: ImageBitmap | null = null;
   try {
-    const apple = typeof navigator !== 'undefined' && /iP(hone|ad|od)/.test(navigator.userAgent);
-    const options = !apple && blob.size > 2_000_000 ? ({ resizeWidth: max, resizeQuality: 'high' } as ImageBitmapOptions) : undefined;
     try {
-      bitmap = await createImageBitmap(blob, options);
+      bitmap = await createImageBitmap(blob, { resizeWidth: max, resizeQuality: 'medium' } as ImageBitmapOptions);
     } catch {
+      if (blob.size > 1_500_000) return null;
       bitmap = await createImageBitmap(blob);
     }
     const longest = Math.max(bitmap.width, bitmap.height);
     const scale = Math.min(1, max / longest);
     const width = Math.max(1, Math.round(bitmap.width * scale));
     const height = Math.max(1, Math.round(bitmap.height * scale));
-    if (scale === 1 && blob.type === 'image/jpeg' && blob.size < 2_000_000) {
+    if (scale === 1 && blob.type === 'image/jpeg' && blob.size < 900_000) {
       bitmap.close?.();
       return blob;
     }
@@ -224,7 +222,7 @@ async function shrinkImage(blob: Blob): Promise<Blob | null> {
 /** Keep a clear inspection photo without holding a 48 megapixel image in memory. */
 export async function fitPhotoBlob(blob: Blob) {
   if (blob.type.startsWith('video')) return blob;
-  const fitted = await scaleImage(blob, 2400, 0.82);
+  const fitted = await scaleImage(blob, 1920, 0.8);
   return fitted ?? blob;
 }
 
@@ -236,9 +234,9 @@ export async function warmDisplayUri(localUri?: string) {
   if (!blob) {
     const full = await readStoredBlob(localUri).catch(() => null);
     if (!full || full.type.startsWith('video')) return;
-    const shrunk = await shrinkImage(full);
-    blob = shrunk ?? full;
-    if (shrunk) await putStoredBlob(thumbUri(localUri), shrunk).catch(() => undefined);
+    const shrunk = full.size < 900_000 && full.type === 'image/jpeg' ? full : await shrinkImage(full);
+    blob = shrunk ?? (full.size < 1_500_000 ? full : null);
+    if (shrunk && shrunk !== full) await putStoredBlob(thumbUri(localUri), shrunk).catch(() => undefined);
   }
   if (blob) displayUrls.set(localUri, URL.createObjectURL(blob));
 }
