@@ -396,10 +396,28 @@ async function adoptReturnedCopies() {
 }
 
 export async function openRentalFor(vehicleId: string) {
-  const rentals = await loadRentals();
-  return rentals
+  const pick = (rentals: LocalRental[]) => rentals
     .filter((rental) => rental.vehicleId === vehicleId && !rentalIsReturned(rental))
     .sort((a, b) => b.createdAt - a.createdAt)[0];
+  const remember = async (found?: LocalRental) => {
+    if (!found) return undefined;
+    const current = await loadRentals();
+    if (!current.some((item) => sameRentalRecord(item, found))) await saveRentals([found, ...current]);
+    return found;
+  };
+  const local = pick(await loadRentals());
+  if (local) return local;
+  const pull = async () => {
+    const [byVehicle, open] = await Promise.all([
+      fetchVehicleRentals(vehicleId).catch(() => [] as LocalRental[]),
+      fetchOpenRentals().catch(() => [] as LocalRental[]),
+    ]);
+    return pick([...byVehicle, ...open]);
+  };
+  const first = await pull();
+  if (first) return remember(first);
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  return remember(await pull());
 }
 
 export async function rentalByLocalId(localId: string) {
