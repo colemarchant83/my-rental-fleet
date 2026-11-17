@@ -125,7 +125,8 @@ export default {
       }
       const head = await env.BUCKET.head(key);
       if (!head) return new Response('Not found', { status: 404, headers: cors(origin) });
-      const range = byteRange(request.headers.get('Range'), head.size);
+      const requested = request.headers.get('Range');
+      const range = byteRange(requested, head.size);
       if (range === 'unsatisfiable') {
         return new Response(null, {
           status: 416,
@@ -134,7 +135,8 @@ export default {
       }
       const object = await env.BUCKET.get(key, range ? { range } : undefined);
       if (!object) return new Response('Not found', { status: 404, headers: cors(origin) });
-      const span = object.range;
+      // A full file must be 200. Marking it 206 makes the iPhone refuse to play and makes Android stop partway through.
+      const span = requested && object.range ? object.range : null;
       const status = span ? 206 : 200;
       const length = span ? span.length : object.size;
       const headers = {
@@ -142,7 +144,7 @@ export default {
         'Content-Type': object.httpMetadata?.contentType || 'application/octet-stream',
         'Content-Length': String(length),
         'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=86400',
+        'Cache-Control': 'public, max-age=3600',
       };
       if (span) headers['Content-Range'] = `bytes ${span.offset}-${span.offset + span.length - 1}/${object.size}`;
       if (request.method === 'HEAD') return new Response(null, { status, headers });

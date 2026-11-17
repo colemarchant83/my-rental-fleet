@@ -482,9 +482,87 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   );
 }
 
+const openedVideos = new Map<string, string>();
+
+function cleanVideoUri(uri: string) {
+  return uri.split('#')[0];
+}
+
+async function videoBlob(uri: string) {
+  const stored = uri.startsWith('idb:') ? await readStoredBlob(uri).catch(() => null) : null;
+  const blob = stored ?? await (await fetch(cleanVideoUri(uri), { cache: 'no-store' })).blob();
+  if (!blob.size) throw new Error('empty');
+  return blob.type.startsWith('video/') ? blob : new Blob([blob], { type: 'video/mp4' });
+}
+
+function WebVideo({ src, onStuck }: { src: string; onStuck: () => void }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  const stuckRef = useRef(onStuck);
+  stuckRef.current = onStuck;
+  useEffect(() => {
+    const video = ref.current;
+    if (!video) return;
+    let gaveUp = false;
+    let last = -1;
+    let mark = -1;
+    let timer = 0;
+    const stop = () => {
+      if (gaveUp) return;
+      gaveUp = true;
+      window.clearTimeout(timer);
+      stuckRef.current();
+    };
+    const arm = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (video.ended || video.currentTime !== last) return;
+        if (video.readyState < 3) stop();
+      }, 8000);
+    };
+    video.addEventListener('error', stop);
+    video.addEventListener('waiting', arm);
+    video.addEventListener('stalled', arm);
+    const moved = () => {
+      last = video.currentTime;
+      window.clearTimeout(timer);
+    };
+    video.addEventListener('timeupdate', moved);
+    video.addEventListener('canplay', moved);
+    const tick = window.setInterval(() => {
+      if (gaveUp || video.paused || video.ended) return;
+      if (video.currentTime > 0 && video.currentTime === mark) stop();
+      mark = video.currentTime;
+    }, 8000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(tick);
+      video.removeEventListener('error', stop);
+      video.removeEventListener('waiting', arm);
+      video.removeEventListener('stalled', arm);
+      video.removeEventListener('timeupdate', moved);
+      video.removeEventListener('canplay', moved);
+    };
+  }, [src]);
+  return (
+    <View style={styles.videoFrame}>
+      {createElement('video', {
+        ref,
+        src,
+        controls: true,
+        playsInline: true,
+        preload: 'auto',
+        style: { width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#1c1917' },
+      })}
+    </View>
+  );
+}
+
 export function VideoPreview({ uri }: { uri?: string }) {
   const [play, setPlay] = useState(false);
   const [src, setSrc] = useState('');
+  const [opening, setOpening] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const direct = useRef('');
   useEffect(() => {
     if (!play) return;
     let live = true;
@@ -494,25 +572,48 @@ export function VideoPreview({ uri }: { uri?: string }) {
         setSrc('');
         return;
       }
+      const cached = openedVideos.get(uri);
+      if (cached) {
+        setSrc(cached);
+        return;
+      }
       if (uri.startsWith('http') || uri.startsWith('blob:') || uri.startsWith('data:')) {
-        setSrc(uri);
+        direct.current = cleanVideoUri(uri);
+        setSrc(direct.current);
         return;
       }
       if (uri.startsWith('idb:')) {
         const blob = await readStoredBlob(uri).catch(() => null);
         if (!live || !blob) return;
-        objectUrl = URL.createObjectURL(blob);
+        objectUrl = URL.createObjectURL(blob.type.startsWith('video/') ? blob : new Blob([blob], { type: 'video/mp4' }));
+        direct.current = objectUrl;
         setSrc(objectUrl);
         return;
       }
+      direct.current = uri;
       setSrc(uri);
     };
     void load();
     return () => {
       live = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (objectUrl && !openedVideos.has(uri || '')) URL.revokeObjectURL(objectUrl);
     };
   }, [play, uri]);
+  const openWholeFile = async () => {
+    if (!uri || openedVideos.has(uri) || opening) return;
+    setOpening(true);
+    setFailed(false);
+    try {
+      const blob = await videoBlob(direct.current || uri);
+      const objectUrl = URL.createObjectURL(blob);
+      openedVideos.set(uri, objectUrl);
+      setSrc(objectUrl);
+    } catch {
+      setFailed(true);
+    } finally {
+      setOpening(false);
+    }
+  };
   if (!play || !src) {
     return (
       <Pressable style={styles.videoFrame} onPress={() => setPlay(true)}>
@@ -520,19 +621,22 @@ export function VideoPreview({ uri }: { uri?: string }) {
       </Pressable>
     );
   }
-  if (Platform.OS === 'web') {
-    const playable = src.startsWith('http') || src.startsWith('blob:') ? `${src.split('#')[0]}#t=0.001` : src;
+  if (opening) {
     return (
       <View style={styles.videoFrame}>
-        {createElement('video', {
-          src: playable,
-          controls: true,
-          playsInline: true,
-          preload: 'metadata',
-          style: { width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#1c1917' },
-        })}
+        <Text style={styles.playMark}>Opening video...</Text>
       </View>
     );
+  }
+  if (failed) {
+    return (
+      <View style={styles.videoFrame}>
+        <Text style={styles.playMark}>This video could not be opened</Text>
+      </View>
+    );
+  }
+  if (Platform.OS === 'web') {
+    return <WebVideo src={src} onStuck={() => { if (uri && openedVideos.has(uri)) setFailed(true); else void openWholeFile(); }} />;
   }
   return <Video source={{ uri: src }} style={styles.videoFrame} useNativeControls resizeMode={ResizeMode.COVER} />;
 }
