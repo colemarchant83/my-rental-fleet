@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -12,6 +12,7 @@ import { currentOwnerId } from '../../account';
 import { deleteVehicleRecord, loadCachedVehicles, rememberCover, saveCachedVehicles, vehicleIdLine, type CachedVehicle } from '../../fleet-store';
 import { deleteMaintenance, loadMaintenance } from '../../maintenance-store';
 import { OfflineGate } from '../../components/offline-gate';
+import { WebVinScanner } from '../../components/vin-scanner';
 import { theme } from '../../theme';
 
 function PageBar({ onBack }: { onBack?: () => void }) {
@@ -231,6 +232,16 @@ export default function AddScreen() {
           <PageBar onBack={goBack} />
           <Text style={styles.heading}>VIN barcode</Text>
           <View style={styles.cameraFrame}>
+            {Platform.OS === 'web' ? (
+              <WebVinScanner
+                onVin={(value) => {
+                  const found = extractVin(value);
+                  if (!found || locked.current) return;
+                  locked.current = true;
+                  void useVin(found);
+                }}
+              />
+            ) : (
             <CameraView
               ref={camera}
               style={styles.cameraFill}
@@ -244,6 +255,7 @@ export default function AddScreen() {
                 void useVin(found);
               }}
             />
+            )}
           </View>
           <Text style={styles.help}>{reading ? 'Looking up that VIN...' : 'Point the camera at the barcode.'}</Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
