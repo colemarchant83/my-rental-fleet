@@ -163,7 +163,7 @@ export default function RootLayout() {
     if (typeof document !== 'undefined') {
       const manifest = document.createElement('link');
       manifest.rel = 'manifest';
-      manifest.href = '/manifest.webmanifest';
+      manifest.href = '/manifest.webmanifest?v=3';
       document.head.appendChild(manifest);
       const touch = document.createElement('link');
       touch.rel = 'apple-touch-icon';
