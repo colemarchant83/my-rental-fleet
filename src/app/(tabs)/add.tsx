@@ -12,7 +12,7 @@ import { currentOwnerId } from '../../account';
 import { deleteVehicleRecord, loadCachedVehicles, rememberCover, saveCachedVehicles, vehicleIdLine, type CachedVehicle } from '../../fleet-store';
 import { deleteMaintenance, loadMaintenance } from '../../maintenance-store';
 import { OfflineGate } from '../../components/offline-gate';
-import { WebVinScanner } from '../../components/vin-scanner';
+import { WebVinScanner, extractVin } from '../../components/vin-scanner';
 import { theme } from '../../theme';
 
 function PageBar({ onBack }: { onBack?: () => void }) {
@@ -34,15 +34,6 @@ function PageBar({ onBack }: { onBack?: () => void }) {
 }
 
 type Step = 'menu' | 'add' | 'delete' | 'barcode' | 'vin' | 'hull' | 'manual' | 'review';
-
-function extractVin(text: string) {
-  const compact = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  for (let index = 0; index <= compact.length - 17; index += 1) {
-    const slice = compact.slice(index, index + 17).replace(/[IOQ]/g, (char) => (char === 'I' ? '1' : '0'));
-    if (/^[A-HJ-NPR-Z0-9]{17}$/.test(slice)) return slice;
-  }
-  return '';
-}
 
 async function decodeVin(vin: string) {
   const response = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin)}?format=json`);
@@ -257,7 +248,7 @@ export default function AddScreen() {
             />
             )}
           </View>
-          <Text style={styles.help}>{reading ? 'Looking up that VIN...' : 'Point the camera at the barcode.'}</Text>
+          <Text style={styles.help}>{reading ? 'Looking up that VIN...' : 'Fill the box with the barcode and hold still.'}</Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : (
