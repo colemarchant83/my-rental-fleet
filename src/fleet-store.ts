@@ -1017,6 +1017,22 @@ function rentalFromDoc(remoteId: string, data: Record<string, unknown>): LocalRe
   };
 }
 
+export async function reconcilePhoneRentals(remoteOpen: LocalRental[]) {
+  const keys = new Set<string>();
+  for (const rental of remoteOpen) {
+    keys.add(rental.localId);
+    if (rental.remoteId) keys.add(rental.remoteId);
+  }
+  const local = await loadRentals();
+  const next = local.filter((rental) => {
+    if (rentalIsReturned(rental)) return true;
+    if (!rental.remoteId && rental.sync !== 'synced') return true;
+    return keys.has(rental.localId) || (!!rental.remoteId && keys.has(rental.remoteId));
+  });
+  if (next.length !== local.length) await saveRentals(next);
+  return mergeRentalLists(next, remoteOpen);
+}
+
 export async function fetchOpenRentals() {
   const uid = currentOwnerId();
   const snap = await getDocs(query(collection(db, 'rentals'), where('ownerId', '==', uid)));

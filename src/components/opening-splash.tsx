@@ -53,7 +53,7 @@ export function OpeningSplash({ onDone }: { onDone: () => void }) {
     }
     node.style.position = 'fixed';
     const stage = document.createElement('div');
-    stage.style.cssText = 'position:absolute;left:50%;top:50%;width:min(100vw,100dvh);height:min(100vw,100dvh);transform:translate(-50%,-50%);container-type:size';
+    stage.style.cssText = 'position:absolute;left:50%;top:50%;width:min(100vw,100dvh);height:min(100vw,100dvh);transform:translate(-50%,-50%)';
     const tiles = CORNERS.map((corner) => {
       const tile = document.createElement('div');
       tile.style.cssText = `position:absolute;transform:translate(-50%,-50%);background:url(/opening-icon.png) ${corner} / 200% 200% no-repeat;opacity:0`;
@@ -71,7 +71,7 @@ export function OpeningSplash({ onDone }: { onDone: () => void }) {
     stage.appendChild(mark);
     const title = document.createElement('div');
     title.textContent = 'My Rental Fleet';
-    title.style.cssText = 'position:absolute;left:50%;top:13%;width:94%;text-align:center;font-weight:800;letter-spacing:-0.03em;line-height:1.05;color:#1c1917;font-family:system-ui,-apple-system,sans-serif;font-size:34px;font-size:9.4cqi;opacity:0;transform:translate(-50%,-30%);pointer-events:none';
+    title.style.cssText = 'position:absolute;left:50%;top:13%;width:94%;text-align:center;font-weight:800;letter-spacing:-0.03em;line-height:1.05;color:#1c1917;font-family:system-ui,-apple-system,sans-serif;font-size:min(40px,9.4vw);visibility:hidden;opacity:0;transform:translate(-50%,-50%);pointer-events:none';
     stage.appendChild(title);
     node.appendChild(stage);
 
@@ -106,6 +106,7 @@ export function OpeningSplash({ onDone }: { onDone: () => void }) {
       place(1, 1, 1, 0);
       logo.style.opacity = '1';
       mark.style.transform = 'translate(-50%,-50%) scale(1)';
+      title.style.visibility = 'visible';
       title.style.opacity = '1';
       title.style.transform = 'translate(-50%,-50%)';
       const backup = window.setTimeout(finish, 1200);
@@ -130,8 +131,12 @@ export function OpeningSplash({ onDone }: { onDone: () => void }) {
       }
       if (t > 2.68) {
         const rise = smooth(Math.min(1, (t - 2.68) / 0.4));
+        title.style.visibility = 'visible';
         title.style.opacity = String(rise);
         title.style.transform = `translate(-50%, ${-30 - rise * 20}%)`;
+      } else {
+        title.style.visibility = 'hidden';
+        title.style.opacity = '0';
       }
       if (t < 4.15) frame = requestAnimationFrame(tick);
       else finish();

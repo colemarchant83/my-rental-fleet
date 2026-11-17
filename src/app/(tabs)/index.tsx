@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, isOutStatus, mergeRentalLists, rentalIsReturned, saveCachedVehicles, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, reconcilePhoneRentals, rentalIsReturned, saveCachedVehicles, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 
@@ -81,7 +81,16 @@ export default function VehicleListScreen() {
         setRentals(local);
         try {
           const remote = await fetchOpenRentals();
-          setRentals(mergeRentalLists(await loadRentals(), remote));
+          let merged = await reconcilePhoneRentals(remote);
+          const openVehicleIds = [...new Set(merged.filter((rental) => !rentalIsReturned(rental)).map((rental) => rental.vehicleId))];
+          for (const vehicleId of openVehicleIds) {
+            const history = await fetchVehicleRentals(vehicleId).catch(() => null);
+            if (!history) continue;
+            await forgetRentalsRemovedElsewhere(vehicleId, history);
+            const local = (await loadRentals()).filter((rental) => rental.vehicleId === vehicleId);
+            merged = [...merged.filter((rental) => rental.vehicleId !== vehicleId), ...mergeRentalLists(local, history)];
+          }
+          setRentals(merged);
         } catch {
           // Keep the rentals already on this phone when the server cannot be reached.
         }
@@ -117,7 +126,7 @@ export default function VehicleListScreen() {
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {vehicles.map((vehicle) => {
         const open = rentals.find((rental) => rental.vehicleId === vehicle.id && !rentalIsReturned(rental));
-        const out = !!open;
+        const out = rentalsReady && !!open;
         const shop = !out && (vehicle.status === 'In the shop' || vehicle.status === 'In Shop');
         const renter = open?.renterName;
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
@@ -129,7 +138,7 @@ export default function VehicleListScreen() {
               <View style={styles.titleRow}>
                 <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
                 <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>
-                  <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
+                  <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{!rentalsReady ? 'Checking' : out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
                 </View>
               </View>
               {vehicle.yearMakeModel || (out && renter) ? (
