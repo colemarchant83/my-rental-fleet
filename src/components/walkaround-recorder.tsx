@@ -22,21 +22,43 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
     const open = async () => {
       try {
-        const readyCamera = primedCamera ?? openWebCamera();
+        const pending = primedCamera;
         primedCamera = null;
-        session.current = await readyCamera;
+        let opened: WebSession;
+        try {
+          opened = await (pending ?? openWebCamera());
+        } catch (error) {
+          if (!pending) throw error;
+          opened = await openWebCamera();
+        }
+        if (!live) {
+          opened.stop();
+          return;
+        }
+        session.current = opened;
         const video = videoRef.current;
         if (!video) throw new Error('camera');
-        video.srcObject = session.current.preview;
+        video.muted = true;
+        video.playsInline = true;
+        video.srcObject = opened.preview;
         await video.play();
-        if (live) setReady(true);
-      } catch {
-        if (live) setError('The camera could not start. Allow camera access and try again.');
+        if (live) {
+          setError('');
+          setReady(true);
+        }
+      } catch (error) {
+        session.current?.stop();
+        session.current = null;
+        if (live) {
+          setReady(false);
+          setError(cameraStartMessage(error));
+        }
       }
     };
     void open();
@@ -45,7 +67,7 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
       session.current?.stop();
       session.current = null;
     };
-  }, []);
+  }, [attempt]);
 
   useEffect(() => {
     if (!recording) return;
@@ -112,8 +134,12 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
                 <Text style={styles.stopText}>Stop</Text>
               </Pressable>
             ) : (
-              <Pressable style={[styles.record, !ready && styles.dim]} onPress={start} disabled={!ready}>
-                <Text style={styles.recordText}>Record</Text>
+              <Pressable
+                style={[styles.record, !ready && !error && styles.dim]}
+                onPress={error ? () => setAttempt((value) => value + 1) : start}
+                disabled={!ready && !error}
+              >
+                <Text style={styles.recordText}>{error ? 'Try again' : 'Record'}</Text>
               </Pressable>
             )}
             {!recording ? (
@@ -148,20 +174,8 @@ export function primeWalkaroundCamera() {
 }
 
 async function openWebCamera(): Promise<WebSession> {
-  let stream: MediaStream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: cameraConstraints() });
-  } catch {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: cameraConstraints() });
-  }
+  const stream = await claimCamera();
   const track = stream.getVideoTracks()[0];
-  if (track) {
-    await track.applyConstraints({
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-      frameRate: { ideal: 30, max: 30 },
-    }).catch(() => undefined);
-  }
   const settings = track?.getSettings() ?? {};
   const longSide = Math.max(settings.width || 0, settings.height || 0);
   const capped = longSide > 1920 ? capAt1080(stream) : directCapture(stream);
@@ -262,13 +276,36 @@ function directCapture(source: MediaStream) {
   };
 }
 
-function cameraConstraints(): MediaTrackConstraints {
-  return {
-    facingMode: { ideal: 'environment' },
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    frameRate: { ideal: 30, max: 30 },
-  };
+function cameraStartMessage(error: unknown) {
+  const name = error instanceof DOMException ? error.name : '';
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    return 'The camera could not start. Allow camera access and try again.';
+  }
+  if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
+    return 'The camera is in use by something else. Close other camera apps and tap Try again.';
+  }
+  return 'The camera could not start. Tap Try again.';
+}
+
+async function claimCamera() {
+  const videos: MediaTrackConstraints[] = [
+    { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+    { facingMode: { ideal: 'environment' } },
+    {},
+  ];
+  let last: unknown;
+  for (const video of videos) {
+    for (const audio of [true, false]) {
+      try {
+        return await navigator.mediaDevices.getUserMedia({ audio, video });
+      } catch (error) {
+        last = error;
+        const name = error instanceof DOMException ? error.name : '';
+        if ((name === 'NotAllowedError' || name === 'PermissionDeniedError') && !audio) throw error;
+      }
+    }
+  }
+  throw last instanceof Error ? last : new Error('camera');
 }
 
 function fittedSize(width: number, height: number) {
