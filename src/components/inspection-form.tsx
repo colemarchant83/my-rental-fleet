@@ -496,12 +496,35 @@ async function videoBlob(uri: string) {
   return blob.type.startsWith('video/') ? blob : new Blob([blob], { type: 'video/mp4' });
 }
 
-function WebVideo({ src, large, onStuck }: { src: string; large: boolean; onStuck: () => void }) {
-  const ref = useRef<HTMLVideoElement | null>(null);
+function WebVideo({ src, large, onStuck, onClose }: { src: string; large: boolean; onStuck: () => void; onClose: () => void }) {
+  const host = useRef<View>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const stuckRef = useRef(onStuck);
+  const closeRef = useRef(onClose);
   stuckRef.current = onStuck;
+  closeRef.current = onClose;
   useEffect(() => {
-    const video = ref.current;
+    const parent = host.current as unknown as HTMLElement | null;
+    if (!parent) return;
+    const video = document.createElement('video');
+    video.controls = true;
+    video.playsInline = true;
+    video.setAttribute('controlsList', 'nofullscreen');
+    video.disablePictureInPicture = true;
+    video.preload = 'auto';
+    video.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;object-fit:contain;background:#1c1917';
+    parent.appendChild(video);
+    videoRef.current = video;
+    return () => {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      video.remove();
+      videoRef.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    const video = videoRef.current;
     if (!video) return;
     let gaveUp = false;
     let last = -1;
@@ -520,25 +543,21 @@ function WebVideo({ src, large, onStuck }: { src: string; large: boolean; onStuc
         if (video.readyState < 3) stop();
       }, 8000);
     };
-    const leaveFullscreen = () => {
-      const current = document.fullscreenElement;
-      if (current && (current === video || video.contains(current))) void document.exitFullscreen().catch(() => undefined);
-    };
-    video.addEventListener('error', stop);
-    video.addEventListener('waiting', arm);
-    video.addEventListener('stalled', arm);
     const moved = () => {
       last = video.currentTime;
       window.clearTimeout(timer);
     };
+    video.addEventListener('error', stop);
+    video.addEventListener('waiting', arm);
+    video.addEventListener('stalled', arm);
     video.addEventListener('timeupdate', moved);
     video.addEventListener('canplay', moved);
-    document.addEventListener('fullscreenchange', leaveFullscreen);
     const tick = window.setInterval(() => {
       if (gaveUp || video.paused || video.ended) return;
       if (video.currentTime > 0 && video.currentTime === mark) stop();
       mark = video.currentTime;
     }, 8000);
+    if (video.src !== src) video.src = src;
     return () => {
       window.clearTimeout(timer);
       window.clearInterval(tick);
@@ -547,23 +566,33 @@ function WebVideo({ src, large, onStuck }: { src: string; large: boolean; onStuc
       video.removeEventListener('stalled', arm);
       video.removeEventListener('timeupdate', moved);
       video.removeEventListener('canplay', moved);
-      document.removeEventListener('fullscreenchange', leaveFullscreen);
     };
   }, [src]);
-  return (
-    <View style={large ? styles.videoLarge : styles.videoFrame}>
-      {createElement('video', {
-        ref,
-        src,
-        controls: true,
-        playsInline: true,
-        controlsList: 'nofullscreen',
-        disablePictureInPicture: true,
-        preload: 'auto',
-        style: { width: '100%', height: large ? '100%' : '100%', objectFit: 'contain', backgroundColor: '#1c1917' },
-      })}
-    </View>
-  );
+  useEffect(() => {
+    const video = videoRef.current;
+    const inline = host.current as unknown as HTMLElement | null;
+    if (!video || !inline || !large) return;
+    const playing = !video.paused && !video.ended;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;width:100vw;height:100dvh;z-index:2147483000;background:#000;overflow:hidden';
+    video.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;object-fit:contain;background:#000';
+    overlay.appendChild(video);
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = 'Close';
+    close.style.cssText = 'position:absolute;top:18px;right:18px;z-index:2;background:#292524;color:#fff;font-weight:800;font-size:16px;border:0;border-radius:12px;padding:10px 16px';
+    close.onclick = () => closeRef.current();
+    overlay.appendChild(close);
+    document.body.appendChild(overlay);
+    if (playing) void video.play().catch(() => undefined);
+    return () => {
+      overlay.remove();
+      video.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;object-fit:contain;background:#1c1917';
+      inline.appendChild(video);
+      if (playing) void video.play().catch(() => undefined);
+    };
+  }, [large]);
+  return <View ref={host} style={styles.videoFrame} />;
 }
 
 export function VideoPreview({ uri }: { uri?: string }) {
@@ -676,10 +705,12 @@ export function VideoPreview({ uri }: { uri?: string }) {
   if (Platform.OS === 'web') {
     return (
       <View>
-        <WebVideo src={src} large={large} onStuck={() => { if (uri && openedVideos.has(uri)) setFailed(true); else void openWholeFile(); }} />
-        <Pressable style={large ? styles.videoClose : styles.videoSize} onPress={() => setLarge((value) => !value)}>
-          <Text style={large ? styles.playMark : styles.videoSizeText}>{large ? 'Close' : 'Full screen'}</Text>
-        </Pressable>
+        <WebVideo src={src} large={large} onClose={() => setLarge(false)} onStuck={() => { if (uri && openedVideos.has(uri)) setFailed(true); else void openWholeFile(); }} />
+        {large ? null : (
+          <Pressable style={styles.videoSize} onPress={() => setLarge(true)}>
+            <Text style={styles.videoSizeText}>Full screen</Text>
+          </Pressable>
+        )}
       </View>
     );
   }
@@ -852,9 +883,7 @@ const styles = StyleSheet.create({
   ghost: { borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 10, borderStyle: 'dashed' },
   ghostText: { color: theme.text, fontWeight: '600' },
   count: { color: theme.green, marginTop: 6, fontSize: 13 },
-  videoFrame: { marginTop: 10, height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1c1917', alignItems: 'center', justifyContent: 'center' },
-  videoLarge: { position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, zIndex: 80, backgroundColor: '#000' } as unknown as { position: 'absolute' },
-  videoClose: { position: 'fixed', top: 18, right: 18, zIndex: 90, backgroundColor: '#292524', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 } as unknown as { position: 'absolute' },
+  videoFrame: { position: 'relative', marginTop: 10, height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1c1917', alignItems: 'center', justifyContent: 'center' },
   videoSize: { alignSelf: 'flex-end', marginTop: 8, paddingHorizontal: 12, paddingVertical: 8 },
   videoSizeText: { color: theme.action, fontWeight: '800', fontSize: 15 },
   playMark: { color: '#fff', fontWeight: '800', fontSize: 18 },
