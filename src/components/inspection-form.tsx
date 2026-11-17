@@ -691,7 +691,7 @@ export function VideoPreview({ uri }: { uri?: string }) {
   if (opening) {
     return (
       <View style={styles.videoFrame}>
-        <Text style={styles.playMark}>Opening video. A long one can take a minute.</Text>
+        <Text style={styles.playMark}>Opening Video</Text>
       </View>
     );
   }
