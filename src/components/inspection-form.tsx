@@ -727,10 +727,15 @@ function ThumbRow({ photos, onOpen, onRemove }: { photos: { id: string; localUri
   if (!photos.length) return null;
   return (
     <View style={styles.thumbRow}>
-      {photos.map((photo) => onRemove ? (
-        <RemovablePhoto key={photo.id} uri={photo.localUri || photo.remoteUrl || ''} style={styles.compareThumb} onOpen={onOpen} onRemove={() => onRemove(photo.id)} />
-      ) : (
-        <MediaImage key={photo.id} uri={photo.localUri || photo.remoteUrl || ''} style={styles.compareThumb} onOpen={onOpen} />
+      {photos.map((photo) => (
+        <View key={photo.id} style={styles.thumbSlot}>
+          <MediaImage uri={photo.localUri || photo.remoteUrl || ''} style={styles.thumbFill} onOpen={onOpen} />
+          {onRemove ? (
+            <Pressable style={styles.photoX} onPress={() => onRemove(photo.id)} hitSlop={8}>
+              <Text style={styles.photoXText}>×</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ))}
     </View>
   );
@@ -778,12 +783,13 @@ function MediaImage({ uri, style, onOpen }: { uri: string; style: StyleProp<Imag
     };
   }, [uri]);
   const shown = display.uri || direct;
+  const frame = [style, { overflow: 'hidden' as const, position: 'relative' as const }];
   if (!shown) return <View style={style} />;
-  const image = <Image source={{ uri: shown }} style={style} resizeMode="cover" />;
-  if (!onOpen) return image;
+  const image = <Image source={{ uri: shown }} style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }} resizeMode="cover" />;
+  if (!onOpen) return <View style={frame}>{image}</View>;
   return (
     <Pressable
-      style={styles.zoomTap}
+      style={frame}
       onPress={() => {
         if (!uri.startsWith('idb:')) {
           onOpen(shown);
@@ -865,13 +871,14 @@ const styles = StyleSheet.create({
   photoX: { position: 'absolute', top: 4, right: 4, zIndex: 2, width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(28,25,23,0.72)', alignItems: 'center', justifyContent: 'center' },
   photoXText: { color: '#fff', fontWeight: '800', fontSize: 18, lineHeight: 20 },
   thumb: { width: 92, height: 92, borderRadius: 10, backgroundColor: theme.input },
-  compare: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'flex-start' },
-  compareCol: { flex: 1, minWidth: 0 },
+  compare: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'flex-start', overflow: 'hidden' },
+  compareCol: { flex: 1, minWidth: 0, overflow: 'hidden' },
   compareLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', marginBottom: 4 },
   checkoutIssue: { alignSelf: 'flex-start', marginTop: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#c2410c', color: '#fff', fontSize: 15, fontWeight: '800' },
   compareShot: { width: '100%', height: 150, borderRadius: 12, backgroundColor: theme.input },
-  thumbRow: { flexDirection: 'row', gap: 6, marginTop: 6 },
-  compareThumb: { width: 52, height: 52, borderRadius: 8, backgroundColor: theme.input },
+  thumbRow: { flexDirection: 'row', gap: 4, marginTop: 6, width: '100%' },
+  thumbSlot: { flex: 1, minWidth: 0, aspectRatio: 1, position: 'relative' },
+  thumbFill: { width: '100%', height: '100%', borderRadius: 8, backgroundColor: theme.input },
   addPhoto: { borderWidth: 1, borderColor: theme.action, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 8 },
   addPhotoText: { color: theme.action, fontWeight: '800', fontSize: 14 },
   compareFrame: { width: '100%', minHeight: 150, borderRadius: 12, backgroundColor: theme.input, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
