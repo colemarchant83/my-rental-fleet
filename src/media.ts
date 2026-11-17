@@ -141,8 +141,7 @@ export function useCardThumb(remoteUrl?: string) {
       if (!response?.ok) return '';
       const blob = await response.blob();
       const small = await scaleImage(blob, 640, 0.72);
-      if (!small) return '';
-      const url = URL.createObjectURL(small);
+      const url = URL.createObjectURL(small || blob);
       remoteThumbs.set(source, url);
       return url;
     }).then((url) => {
@@ -165,11 +164,25 @@ export function useCardThumb(remoteUrl?: string) {
 }
 
 async function scaleImage(blob: Blob, max: number, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), 4000);
+    drawScaled(blob, max, quality).then((next) => {
+      clearTimeout(timer);
+      resolve(next);
+    }, () => {
+      clearTimeout(timer);
+      resolve(null);
+    });
+  });
+}
+
+async function drawScaled(blob: Blob, max: number, quality: number): Promise<Blob | null> {
   if (typeof document === 'undefined' || typeof createImageBitmap === 'undefined') return null;
   if (blob.type.startsWith('video')) return null;
   let bitmap: ImageBitmap | null = null;
   try {
-    const options = blob.size > 2_000_000 ? ({ resizeWidth: max, resizeQuality: 'high' } as ImageBitmapOptions) : undefined;
+    const apple = typeof navigator !== 'undefined' && /iP(hone|ad|od)/.test(navigator.userAgent);
+    const options = !apple && blob.size > 2_000_000 ? ({ resizeWidth: max, resizeQuality: 'high' } as ImageBitmapOptions) : undefined;
     try {
       bitmap = await createImageBitmap(blob, options);
     } catch {
