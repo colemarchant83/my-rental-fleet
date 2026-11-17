@@ -9,6 +9,7 @@ import { reportProblem } from '../problem-report';
 import { auth } from '../firebase';
 import { syncAll, watchConnection } from '../fleet-store';
 import { OfflineWall } from '../components/offline-gate';
+import { OpeningSplash } from '../components/opening-splash';
 import { theme } from '../theme';
 
 function ScreenHeader() {
@@ -78,6 +79,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
 export default function RootLayout() {
   const router = useRouter();
   const path = usePathname();
+  const [opening, setOpening] = useState(true);
   const [accountReady, setAccountReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [verified, setVerified] = useState(false);
@@ -237,6 +239,7 @@ export default function RootLayout() {
     ) : (
       <SignInScreen />
     )}
+    {opening ? <OpeningSplash onDone={() => setOpening(false)} /> : null}
     </View>
   );
 }
