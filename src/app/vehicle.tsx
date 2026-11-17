@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { currentOwnerId } from '../account';
-import { formatDay, formatStamp, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, mergeRentalLists, rememberCover, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, mergeRentalLists, rememberCover, rentalIsReturned, saveCachedVehicles, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 
@@ -153,6 +153,12 @@ export default function VehicleDetail() {
   const out = !!open;
   const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
   const display = useDisplayUri(cover?.localUri, cover?.remoteUrl || vehicle?.photoUrl);
+
+  useEffect(() => {
+    if (!id || !olderLoaded || !vehicle || open) return;
+    if (!isOutStatus(vehicle.status) && !vehicle.renterName) return;
+    void settleVehicleRentalStatus(id, vehicle);
+  }, [id, olderLoaded, open, vehicle]);
 
   const setStatus = async (status: string) => {
     if (!id) return;

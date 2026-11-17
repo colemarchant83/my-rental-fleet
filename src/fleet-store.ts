@@ -812,6 +812,35 @@ export async function forgetRentalsRemovedElsewhere(vehicleId: string, remote: L
   if (next.length !== local.length) await saveRentals(next);
 }
 
+const settlingOut = new Set<string>();
+
+export async function settleVehicleRentalStatus(vehicleId: string, vehicle?: { status?: string; renterName?: string }) {
+  const out = isOutStatus(vehicle?.status);
+  const shop = vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop';
+  if (!out && !vehicle?.renterName) return;
+  if (settlingOut.has(vehicleId)) return;
+  settlingOut.add(vehicleId);
+  try {
+    const remote = await fetchVehicleRentals(vehicleId);
+    await forgetRentalsRemovedElsewhere(vehicleId, remote);
+    const local = (await loadRentals()).filter((rental) => rental.vehicleId === vehicleId);
+    if (local.some((rental) => !rentalIsReturned(rental) && rental.sync !== 'synced' && !rental.remoteId)) return;
+    if (mergeRentalLists(local, remote).some((rental) => !rentalIsReturned(rental))) return;
+    if (shop) {
+      await updateDoc(doc(db, 'vehicles', vehicleId), { renterName: deleteField() });
+      return;
+    }
+    await updateDoc(doc(db, 'vehicles', vehicleId), {
+      status: 'Available',
+      renterName: deleteField(),
+    });
+  } catch {
+    // Leave the machine record alone until the rental cards can be read.
+  } finally {
+    settlingOut.delete(vehicleId);
+  }
+}
+
 async function dropRentalsDeletedElsewhere() {
   const local = await loadRentals();
   const vehicleIds = [...new Set(local.filter((rental) => rental.remoteId || rental.sync === 'synced').map((rental) => rental.vehicleId))];

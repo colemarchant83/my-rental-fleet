@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, isOutStatus, mergeRentalLists, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, isOutStatus, mergeRentalLists, rentalIsReturned, saveCachedVehicles, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 
@@ -96,6 +96,14 @@ export default function VehicleListScreen() {
     return subscribeFleet(refresh);
   }, []);
 
+  useEffect(() => {
+    if (!rentalsReady) return;
+    for (const vehicle of vehicles) {
+      if (!isOutStatus(vehicle.status) && !vehicle.renterName) continue;
+      void settleVehicleRentalStatus(vehicle.id, vehicle);
+    }
+  }, [rentalsReady, vehicles]);
+
   const openInspection = (vehicle: Vehicle, mode: 'checkout' | 'checkin') => {
     router.push({ pathname: '/inspection', params: { vehicleId: vehicle.id, type: mode } });
   };
@@ -109,9 +117,9 @@ export default function VehicleListScreen() {
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {vehicles.map((vehicle) => {
         const open = rentals.find((rental) => rental.vehicleId === vehicle.id && !rentalIsReturned(rental));
-        const out = !!open || (!rentalsReady && isOutStatus(vehicle.status));
+        const out = !!open;
         const shop = !out && (vehicle.status === 'In the shop' || vehicle.status === 'In Shop');
-        const renter = open?.renterName || vehicle.renterName;
+        const renter = open?.renterName;
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
         const waiting = !!open && open.sync !== 'synced';
         return (
@@ -133,13 +141,15 @@ export default function VehicleListScreen() {
               {vehicle.vin ? <Text style={styles.vin}>{vehicleIdLine(vehicle.vin)}</Text> : null}
               {savedIds.includes(vehicle.id) ? <Text style={styles.offline}>Saved on this phone for offline use.</Text> : null}
               <Pressable
-                style={styles.action}
+                style={[styles.action, !rentalsReady && styles.actionWait]}
+                disabled={!rentalsReady}
                 onPress={(event) => {
                   event.stopPropagation();
+                  if (!rentalsReady) return;
                   openInspection(vehicle, out ? 'checkin' : 'checkout');
                 }}
               >
-                <Text style={styles.actionText}>{out ? 'Check in — return inspection' : 'Check out — pre-rental inspection'}</Text>
+                <Text style={styles.actionText}>{!rentalsReady ? 'Checking rental...' : out ? 'Check in — return inspection' : 'Check out — pre-rental inspection'}</Text>
               </Pressable>
               {waiting ? <Text style={styles.waiting}>Files are saved on this phone, so nothing will be lost. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.</Text> : null}
             </View>
@@ -174,6 +184,7 @@ const styles = StyleSheet.create({
   vin: { color: theme.muted, marginTop: 2 },
   offline: { color: theme.muted, marginTop: 6, fontSize: 13 },
   action: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 12, alignItems: 'center', marginTop: 14 },
+  actionWait: { opacity: 0.7 },
   actionText: { color: theme.ink, fontWeight: '800', fontSize: 15, textAlign: 'center' },
   waiting: { color: theme.rent, marginTop: 8, fontSize: 13 },
   badge: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
