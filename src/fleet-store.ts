@@ -970,6 +970,14 @@ function rentalFromDoc(remoteId: string, data: Record<string, unknown>): LocalRe
   };
 }
 
+export async function fetchOpenRentals() {
+  const uid = currentOwnerId();
+  const snap = await getDocs(query(collection(db, 'rentals'), where('ownerId', '==', uid)));
+  return snap.docs
+    .map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>))
+    .filter((item) => !rentalIsReturned(item));
+}
+
 export async function fetchVehicleRentals(vehicleId: string) {
   const uid = currentOwnerId();
   const snap = await getDocs(query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId)));

@@ -100,7 +100,7 @@ function WebRecorder({ onClose, onRecorded }: Omit<Props, 'visible'>) {
         {saving ? (
           <View style={styles.saving}>
             <Text style={styles.savingTitle}>Saving the video</Text>
-            <Text style={styles.savingNote}>A long video takes a few seconds. Keep this screen open.</Text>
+            <Text style={styles.savingNote}>A long video can take a minute. Keep this screen open.</Text>
           </View>
         ) : null}
         {!saving && recording ? <Text style={styles.timer}>{formatClock(seconds)}</Text> : null}
@@ -228,17 +228,19 @@ async function openWebCamera(): Promise<WebSession> {
         stopping = true;
         window.clearInterval(watch);
         recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: recorder?.mimeType || 'video/mp4' });
-          if (interrupted || !blob.size) {
+          const raw = new Blob(chunks, { type: recorder?.mimeType || 'video/mp4' });
+          if (interrupted || !raw.size) {
             reject(new Error('This video was cut off before it finished saving. It was not kept. Record it again.'));
             return;
           }
-          void recordedVideoPlays(blob).then((ok) => {
+          void import('../fix-video').then(({ flattenIfFragmented }) => flattenIfFragmented(raw)).then((blob) => recordedVideoPlays(blob).then((ok) => {
             if (!ok) {
               reject(new Error('This video was cut off before it finished saving. It was not kept. Record it again.'));
               return;
             }
             resolve(URL.createObjectURL(blob));
+          })).catch(() => {
+            reject(new Error('This video could not be saved on the device. Try again.'));
           });
         };
         recorder.stop();

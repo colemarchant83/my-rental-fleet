@@ -7,6 +7,7 @@ import { SPOTS, emptySide, formatDay, formatStamp, keepPhoto, keepVideo, type In
 import { ZoomModal } from './zoom-modal';
 import { WalkaroundRecorder, primeWalkaroundCamera } from './walkaround-recorder';
 import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, readStoredBlob, useDisplayUri } from '../media';
+import { flattenIfFragmented, looksFragmented, remoteLooksFragmented } from '../fix-video';
 import { beginUpload } from '../r2';
 import { theme } from '../theme';
 
@@ -495,7 +496,7 @@ async function videoBlob(uri: string) {
   return blob.type.startsWith('video/') ? blob : new Blob([blob], { type: 'video/mp4' });
 }
 
-function WebVideo({ src, onStuck }: { src: string; onStuck: () => void }) {
+function WebVideo({ src, large, onStuck }: { src: string; large: boolean; onStuck: () => void }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const stuckRef = useRef(onStuck);
   stuckRef.current = onStuck;
@@ -519,6 +520,10 @@ function WebVideo({ src, onStuck }: { src: string; onStuck: () => void }) {
         if (video.readyState < 3) stop();
       }, 8000);
     };
+    const leaveFullscreen = () => {
+      const current = document.fullscreenElement;
+      if (current && (current === video || video.contains(current))) void document.exitFullscreen().catch(() => undefined);
+    };
     video.addEventListener('error', stop);
     video.addEventListener('waiting', arm);
     video.addEventListener('stalled', arm);
@@ -528,6 +533,7 @@ function WebVideo({ src, onStuck }: { src: string; onStuck: () => void }) {
     };
     video.addEventListener('timeupdate', moved);
     video.addEventListener('canplay', moved);
+    document.addEventListener('fullscreenchange', leaveFullscreen);
     const tick = window.setInterval(() => {
       if (gaveUp || video.paused || video.ended) return;
       if (video.currentTime > 0 && video.currentTime === mark) stop();
@@ -541,17 +547,20 @@ function WebVideo({ src, onStuck }: { src: string; onStuck: () => void }) {
       video.removeEventListener('stalled', arm);
       video.removeEventListener('timeupdate', moved);
       video.removeEventListener('canplay', moved);
+      document.removeEventListener('fullscreenchange', leaveFullscreen);
     };
   }, [src]);
   return (
-    <View style={styles.videoFrame}>
+    <View style={large ? styles.videoLarge : styles.videoFrame}>
       {createElement('video', {
         ref,
         src,
         controls: true,
         playsInline: true,
+        controlsList: 'nofullscreen',
+        disablePictureInPicture: true,
         preload: 'auto',
-        style: { width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#1c1917' },
+        style: { width: '100%', height: large ? '100%' : '100%', objectFit: 'contain', backgroundColor: '#1c1917' },
       })}
     </View>
   );
@@ -562,6 +571,7 @@ export function VideoPreview({ uri }: { uri?: string }) {
   const [src, setSrc] = useState('');
   const [opening, setOpening] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [large, setLarge] = useState(false);
   const direct = useRef('');
   useEffect(() => {
     if (!play) return;
@@ -577,21 +587,48 @@ export function VideoPreview({ uri }: { uri?: string }) {
         setSrc(cached);
         return;
       }
-      if (uri.startsWith('http') || uri.startsWith('blob:') || uri.startsWith('data:')) {
+      if (uri.startsWith('http')) {
+        direct.current = cleanVideoUri(uri);
+        const fragmented = await remoteLooksFragmented(direct.current).catch(() => false);
+        if (!live) return;
+        if (!fragmented) {
+          setSrc(direct.current);
+          return;
+        }
+      } else if (uri.startsWith('idb:')) {
+        const blob = await readStoredBlob(uri).catch(() => null);
+        if (!live || !blob) return;
+        const head = new Uint8Array(await blob.slice(0, 8192).arrayBuffer());
+        if (!looksFragmented(head)) {
+          objectUrl = URL.createObjectURL(blob.type.startsWith('video/') ? blob : new Blob([blob], { type: 'video/mp4' }));
+          direct.current = objectUrl;
+          setSrc(objectUrl);
+          return;
+        }
+        direct.current = uri;
+      } else if (uri.startsWith('blob:') || uri.startsWith('data:')) {
         direct.current = cleanVideoUri(uri);
         setSrc(direct.current);
         return;
-      }
-      if (uri.startsWith('idb:')) {
-        const blob = await readStoredBlob(uri).catch(() => null);
-        if (!live || !blob) return;
-        objectUrl = URL.createObjectURL(blob.type.startsWith('video/') ? blob : new Blob([blob], { type: 'video/mp4' }));
-        direct.current = objectUrl;
-        setSrc(objectUrl);
+      } else {
+        direct.current = uri;
+        setSrc(uri);
         return;
       }
-      direct.current = uri;
-      setSrc(uri);
+      setOpening(true);
+      try {
+        const blob = await videoBlob(direct.current || uri);
+        const fixed = await flattenIfFragmented(blob);
+        if (!live) return;
+        objectUrl = URL.createObjectURL(fixed);
+        openedVideos.set(uri, objectUrl);
+        objectUrl = '';
+        setSrc(openedVideos.get(uri) || '');
+      } catch {
+        if (live) setFailed(true);
+      } finally {
+        if (live) setOpening(false);
+      }
     };
     void load();
     return () => {
@@ -605,7 +642,8 @@ export function VideoPreview({ uri }: { uri?: string }) {
     setFailed(false);
     try {
       const blob = await videoBlob(direct.current || uri);
-      const objectUrl = URL.createObjectURL(blob);
+      const fixed = await flattenIfFragmented(blob);
+      const objectUrl = URL.createObjectURL(fixed);
       openedVideos.set(uri, objectUrl);
       setSrc(objectUrl);
     } catch {
@@ -614,7 +652,7 @@ export function VideoPreview({ uri }: { uri?: string }) {
       setOpening(false);
     }
   };
-  if (!play || !src) {
+  if (!play || (!src && !opening && !failed)) {
     return (
       <Pressable style={styles.videoFrame} onPress={() => setPlay(true)}>
         <Text style={styles.playMark}>Play</Text>
@@ -624,11 +662,11 @@ export function VideoPreview({ uri }: { uri?: string }) {
   if (opening) {
     return (
       <View style={styles.videoFrame}>
-        <Text style={styles.playMark}>Opening video...</Text>
+        <Text style={styles.playMark}>Opening video. A long one can take a minute.</Text>
       </View>
     );
   }
-  if (failed) {
+  if (failed || !src) {
     return (
       <View style={styles.videoFrame}>
         <Text style={styles.playMark}>This video could not be opened</Text>
@@ -636,7 +674,14 @@ export function VideoPreview({ uri }: { uri?: string }) {
     );
   }
   if (Platform.OS === 'web') {
-    return <WebVideo src={src} onStuck={() => { if (uri && openedVideos.has(uri)) setFailed(true); else void openWholeFile(); }} />;
+    return (
+      <View>
+        <WebVideo src={src} large={large} onStuck={() => { if (uri && openedVideos.has(uri)) setFailed(true); else void openWholeFile(); }} />
+        <Pressable style={large ? styles.videoClose : styles.videoSize} onPress={() => setLarge((value) => !value)}>
+          <Text style={large ? styles.playMark : styles.videoSizeText}>{large ? 'Close' : 'Full screen'}</Text>
+        </Pressable>
+      </View>
+    );
   }
   return <Video source={{ uri: src }} style={styles.videoFrame} useNativeControls resizeMode={ResizeMode.COVER} />;
 }
@@ -808,6 +853,10 @@ const styles = StyleSheet.create({
   ghostText: { color: theme.text, fontWeight: '600' },
   count: { color: theme.green, marginTop: 6, fontSize: 13 },
   videoFrame: { marginTop: 10, height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1c1917', alignItems: 'center', justifyContent: 'center' },
+  videoLarge: { position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, zIndex: 80, backgroundColor: '#000' } as unknown as { position: 'absolute' },
+  videoClose: { position: 'fixed', top: 18, right: 18, zIndex: 90, backgroundColor: '#292524', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 } as unknown as { position: 'absolute' },
+  videoSize: { alignSelf: 'flex-end', marginTop: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  videoSizeText: { color: theme.action, fontWeight: '800', fontSize: 15 },
   playMark: { color: '#fff', fontWeight: '800', fontSize: 18 },
   videoBtn: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 12 },
   videoBtnText: { color: theme.ink, fontWeight: '800', fontSize: 16 },

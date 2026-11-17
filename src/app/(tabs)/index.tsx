@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { loadCachedVehicles, loadCovers, loadRentals, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, isOutStatus, mergeRentalLists, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 
@@ -14,6 +14,7 @@ export default function VehicleListScreen() {
   const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [rentals, setRentals] = useState<LocalRental[]>([]);
+  const [rentalsReady, setRentalsReady] = useState(false);
   const [covers, setCovers] = useState<CoverPhoto[]>([]);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
@@ -75,7 +76,17 @@ export default function VehicleListScreen() {
           return current.length === byId.size ? current : [...byId.values()];
         });
       });
-      void loadRentals().then(setRentals);
+      void (async () => {
+        const local = await loadRentals();
+        setRentals(local);
+        try {
+          const remote = await fetchOpenRentals();
+          setRentals(mergeRentalLists(await loadRentals(), remote));
+        } catch {
+          // Keep the rentals already on this phone when the server cannot be reached.
+        }
+        setRentalsReady(true);
+      })();
       void loadCovers().then(async (next) => {
         await Promise.all(next.map((cover) => warmDisplayUri(cover.localUri)));
         setCovers(next);
@@ -98,7 +109,7 @@ export default function VehicleListScreen() {
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {vehicles.map((vehicle) => {
         const open = rentals.find((rental) => rental.vehicleId === vehicle.id && !rentalIsReturned(rental));
-        const out = !!open;
+        const out = !!open || (!rentalsReady && isOutStatus(vehicle.status));
         const shop = !out && (vehicle.status === 'In the shop' || vehicle.status === 'In Shop');
         const renter = open?.renterName || vehicle.renterName;
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
