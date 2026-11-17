@@ -76,15 +76,28 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
   );
 }
 
+function playOpeningSplash() {
+  if (typeof sessionStorage === 'undefined') return true;
+  return sessionStorage.getItem('fleet-opened') !== '1';
+}
+
 export default function RootLayout() {
   const router = useRouter();
   const path = usePathname();
-  const [opening, setOpening] = useState(true);
+  const [opening, setOpening] = useState(playOpeningSplash);
   const [accountReady, setAccountReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [verified, setVerified] = useState(false);
   const sharing = path.startsWith('/share');
   const claimed = useRef('');
+  useEffect(() => {
+    if (!opening) return;
+    try {
+      sessionStorage.setItem('fleet-opened', '1');
+    } catch {
+      // A phone that cannot store this still shows the animation once.
+    }
+  }, [opening]);
   const openAccount = useCallback((uid: string, justSignedIn: boolean) => {
     setSignedIn(true);
     setVerified(true);
