@@ -62,11 +62,40 @@ function paintStrip(source: CanvasImageSource, sourceWidth: number, sourceHeight
   context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.width, canvas.height);
 }
 
+function paintTurned(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
+  const cropW = Math.max(64, Math.round(sourceWidth * 0.32));
+  const cropH = Math.round(sourceHeight * 0.78);
+  const x = Math.round((sourceWidth - cropW) / 2);
+  const y = Math.round((sourceHeight - cropH) / 2);
+  const scale = Math.min(1, 1400 / cropH);
+  canvas.width = Math.max(2, Math.round(cropH * scale));
+  canvas.height = Math.max(2, Math.round(cropW * scale));
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.translate(canvas.width, 0);
+  context.rotate(Math.PI / 2);
+  context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.height, canvas.width);
+  context.setTransform(1, 0, 0, 1, 0, 0);
+}
+
 export function WebVinScanner({ onVin }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const onVinRef = useRef(onVin);
   const [error, setError] = useState('');
   onVinRef.current = onVin;
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.body.dataset.vinScan = '1';
+    const orientation = window.screen?.orientation as { unlock?: () => void; lock?: (orientation: string) => Promise<void> } | undefined;
+    orientation?.unlock?.();
+    window.dispatchEvent(new Event('resize'));
+    return () => {
+      delete document.body.dataset.vinScan;
+      orientation?.lock?.('portrait').catch(() => undefined);
+      window.dispatchEvent(new Event('resize'));
+    };
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -146,10 +175,16 @@ export function WebVinScanner({ onVin }: Props) {
             }
             if (sourceWidth && sourceHeight) {
               paintStrip(source, sourceWidth, sourceHeight, canvas, context);
+              const across = await zxing.detect(canvas);
+              if (across.some((code) => code.rawValue && found(code.rawValue))) {
+                if (source instanceof ImageBitmap) source.close();
+                return;
+              }
+              paintTurned(source, sourceWidth, sourceHeight, canvas, context);
+              const upright = await zxing.detect(canvas);
               if (source instanceof ImageBitmap) source.close();
-              const codes = await zxing.detect(canvas);
-              if (codes.some((code) => code.rawValue && found(code.rawValue))) return;
-            }
+              if (upright.some((code) => code.rawValue && found(code.rawValue))) return;
+            } else if (source instanceof ImageBitmap) source.close();
           }
         } catch {
           // A missed frame is not a failure. Keep the camera open.
@@ -178,6 +213,7 @@ export function WebVinScanner({ onVin }: Props) {
         style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#111' },
       })}
       <View pointerEvents="none" style={{ position: 'absolute', left: '8%', right: '8%', top: '38%', height: 84, borderWidth: 3, borderColor: theme.white, borderRadius: 12 }} />
+      <View pointerEvents="none" style={{ position: 'absolute', left: '36%', width: '28%', top: '12%', bottom: '12%', borderWidth: 3, borderColor: theme.white, borderRadius: 12 }} />
       {error ? <Text style={{ position: 'absolute', left: 16, right: 16, bottom: 16, color: theme.white, fontWeight: '700' }}>{error}</Text> : null}
     </View>
   );

@@ -197,7 +197,7 @@ export default function RootLayout() {
         document.body.appendChild(cover);
         updateCover = () => {
           if (!cover) return;
-          cover.style.display = window.matchMedia('(orientation: landscape)').matches ? 'flex' : 'none';
+          cover.style.display = window.matchMedia('(orientation: landscape)').matches && document.body.dataset.vinScan !== '1' ? 'flex' : 'none';
         };
         updateCover();
         window.addEventListener('orientationchange', updateCover);
