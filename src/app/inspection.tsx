@@ -27,6 +27,7 @@ export default function InspectionScreen() {
   const sideRef = useRef(side);
   sideRef.current = side;
   const skipDraft = useRef(true);
+  const saveTries = useRef(0);
 
   useEffect(() => {
     if (!vehicleId || Platform.OS !== 'web') {
@@ -36,9 +37,10 @@ export default function InspectionScreen() {
     try {
       const raw = localStorage.getItem(draftKey(vehicleId, mode));
       if (raw) {
-        const saved = JSON.parse(raw) as { renterName?: string; side?: InspectionSide };
+        const saved = JSON.parse(raw) as { renterName?: string; side?: InspectionSide; openId?: string };
         if (saved.side) setSide(saved.side);
         if (saved.renterName) setRenterName(saved.renterName);
+        if (saved.openId) setOpenId(saved.openId);
       }
     } catch {
       /* A bad draft should not block the inspection. */
@@ -51,8 +53,8 @@ export default function InspectionScreen() {
 
   useEffect(() => {
     if (skipDraft.current || !vehicleId || Platform.OS !== 'web') return;
-    localStorage.setItem(draftKey(vehicleId, mode), JSON.stringify({ renterName, side }));
-  }, [vehicleId, mode, renterName, side]);
+    localStorage.setItem(draftKey(vehicleId, mode), JSON.stringify({ renterName, side, openId }));
+  }, [vehicleId, mode, renterName, side, openId]);
 
   useEffect(() => {
     if (!vehicleId) return;
@@ -119,14 +121,16 @@ export default function InspectionScreen() {
         openCard(rental.localId);
         return;
       }
-      const open = (await openRentalFor(vehicleId)) ?? (openId ? { localId: openId } : null);
-      if (!open?.localId) {
-        setError('This return was not saved. The machine is still out. Start the return again from the machine page.');
+      const open = await openRentalFor(vehicleId);
+      const localId = open?.localId || openId || '';
+      if (!localId) {
+        saveTries.current += 1;
+        setError(`This return is still on this screen. Nothing was erased, and the machine is still out. This phone could not find the open rental card. Tap Save & mark returned again. Try ${saveTries.current}.`);
         setSaving(false);
         return;
       }
-      await saveCheckin(open.localId, currentSide);
-      openCard(open.localId);
+      await saveCheckin(localId, currentSide);
+      openCard(localId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save');
       setSaving(false);
