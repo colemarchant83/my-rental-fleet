@@ -110,10 +110,6 @@ export default function InspectionScreen() {
     try {
       const openCard = (localId: string) => {
         if (Platform.OS === 'web') localStorage.removeItem(draftKey(vehicleId, mode));
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.location.assign(`/rental-history?localId=${encodeURIComponent(localId)}`);
-          return;
-        }
         router.replace({ pathname: '/rental-history', params: { localId } });
       };
       if (mode === 'checkout') {

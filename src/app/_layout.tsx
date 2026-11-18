@@ -114,7 +114,7 @@ export default function RootLayout() {
     if (uid) openAccount(uid, false);
   }, [openAccount]);
   useEffect(() => {
-    return watchAccount((user) => {
+    const stop = watchAccount((user) => {
       const justSignedIn = consumeOpeningAccount();
       if (!user) {
         claimed.current = '';
@@ -131,6 +131,21 @@ export default function RootLayout() {
       }
       openAccount(user.uid, justSignedIn);
     });
+    const giveUp = window.setTimeout(() => {
+      const user = auth.currentUser;
+      if (!user) return;
+      if (needsEmailVerification(user)) {
+        setSignedIn(true);
+        setVerified(false);
+        setAccountReady(true);
+        return;
+      }
+      openAccount(user.uid, false);
+    }, 4000);
+    return () => {
+      stop();
+      window.clearTimeout(giveUp);
+    };
   }, [openAccount]);
   useEffect(() => {
     if ((signedIn && verified) || sharing) void syncAll();
@@ -146,18 +161,15 @@ export default function RootLayout() {
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         if (navigator.onLine === false) return;
-        if (window.location.pathname.includes('inspection')) return;
+        if (window.location.pathname.includes('inspection') || window.location.pathname.includes('rental-history')) return;
         refreshing = true;
         window.location.reload();
       });
       void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
     }
     const refreshAfterReconnect = () => {
-      if (typeof window === 'undefined') return;
-      if (window.location.pathname.includes('inspection')) return;
-      if (sessionStorage.getItem('fleet-refreshed-online') === '1') return;
-      sessionStorage.setItem('fleet-refreshed-online', '1');
-      window.location.reload();
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      void syncAll();
     };
     window.addEventListener('online', refreshAfterReconnect);
     const reportPageError = (event: ErrorEvent) => {
