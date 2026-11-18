@@ -248,7 +248,7 @@ export default function AddScreen() {
             />
             )}
           </View>
-          <Text style={styles.help}>{reading ? 'Looking up that VIN...' : 'Line the barcode up with either box and hold still.'}</Text>
+          <Text style={styles.help}>{reading ? 'Looking up that VIN...' : 'Line the barcode up with either box and hold still. For a Dodge or Ram, use the tall box.'}</Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : (

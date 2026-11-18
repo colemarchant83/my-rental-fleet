@@ -36,6 +36,7 @@ export function extractVin(text: string) {
 }
 
 type Detector = { detect: (source: CanvasImageSource) => Promise<{ rawValue?: string }[]> };
+type DenseReader = (image: ImageData, options: Record<string, unknown>) => Promise<{ text?: string }[]>;
 type Shot = { source: CanvasImageSource; width: number; height: number; close: () => void };
 
 async function nativeDetector(): Promise<Detector | null> {
@@ -64,20 +65,47 @@ function paintStrip(source: CanvasImageSource, sourceWidth: number, sourceHeight
   context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.width, canvas.height);
 }
 
-function paintTurned(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
-  const cropW = Math.max(64, Math.round(sourceWidth * 0.32));
-  const cropH = Math.round(sourceHeight * 0.78);
+function paintTurned(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, wide = false) {
+  const cropW = Math.max(64, Math.round(sourceWidth * (wide ? 0.56 : 0.32)));
+  const cropH = Math.round(sourceHeight * (wide ? 0.86 : 0.78));
   const x = Math.round((sourceWidth - cropW) / 2);
   const y = Math.round((sourceHeight - cropH) / 2);
-  const scale = Math.min(1, 1400 / cropH);
+  const scale = wide ? Math.max(1, Math.min(2.2, 1280 / cropH)) : Math.min(1, 1400 / cropH);
   canvas.width = Math.max(2, Math.round(cropH * scale));
   canvas.height = Math.max(2, Math.round(cropW * scale));
   context.setTransform(1, 0, 0, 1, 0, 0);
+  context.imageSmoothingEnabled = !wide;
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.translate(canvas.width, 0);
   context.rotate(Math.PI / 2);
   context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.height, canvas.width);
   context.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+function paintBlock(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
+  const cropW = Math.round(sourceWidth * 0.86);
+  const cropH = Math.round(sourceHeight * 0.5);
+  const x = Math.round((sourceWidth - cropW) / 2);
+  const y = Math.round((sourceHeight - cropH) / 2);
+  const scale = Math.max(1, Math.min(2.2, 1280 / cropW));
+  canvas.width = Math.max(2, Math.round(cropW * scale));
+  canvas.height = Math.max(2, Math.round(cropH * scale));
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.imageSmoothingEnabled = false;
+  context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.width, canvas.height);
+}
+
+function punch(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  const data = image.data;
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
+    const value = Math.max(0, Math.min(255, (gray - 128) * 1.85 + 128));
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
+  }
+  return image;
 }
 
 function matchSensor(bitmap: ImageBitmap, videoWidth: number, videoHeight: number): Shot {
@@ -169,6 +197,18 @@ export function WebVinScanner({ onVin }: Props) {
       const Capture = (globalThis as { ImageCapture?: new (track: MediaStreamTrack) => { grabFrame: () => Promise<ImageBitmap> } }).ImageCapture;
       const imageCapture = Capture && track ? new Capture(track) : null;
       const android = /Android/i.test(navigator.userAgent);
+      let dense: DenseReader | null = null;
+      if (android) {
+        try {
+          const reader = await import('zxing-wasm/reader');
+          reader.setZXingModuleOverrides({
+            locateFile: (path: string, prefix: string) => (String(path).includes('zxing_reader') ? '/zxing_reader.wasm' : prefix + path),
+          });
+          dense = reader.readBarcodes as DenseReader;
+        } catch {
+          dense = null;
+        }
+      }
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d', { willReadFrequently: true });
       const found = (value: string) => {
@@ -193,6 +233,25 @@ export function WebVinScanner({ onVin }: Props) {
         const ready = await zxing.detect(canvas).then(() => true).catch(() => false);
         if (!ready) zxing = null;
       }
+      let pass = 0;
+      const readDense = async () => {
+        if (!dense || !context) return false;
+        try {
+          const image = punch(canvas, context);
+          const codes = await dense(image, {
+            formats: ['PDF417', 'MicroPDF417', 'Code39', 'Code128', 'Code93'],
+            tryHarder: true,
+            tryRotate: true,
+            tryInvert: true,
+            tryDenoise: true,
+            tryDownscale: false,
+            maxNumberOfSymbols: 4,
+          });
+          return codes.some((code) => code.text && found(code.text));
+        } catch {
+          return false;
+        }
+      };
       const scan = async () => {
         if (!live) return;
         let shot: Shot | null = null;
@@ -202,25 +261,36 @@ export function WebVinScanner({ onVin }: Props) {
             if (android && imageCapture) {
               bitmap = await imageCapture.grabFrame().catch(() => null);
               if (!live) return;
-              if (bitmap && native && await read(native, bitmap)) return;
               if (bitmap) shot = matchSensor(bitmap, video.videoWidth, video.videoHeight);
             }
             if (!shot) shot = { source: video, width: video.videoWidth, height: video.videoHeight, close: () => undefined };
             if (zxing) {
-              paintStrip(shot.source, shot.width, shot.height, canvas, context);
-              if (blankFrame(canvas, context) && imageCapture && shot.source === video) {
-                const fallback = await imageCapture.grabFrame().catch(() => null);
-                if (fallback) {
-                  shot.close();
-                  shot = matchSensor(fallback, video.videoWidth, video.videoHeight);
-                  paintStrip(shot.source, shot.width, shot.height, canvas, context);
+              const mode = android ? pass % 3 : 0;
+              pass += 1;
+              if (!android || mode === 0) {
+                paintStrip(shot.source, shot.width, shot.height, canvas, context);
+                if (blankFrame(canvas, context) && imageCapture && shot.source === video) {
+                  const fallback = await imageCapture.grabFrame().catch(() => null);
+                  if (fallback) {
+                    shot.close();
+                    shot = matchSensor(fallback, video.videoWidth, video.videoHeight);
+                    paintStrip(shot.source, shot.width, shot.height, canvas, context);
+                  }
                 }
+                if (await read(zxing, canvas)) return;
+                if (native && await read(native, canvas)) return;
               }
-              if (await read(zxing, canvas)) return;
-              if (native && await read(native, canvas)) return;
-              paintTurned(shot.source, shot.width, shot.height, canvas, context);
-              if (await read(zxing, canvas)) return;
-              if (native && await read(native, canvas)) return;
+              if (android && mode === 1) {
+                paintBlock(shot.source, shot.width, shot.height, canvas, context);
+                if (await readDense()) return;
+                if (await read(zxing, canvas)) return;
+              }
+              if (!android || mode === 2) {
+                paintTurned(shot.source, shot.width, shot.height, canvas, context, android);
+                if (android && await readDense()) return;
+                if (await read(zxing, canvas)) return;
+                if (native && await read(native, canvas)) return;
+              }
             } else if (native && shot.source === video) {
               if (await read(native, video)) return;
             }
@@ -231,7 +301,7 @@ export function WebVinScanner({ onVin }: Props) {
           if (bitmap && shot?.source !== bitmap) bitmap.close();
           shot?.close();
         }
-        timer = window.setTimeout(() => void scan(), 200);
+        timer = window.setTimeout(() => void scan(), android ? 90 : 200);
       };
       timer = window.setTimeout(() => void scan(), 400);
     };
