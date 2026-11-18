@@ -72,8 +72,20 @@ export default function VehicleListScreen() {
         if (!mine.length) return;
         setVehicles((current) => {
           const byId = new Map(current.map((item) => [item.id, item]));
-          for (const item of mine) if (!byId.has(item.id)) byId.set(item.id, item);
-          return current.length === byId.size ? current : [...byId.values()];
+          let changed = false;
+          for (const item of mine) {
+            const existing = byId.get(item.id);
+            if (!existing) {
+              byId.set(item.id, item);
+              changed = true;
+              continue;
+            }
+            if ((isOutStatus(item.status) || item.renterName) && (!isOutStatus(existing.status) || existing.renterName !== item.renterName)) {
+              byId.set(item.id, { ...existing, status: item.status, renterName: item.renterName });
+              changed = true;
+            }
+          }
+          return changed ? [...byId.values()] : current;
         });
       });
       void (async () => {
@@ -86,6 +98,7 @@ export default function VehicleListScreen() {
           for (const vehicleId of openVehicleIds) {
             const history = await fetchVehicleRentals(vehicleId).catch(() => null);
             if (!history) continue;
+            if (!history.length) continue;
             await forgetRentalsRemovedElsewhere(vehicleId, history);
             await rememberRentals(history);
             const local = (await loadRentals()).filter((rental) => rental.vehicleId === vehicleId);
@@ -127,9 +140,10 @@ export default function VehicleListScreen() {
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {vehicles.map((vehicle) => {
         const open = rentals.find((rental) => rental.vehicleId === vehicle.id && !rentalIsReturned(rental));
-        const out = rentalsReady && !!open;
+        const recordedOut = isOutStatus(vehicle.status) || !!vehicle.renterName;
+        const out = !!open || recordedOut;
         const shop = !out && (vehicle.status === 'In the shop' || vehicle.status === 'In Shop');
-        const renter = open?.renterName;
+        const renter = open?.renterName || (recordedOut ? vehicle.renterName : undefined);
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
         const waiting = !!open && open.sync !== 'synced';
         return (
@@ -139,7 +153,7 @@ export default function VehicleListScreen() {
               <View style={styles.titleRow}>
                 <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
                 <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>
-                  <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{!rentalsReady ? 'Checking' : out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
+                  <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{!rentalsReady && !out ? 'Checking' : out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
                 </View>
               </View>
               {vehicle.yearMakeModel || (out && renter) ? (
@@ -151,15 +165,15 @@ export default function VehicleListScreen() {
               {vehicle.vin ? <Text style={styles.vin}>{vehicleIdLine(vehicle.vin)}</Text> : null}
               {savedIds.includes(vehicle.id) ? <Text style={styles.offline}>Saved on this phone for offline use.</Text> : null}
               <Pressable
-                style={[styles.action, !rentalsReady && styles.actionWait]}
-                disabled={!rentalsReady}
+                style={[styles.action, !rentalsReady && !out && styles.actionWait]}
+                disabled={!rentalsReady && !out}
                 onPress={(event) => {
                   event.stopPropagation();
-                  if (!rentalsReady) return;
+                  if (!rentalsReady && !out) return;
                   openInspection(vehicle, out ? 'checkin' : 'checkout');
                 }}
               >
-                <Text style={styles.actionText}>{!rentalsReady ? 'Checking rental...' : out ? 'Check in — return inspection' : 'Check out — pre-rental inspection'}</Text>
+                <Text style={styles.actionText}>{!rentalsReady && !out ? 'Checking rental...' : out ? 'Check in — return inspection' : 'Check out — pre-rental inspection'}</Text>
               </Pressable>
               {waiting ? <Text style={styles.waiting}>Files are saved on this phone, so nothing will be lost. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.</Text> : null}
             </View>

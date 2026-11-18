@@ -87,7 +87,7 @@ export default function VehicleDetail() {
         try {
           const remote = await fetchVehicleRentals(id);
           if (!live) return;
-          await forgetRentalsRemovedElsewhere(id, remote);
+          if (remote.length) await forgetRentalsRemovedElsewhere(id, remote);
           if (!live) return;
           await rememberRentals(remote);
           if (!live) return;
@@ -152,7 +152,8 @@ export default function VehicleDetail() {
   const visibleRentals = newestFirst.slice(0, shownCount);
   const hiddenRentals = newestFirst.length - visibleRentals.length;
   const showMore = hiddenRentals > 0;
-  const out = !!open;
+  const recordedOut = isOutStatus(vehicle?.status) || !!vehicle?.renterName;
+  const out = !!open || recordedOut;
   const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
   const display = useDisplayUri(cover?.localUri, cover?.remoteUrl || vehicle?.photoUrl);
 

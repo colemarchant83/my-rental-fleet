@@ -1066,7 +1066,39 @@ export async function reconcilePhoneRentals(remoteOpen: LocalRental[]) {
         if (!rental.remoteId && rental.sync !== 'synced') return true;
         return keys.has(rental.localId) || (!!rental.remoteId && keys.has(rental.remoteId));
       });
-  return storeRentalsIfChanged(local, mergeRentalLists(kept, remoteOpen));
+  const stored = await storeRentalsIfChanged(local, mergeRentalLists(kept, remoteOpen));
+  await markVehiclesOutForRentals(stored.filter((rental) => !rentalIsReturned(rental)));
+  return stored;
+}
+
+/** The rental card is what makes a machine out. Copy that onto the saved machine so it still shows out with no service. */
+export async function markVehiclesOutForRentals(openRentals: LocalRental[]) {
+  const byVehicle = new Map<string, LocalRental>();
+  for (const rental of openRentals) {
+    if (!rental.vehicleId || rentalIsReturned(rental)) continue;
+    const current = byVehicle.get(rental.vehicleId);
+    if (!current || rental.createdAt >= current.createdAt) byVehicle.set(rental.vehicleId, rental);
+  }
+  if (!byVehicle.size) return;
+  const saved = await loadCachedVehicles();
+  let changed = false;
+  const next = saved.map((vehicle) => {
+    const rental = byVehicle.get(vehicle.id);
+    if (!rental) return vehicle;
+    if (isOutStatus(vehicle.status) && vehicle.renterName === rental.renterName) return vehicle;
+    changed = true;
+    return { ...vehicle, status: 'Out on rent', renterName: rental.renterName };
+  });
+  if (changed) await saveCachedVehicles(next);
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  for (const [vehicleId, rental] of byVehicle) {
+    const vehicle = saved.find((item) => item.id === vehicleId);
+    if (vehicle && isOutStatus(vehicle.status) && vehicle.renterName === rental.renterName) continue;
+    await updateDoc(doc(db, 'vehicles', vehicleId), {
+      status: 'Out on rent',
+      renterName: rental.renterName,
+    }).catch(() => undefined);
+  }
 }
 
 export async function fetchOpenRentals() {
