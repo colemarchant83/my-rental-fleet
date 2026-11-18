@@ -1,5 +1,6 @@
 import { createElement, useEffect, useRef, useState } from 'react';
 import { Image, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ImageStyle } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { Video, ResizeMode } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
@@ -47,7 +48,19 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const isOut = mode === 'checkout';
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') {
+      let live = true;
+      const unsub = NetInfo.addEventListener((state) => {
+        if (live) setOnline(state.isConnected !== false);
+      });
+      void NetInfo.fetch().then((state) => {
+        if (live) setOnline(state.isConnected !== false);
+      });
+      return () => {
+        live = false;
+        unsub();
+      };
+    }
     let live = true;
     const markOffline = () => setOnline(false);
     const check = () => {

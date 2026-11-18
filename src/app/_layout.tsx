@@ -131,7 +131,7 @@ export default function RootLayout() {
       }
       openAccount(user.uid, justSignedIn);
     });
-    const giveUp = window.setTimeout(() => {
+    const giveUp = setTimeout(() => {
       const user = auth.currentUser;
       if (!user) return;
       if (needsEmailVerification(user)) {
@@ -144,7 +144,7 @@ export default function RootLayout() {
     }, 4000);
     return () => {
       stop();
-      window.clearTimeout(giveUp);
+      clearTimeout(giveUp);
     };
   }, [openAccount]);
   useEffect(() => {
@@ -171,7 +171,6 @@ export default function RootLayout() {
       if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
       void syncAll();
     };
-    window.addEventListener('online', refreshAfterReconnect);
     const reportPageError = (event: ErrorEvent) => {
       void reportProblem(event.message || 'This page hit a problem.', 'screen');
     };
@@ -180,8 +179,11 @@ export default function RootLayout() {
       const message = reason instanceof Error ? reason.message : String(reason || 'A background task failed.');
       void reportProblem(message, 'background');
     };
-    window.addEventListener('error', reportPageError);
-    window.addEventListener('unhandledrejection', reportRejection);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', refreshAfterReconnect);
+      window.addEventListener('error', reportPageError);
+      window.addEventListener('unhandledrejection', reportRejection);
+    }
     const stopWatching = watchConnection();
     let cover: HTMLDivElement | undefined;
     let updateCover: (() => void) | undefined;
@@ -217,12 +219,14 @@ export default function RootLayout() {
       }
     }
     return () => {
-      window.removeEventListener('online', refreshAfterReconnect);
-      window.removeEventListener('error', reportPageError);
-      window.removeEventListener('unhandledrejection', reportRejection);
-      if (updateCover) {
-        window.removeEventListener('orientationchange', updateCover);
-        window.removeEventListener('resize', updateCover);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', refreshAfterReconnect);
+        window.removeEventListener('error', reportPageError);
+        window.removeEventListener('unhandledrejection', reportRejection);
+        if (updateCover) {
+          window.removeEventListener('orientationchange', updateCover);
+          window.removeEventListener('resize', updateCover);
+        }
       }
       stopWatching();
       cover?.remove();

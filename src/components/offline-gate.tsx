@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { usePathname, useRouter } from 'expo-router';
 import { theme } from '../theme';
 
@@ -17,7 +18,18 @@ function isOnlineOnly(path: string) {
 function useConnection() {
   const [online, setOnline] = useState<boolean | null>(null);
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') {
+      let live = true;
+      const mark = (next: boolean) => {
+        if (live) setOnline(next);
+      };
+      const unsub = NetInfo.addEventListener((state) => mark(state.isConnected !== false));
+      void NetInfo.fetch().then((state) => mark(state.isConnected !== false));
+      return () => {
+        live = false;
+        unsub();
+      };
+    }
     let live = true;
     const mark = (next: boolean) => {
       if (live) setOnline(next);

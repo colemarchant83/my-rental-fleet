@@ -247,6 +247,12 @@ export default function AddScreen() {
               }}
             />
             )}
+            {Platform.OS === 'web' ? null : (
+              <>
+                <View pointerEvents="none" style={styles.wideBox} />
+                <View pointerEvents="none" style={styles.tallBox} />
+              </>
+            )}
           </View>
           <Text style={styles.help}>{reading ? 'Looking up that VIN...' : 'Line the barcode up with either box and hold still.'}</Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -408,6 +414,8 @@ const styles = StyleSheet.create({
   deleteChoiceText: { color: theme.white, fontWeight: '800', fontSize: 17 },
   cameraFrame: { width: '100%', height: 420, borderRadius: 16, overflow: 'hidden', marginTop: 12, backgroundColor: '#111' },
   cameraFill: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  wideBox: { position: 'absolute', left: '8%', right: '8%', top: '38%', height: 84, borderWidth: 3, borderColor: theme.white, borderRadius: 12 },
+  tallBox: { position: 'absolute', left: '36%', width: '28%', top: '12%', bottom: '12%', borderWidth: 3, borderColor: theme.white, borderRadius: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 14, marginTop: 12 },
   rowText: { flex: 1 },
   machine: { color: theme.text, fontWeight: '800', fontSize: 18 },

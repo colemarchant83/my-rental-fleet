@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "rental",
+    "name": "My Rental Fleet",
     "slug": "rental",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,9 +8,11 @@
     "scheme": "rental",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon.png"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "com.myrentalfleet.app"
     },
     "android": {
+      "package": "com.myrentalfleet.app",
       "adaptiveIcon": {
         "backgroundColor": "#F7EFE2",
         "foregroundImage": "./assets/images/icon.png"
@@ -40,7 +42,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Record the walk-around of a machine during checkout and return.",
+          "cameraPermission": "Scan a VIN barcode and record the walk-around of a machine.",
           "microphonePermission": "Record sound with the walk-around video.",
           "recordAudioAndroid": true
         }
