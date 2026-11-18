@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { currentOwnerId } from '../account';
-import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, mergeRentalLists, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, mergeRentalLists, openRentalFor, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 
@@ -28,6 +28,7 @@ export default function VehicleDetail() {
   const [factsError, setFactsError] = useState('');
   const [factsLoading, setFactsLoading] = useState(false);
   const [shownCount, setShownCount] = useState(5);
+  const [returnNote, setReturnNote] = useState('');
   const [older, setOlder] = useState<LocalRental[]>([]);
   const [olderLoaded, setOlderLoaded] = useState(false);
 
@@ -81,7 +82,7 @@ export default function VehicleDetail() {
     let live = true;
     const refresh = () => {
       void (async () => {
-        const local = (await loadRentals()).filter((rental) => rental.vehicleId === id);
+        const local = mergeRentalLists(await loadRentals(), await savedOpenRentals()).filter((rental) => rental.vehicleId === id);
         if (!live) return;
         setRentals(local);
         try {
@@ -293,10 +294,31 @@ export default function VehicleDetail() {
       </View>
       <Pressable
         style={styles.save}
-        onPress={() => router.push({ pathname: '/inspection', params: { vehicleId: id, type: out ? 'checkin' : 'checkout' } })}
+        onPress={() => {
+          if (!out || !id) {
+            setReturnNote('');
+            router.push({ pathname: '/inspection', params: { vehicleId: id, type: 'checkout' } });
+            return;
+          }
+          const have = rentals.some((rental) => rental.vehicleId === id && !rentalIsReturned(rental));
+          const go = (ok: boolean) => {
+            if (!ok) {
+              setReturnNote('This phone does not have that rental card yet. Open this machine once with service, then the return can be saved with no service.');
+              return;
+            }
+            setReturnNote('');
+            router.push({ pathname: '/inspection', params: { vehicleId: id, type: 'checkin' } });
+          };
+          if (have) {
+            go(true);
+            return;
+          }
+          void openRentalFor(id).then((rental) => go(!!rental));
+        }}
       >
         <Text style={styles.saveText}>{out ? 'Start return inspection' : 'Start pre-rental inspection'}</Text>
       </Pressable>
+      {returnNote ? <Text style={styles.nicknameError}>{returnNote}</Text> : null}
 
       {newestFirst.length === 0 ? <Text style={styles.muted}>{olderLoaded ? 'No rentals yet.' : 'Loading rental files...'}</Text> : visibleRentals.map((rental) => (
         <Pressable key={rental.localId} style={styles.folder} onPress={() => router.push({ pathname: '/rental-history', params: { localId: rental.localId } })}>

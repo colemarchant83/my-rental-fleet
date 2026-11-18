@@ -79,6 +79,7 @@ export type CoverPhoto = {
 };
 
 const RENTALS_KEY = 'fleet.rentals.v1';
+const OPEN_CARDS_KEY = 'fleet.open-cards.v1';
 const COVERS_KEY = 'fleet.covers.v1';
 const VEHICLES_KEY = 'fleet.vehicles.v1';
 const VEHICLE_CACHE = 'fleet-data-v1';
@@ -293,6 +294,7 @@ export async function loadCovers() {
 
 async function saveRentals(rentals: LocalRental[]) {
   await writeJson(RENTALS_KEY, rentals);
+  await keepOpenCards(rentals).catch(() => undefined);
 }
 
 async function saveCovers(covers: CoverPhoto[]) {
@@ -369,6 +371,31 @@ function sameRentalRecord(a: LocalRental, b: LocalRental) {
   return rentalIds(b).some((id) => ids.has(id));
 }
 
+async function loadOpenCards() {
+  return readJson<Record<string, LocalRental>>(OPEN_CARDS_KEY, {});
+}
+
+/** The open rental card has to stay on the phone even if a later refresh rewrites the rental list. */
+async function keepOpenCards(rentals: LocalRental[]) {
+  const cards = await loadOpenCards();
+  for (const rental of rentals) {
+    if (!rental.vehicleId) continue;
+    if (rentalIsReturned(rental)) {
+      const current = cards[rental.vehicleId];
+      if (current && sameRentalRecord(current, rental)) delete cards[rental.vehicleId];
+      continue;
+    }
+    const current = cards[rental.vehicleId];
+    if (!current || rental.createdAt >= current.createdAt) cards[rental.vehicleId] = rental;
+  }
+  await AsyncStorage.setItem(OPEN_CARDS_KEY, JSON.stringify(cards));
+}
+
+export async function savedOpenRentals() {
+  const cards = await loadOpenCards();
+  return Object.values(cards).filter((rental) => rental.vehicleId && !rentalIsReturned(rental));
+}
+
 function coveredByReturned(rental: LocalRental, others: LocalRental[]) {
   if (rentalIsReturned(rental)) return false;
   const name = rental.renterName.trim().toLowerCase();
@@ -441,6 +468,8 @@ export async function openRentalFor(vehicleId: string) {
   };
   const local = pick(await loadRentals());
   if (local) return local;
+  const cached = (await loadOpenCards())[vehicleId];
+  if (cached && cached.vehicleId === vehicleId && !rentalIsReturned(cached)) return remember(cached);
   const pull = async () => {
     const [byVehicle, open] = await Promise.all([
       fetchVehicleRentals(vehicleId).catch(() => [] as LocalRental[]),
@@ -856,7 +885,9 @@ export async function settleVehicleRentalStatus(vehicleId: string, vehicle?: { s
   settlingOut.add(vehicleId);
   try {
     const remote = await fetchVehicleRentals(vehicleId);
-    await forgetRentalsRemovedElsewhere(vehicleId, remote);
+    if (remote.length) await forgetRentalsRemovedElsewhere(vehicleId, remote);
+    const openRemote = remote.filter((rental) => !rentalIsReturned(rental));
+    if (openRemote.length) await rememberRentals(openRemote);
     const local = (await loadRentals()).filter((rental) => rental.vehicleId === vehicleId);
     if (local.some((rental) => !rentalIsReturned(rental) && rental.sync !== 'synced' && !rental.remoteId)) return;
     if (mergeRentalLists(local, remote).some((rental) => !rentalIsReturned(rental))) return;
@@ -1067,6 +1098,17 @@ export async function reconcilePhoneRentals(remoteOpen: LocalRental[]) {
         return keys.has(rental.localId) || (!!rental.remoteId && keys.has(rental.remoteId));
       });
   const stored = await storeRentalsIfChanged(local, mergeRentalLists(kept, remoteOpen));
+  if (!offline) {
+    const stillOut = new Set(remoteOpen.map((rental) => rental.vehicleId));
+    const cards = await loadOpenCards();
+    let changed = false;
+    for (const vehicleId of Object.keys(cards)) {
+      if (stillOut.has(vehicleId)) continue;
+      delete cards[vehicleId];
+      changed = true;
+    }
+    if (changed) await AsyncStorage.setItem(OPEN_CARDS_KEY, JSON.stringify(cards));
+  }
   await markVehiclesOutForRentals(stored.filter((rental) => !rentalIsReturned(rental)));
   return stored;
 }

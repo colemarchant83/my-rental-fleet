@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, reconcilePhoneRentals, rememberRentals, rentalIsReturned, saveCachedVehicles, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, openRentalFor, reconcilePhoneRentals, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 
@@ -17,6 +17,7 @@ export default function VehicleListScreen() {
   const [rentalsReady, setRentalsReady] = useState(false);
   const [covers, setCovers] = useState<CoverPhoto[]>([]);
   const [error, setError] = useState('');
+  const [returnNote, setReturnNote] = useState('');
   const [ready, setReady] = useState(false);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [visit, setVisit] = useState(0);
@@ -89,7 +90,7 @@ export default function VehicleListScreen() {
         });
       });
       void (async () => {
-        const local = await loadRentals();
+        const local = mergeRentalLists(await loadRentals(), await savedOpenRentals());
         setRentals(local);
         try {
           const remote = await fetchOpenRentals();
@@ -128,7 +129,25 @@ export default function VehicleListScreen() {
   }, [rentalsReady, vehicles]);
 
   const openInspection = (vehicle: Vehicle, mode: 'checkout' | 'checkin') => {
-    router.push({ pathname: '/inspection', params: { vehicleId: vehicle.id, type: mode } });
+    if (mode !== 'checkin') {
+      setReturnNote('');
+      router.push({ pathname: '/inspection', params: { vehicleId: vehicle.id, type: mode } });
+      return;
+    }
+    const have = rentals.some((rental) => rental.vehicleId === vehicle.id && !rentalIsReturned(rental));
+    const go = (ok: boolean) => {
+      if (!ok) {
+        setReturnNote('This phone does not have that rental card yet. Open the app once with service and wait until the renter name shows. Then the return can be saved with no service.');
+        return;
+      }
+      setReturnNote('');
+      router.push({ pathname: '/inspection', params: { vehicleId: vehicle.id, type: mode } });
+    };
+    if (have) {
+      go(true);
+      return;
+    }
+    void openRentalFor(vehicle.id).then((rental) => go(!!rental));
   };
 
   return (
@@ -136,6 +155,7 @@ export default function VehicleListScreen() {
       <Text style={styles.heading}>Rentals</Text>
       {ready ? <Text style={styles.count}>{vehicles.length} {vehicles.length === 1 ? 'machine' : 'machines'}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {returnNote ? <Text style={styles.error}>{returnNote}</Text> : null}
       {!ready && !error ? <Text style={styles.intro}>Loading machines...</Text> : null}
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {vehicles.map((vehicle) => {
