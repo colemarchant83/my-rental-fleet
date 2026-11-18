@@ -36,6 +36,7 @@ export function extractVin(text: string) {
 }
 
 type Detector = { detect: (source: CanvasImageSource) => Promise<{ rawValue?: string }[]> };
+type Shot = { source: CanvasImageSource; width: number; height: number; close: () => void };
 
 async function nativeDetector(): Promise<Detector | null> {
   const Native = (globalThis as { BarcodeDetector?: { new (options: { formats: string[] }): Detector; getSupportedFormats?: () => Promise<string[]> } }).BarcodeDetector;
@@ -59,6 +60,7 @@ function paintStrip(source: CanvasImageSource, sourceWidth: number, sourceHeight
   const scale = Math.min(1, 1400 / cropW);
   canvas.width = Math.max(2, Math.round(cropW * scale));
   canvas.height = Math.max(2, Math.round(cropH * scale));
+  context.setTransform(1, 0, 0, 1, 0, 0);
   context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.width, canvas.height);
 }
 
@@ -76,6 +78,34 @@ function paintTurned(source: CanvasImageSource, sourceWidth: number, sourceHeigh
   context.rotate(Math.PI / 2);
   context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.height, canvas.width);
   context.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+function matchSensor(bitmap: ImageBitmap, videoWidth: number, videoHeight: number): Shot {
+  const sameWay = videoWidth >= videoHeight === bitmap.width >= bitmap.height;
+  if (sameWay) return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
+  const turned = document.createElement('canvas');
+  turned.width = bitmap.height;
+  turned.height = bitmap.width;
+  const turnedContext = turned.getContext('2d');
+  if (!turnedContext) return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
+  turnedContext.translate(turned.width, 0);
+  turnedContext.rotate(Math.PI / 2);
+  turnedContext.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return { source: turned, width: turned.width, height: turned.height, close: () => undefined };
+}
+
+function blankFrame(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
+  try {
+    const side = Math.min(8, canvas.width, canvas.height);
+    if (side < 2) return true;
+    const data = context.getImageData(Math.floor((canvas.width - side) / 2), Math.floor((canvas.height - side) / 2), side, side).data;
+    let total = 0;
+    for (let index = 0; index < data.length; index += 4) total += data[index] + data[index + 1] + data[index + 2];
+    return total / (data.length / 4) < 14;
+  } catch {
+    return false;
+  }
 }
 
 export function WebVinScanner({ onVin }: Props) {
@@ -121,6 +151,7 @@ export function WebVinScanner({ onVin }: Props) {
       video.srcObject = stream;
       video.muted = true;
       video.playsInline = true;
+      video.setAttribute('playsinline', 'true');
       await video.play();
       const native = await nativeDetector();
       let zxing: Detector | null = null;
@@ -132,6 +163,9 @@ export function WebVinScanner({ onVin }: Props) {
       } catch {
         zxing = null;
       }
+      const Capture = (globalThis as { ImageCapture?: new (track: MediaStreamTrack) => { grabFrame: () => Promise<ImageBitmap> } }).ImageCapture;
+      const imageCapture = Capture && track ? new Capture(track) : null;
+      const android = /Android/i.test(navigator.userAgent);
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d', { willReadFrequently: true });
       const found = (value: string) => {
@@ -144,29 +178,61 @@ export function WebVinScanner({ onVin }: Props) {
         work,
         new Promise<null>((resolve) => window.setTimeout(() => resolve(null), ms)),
       ]);
+      const read = async (detector: Detector, source: CanvasImageSource) => {
+        try {
+          const codes = await within(detector.detect(source), 700);
+          return Boolean(codes?.some((code) => code.rawValue && found(code.rawValue)));
+        } catch {
+          return false;
+        }
+      };
+      const snapshot = async (): Promise<Shot> => {
+        const fromVideo = () => ({ source: video, width: video.videoWidth, height: video.videoHeight, close: () => undefined });
+        if (!android || !imageCapture) return fromVideo();
+        try {
+          const bitmap = await within(imageCapture.grabFrame(), 700);
+          if (!bitmap) return fromVideo();
+          return matchSensor(bitmap, video.videoWidth, video.videoHeight);
+        } catch {
+          return fromVideo();
+        }
+      };
       const scan = async () => {
         if (!live) return;
+        let shot: Shot | null = null;
         try {
-          if (video.videoWidth) {
-            if (native) {
-              const codes = await within(native.detect(video), 800);
-              if (codes?.some((code) => code.rawValue && found(code.rawValue))) return;
+          if (video.videoWidth && context) {
+            shot = await snapshot();
+            if (!live) return;
+            if (zxing) {
+              paintStrip(shot.source, shot.width, shot.height, canvas, context);
+              if (blankFrame(canvas, context) && imageCapture && shot.source === video) {
+                const bitmap = await within(imageCapture.grabFrame(), 700);
+                if (bitmap) {
+                  shot.close();
+                  shot = matchSensor(bitmap, video.videoWidth, video.videoHeight);
+                  paintStrip(shot.source, shot.width, shot.height, canvas, context);
+                }
+              }
+              if (await read(zxing, canvas)) return;
+              if (native && await read(native, canvas)) return;
+              paintTurned(shot.source, shot.width, shot.height, canvas, context);
+              if (await read(zxing, canvas)) return;
+              if (native && await read(native, canvas)) return;
             }
-            if (zxing && context) {
-              paintStrip(video, video.videoWidth, video.videoHeight, canvas, context);
-              const across = await within(zxing.detect(canvas), 800);
-              if (across?.some((code) => code.rawValue && found(code.rawValue))) return;
-              paintTurned(video, video.videoWidth, video.videoHeight, canvas, context);
-              const upright = await within(zxing.detect(canvas), 800);
-              if (upright?.some((code) => code.rawValue && found(code.rawValue))) return;
+            if (!zxing && native) {
+              if (shot.source !== video) paintStrip(shot.source, shot.width, shot.height, canvas, context);
+              if (await read(native, shot.source === video ? video : canvas)) return;
             }
           }
         } catch {
           // A missed frame is not a failure. Keep the camera open.
+        } finally {
+          shot?.close();
         }
-        timer = window.setTimeout(() => void scan(), 250);
+        timer = window.setTimeout(() => void scan(), 280);
       };
-      timer = window.setTimeout(() => void scan(), 350);
+      timer = window.setTimeout(() => void scan(), 400);
     };
     void open().catch(() => {
       if (live) setError('The camera could not start. Allow camera access and try again.');
