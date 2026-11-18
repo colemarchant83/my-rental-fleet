@@ -406,7 +406,7 @@ function HistoryPhoto({ photo, style, onOpen, empty, compact }: { photo: Stamped
   const localThumb = display.uri.startsWith('blob:') || display.uri.startsWith('data:') ? display.uri : '';
   const remote = photo.remoteUrl?.startsWith('http') ? photo.remoteUrl : '';
   const thumb = useCardThumb(localThumb ? '' : remote);
-  const shown = Platform.OS === 'web' ? localThumb || thumb.url || remote : display.uri;
+  const shown = Platform.OS === 'web' ? localThumb || thumb.url : display.uri;
   const full = remote || display.uri || shown;
   if (!shown) {
     if (!photo.localUri && !remote) {
