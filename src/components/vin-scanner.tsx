@@ -82,41 +82,6 @@ function paintTurned(source: CanvasImageSource, sourceWidth: number, sourceHeigh
   context.setTransform(1, 0, 0, 1, 0, 0);
 }
 
-function paintBand(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, across: number) {
-  const cropW = Math.round(sourceWidth * 0.94);
-  const cropH = Math.max(72, Math.round(sourceHeight * 0.38));
-  const x = Math.round((sourceWidth - cropW) / 2);
-  const y = Math.max(0, Math.min(sourceHeight - cropH, Math.round(sourceHeight * across - cropH / 2)));
-  const scale = Math.min(3, 1500 / cropW);
-  canvas.width = Math.max(2, Math.round(cropW * scale));
-  canvas.height = Math.max(2, Math.round(cropH * scale));
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  context.imageSmoothingEnabled = true;
-  context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.width, canvas.height);
-}
-
-function paintColumn(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, across: number, turn: 1 | -1) {
-  const cropW = Math.max(72, Math.round(sourceWidth * 0.34));
-  const cropH = Math.round(sourceHeight * 0.92);
-  const x = Math.max(0, Math.min(sourceWidth - cropW, Math.round(sourceWidth * across - cropW / 2)));
-  const y = Math.round((sourceHeight - cropH) / 2);
-  const scale = Math.min(3, 1500 / cropH);
-  canvas.width = Math.max(2, Math.round(cropH * scale));
-  canvas.height = Math.max(2, Math.round(cropW * scale));
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  context.imageSmoothingEnabled = true;
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  if (turn < 0) {
-    context.translate(0, canvas.height);
-    context.rotate(-Math.PI / 2);
-  } else {
-    context.translate(canvas.width, 0);
-    context.rotate(Math.PI / 2);
-  }
-  context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.height, canvas.width);
-  context.setTransform(1, 0, 0, 1, 0, 0);
-}
-
 function orientToScreen(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, portrait: boolean): Shot {
   const sourcePortrait = sourceHeight >= sourceWidth;
   if (sourcePortrait === portrait) return { source, width: sourceWidth, height: sourceHeight, close: () => undefined };
@@ -131,17 +96,77 @@ function orientToScreen(source: CanvasImageSource, sourceWidth: number, sourceHe
   return { source: turned, width: turned.width, height: turned.height, close: () => undefined };
 }
 
-function punch(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
-  const image = context.getImageData(0, 0, canvas.width, canvas.height);
-  const data = image.data;
+function glare(image: ImageData) {
+  const copy = new ImageData(new Uint8ClampedArray(image.data), image.width, image.height);
+  const data = copy.data;
+  const hist = new Uint32Array(256);
+  let samples = 0;
+  for (let index = 0; index < data.length; index += 16) {
+    const gray = Math.min(data[index], data[index + 1], data[index + 2]);
+    hist[gray] += 1;
+    samples += 1;
+  }
+  const cut = Math.max(1, Math.floor(samples * 0.05));
+  let low = 0;
+  let high = 255;
+  let seen = 0;
+  for (let index = 0; index < 256; index += 1) {
+    seen += hist[index];
+    if (seen >= cut) { low = index; break; }
+  }
+  seen = 0;
+  for (let index = 255; index >= 0; index -= 1) {
+    seen += hist[index];
+    if (seen >= cut) { high = index; break; }
+  }
+  const span = Math.max(24, high - low);
   for (let index = 0; index < data.length; index += 4) {
-    const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
-    const value = Math.max(0, Math.min(255, (gray - 128) * 1.4 + 128));
+    const gray = Math.min(data[index], data[index + 1], data[index + 2]);
+    const value = Math.max(0, Math.min(255, ((gray - low) * 255) / span));
     data[index] = value;
     data[index + 1] = value;
     data[index + 2] = value;
   }
-  return image;
+  return copy;
+}
+
+function paintAimed(
+  source: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  viewWidth: number,
+  viewHeight: number,
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D,
+  clockwise: boolean,
+  full: boolean,
+) {
+  const safeW = Math.max(1, viewWidth);
+  const safeH = Math.max(1, viewHeight);
+  const cover = Math.max(safeW / sourceWidth, safeH / sourceHeight);
+  const cropW = full ? sourceWidth : Math.min(sourceWidth, safeW / cover);
+  const cropH = full ? sourceHeight : Math.min(sourceHeight, safeH / cover);
+  const x = full ? 0 : Math.max(0, (sourceWidth - cropW) / 2);
+  const y = full ? 0 : Math.max(0, (sourceHeight - cropH) / 2);
+  const longSide = Math.max(cropW, cropH);
+  const out = longSide > 2000 ? 2000 / longSide : 1;
+  const destW = Math.max(2, Math.round(cropW * out));
+  const destH = Math.max(2, Math.round(cropH * out));
+  if (clockwise) {
+    canvas.width = destH;
+    canvas.height = destW;
+  } else {
+    canvas.width = destW;
+    canvas.height = destH;
+  }
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.imageSmoothingEnabled = out < 0.999;
+  if (clockwise) {
+    context.translate(canvas.width, 0);
+    context.rotate(Math.PI / 2);
+  }
+  context.drawImage(source, x, y, cropW, cropH, 0, 0, destW, destH);
+  context.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 function blankFrame(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
@@ -160,6 +185,9 @@ function blankFrame(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D
 export function WebVinScanner({ onVin }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const onVinRef = useRef(onVin);
+  const turnRef = useRef(false);
+  const scaleRef = useRef(1);
+  const [preview, setPreview] = useState({ on: false, scale: 1 });
   const [error, setError] = useState('');
   onVinRef.current = onVin;
 
@@ -167,8 +195,11 @@ export function WebVinScanner({ onVin }: Props) {
     let live = true;
     let stream: MediaStream | null = null;
     let timer = 0;
+    let onChange = () => undefined;
     const stop = () => {
       window.clearTimeout(timer);
+      window.removeEventListener('resize', onChange);
+      window.removeEventListener('orientationchange', onChange);
       stream?.getTracks().forEach((track) => track.stop());
       stream = null;
     };
@@ -202,6 +233,7 @@ export function WebVinScanner({ onVin }: Props) {
       video.playsInline = true;
       video.setAttribute('playsinline', 'true');
       await video.play();
+      if (!live) { stop(); return; }
       const native = await nativeDetector();
       let zxing: Detector | null = null;
       try {
@@ -232,6 +264,8 @@ export function WebVinScanner({ onVin }: Props) {
       }
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d', { willReadFrequently: true });
+      const align = document.createElement('canvas');
+      const alignContext = align.getContext('2d', { willReadFrequently: true });
       const found = (value: string) => {
         const vin = extractVin(value);
         if (!vin) return false;
@@ -247,15 +281,6 @@ export function WebVinScanner({ onVin }: Props) {
           return false;
         }
       };
-      const within = async (work: Promise<boolean>, ms: number) => {
-        let timer = 0;
-        const result = await Promise.race([
-          work.catch(() => false),
-          new Promise<boolean>((resolve) => { timer = window.setTimeout(() => resolve(false), ms); }),
-        ]);
-        window.clearTimeout(timer);
-        return result;
-      };
       if (zxing && context) {
         canvas.width = 4;
         canvas.height = 4;
@@ -264,82 +289,134 @@ export function WebVinScanner({ onVin }: Props) {
         const ready = await zxing.detect(canvas).then(() => true).catch(() => false);
         if (!ready) zxing = null;
       }
-      let pass = 0;
-      let nativePending: Promise<boolean> | null = null;
-      const bands = [0.2, 0.38, 0.5, 0.62, 0.8];
-      const columns = [0.16, 0.34, 0.5, 0.66, 0.84];
-      const readDense = async () => {
-        if (!dense || !context) return false;
+      const sharpOptions: Record<string, unknown> = {
+        formats: ['Code39', 'Code128', 'Code93'],
+        tryHarder: true,
+        tryRotate: false,
+        tryInvert: true,
+        tryDenoise: false,
+        tryDownscale: false,
+        minLineCount: 1,
+        maxNumberOfSymbols: 2,
+        textMode: 'Plain',
+      };
+      const readSharp = async () => {
+        if (!dense || !context || canvas.width < 2 || canvas.height < 2) return false;
+        let raw: ImageData;
         try {
-          const image = punch(canvas, context);
-          context.putImageData(image, 0, 0);
-          const codes = await dense(image, {
-            formats: ['Code39', 'Code128', 'Code93'],
-            tryHarder: true,
-            tryRotate: true,
-            tryInvert: true,
-            tryDenoise: false,
-            tryDownscale: false,
-            maxNumberOfSymbols: 3,
-          });
-          return codes.some((code) => code.text && found(code.text));
+          raw = context.getImageData(0, 0, canvas.width, canvas.height);
+        } catch {
+          return false;
+        }
+        try {
+          const first = await dense(raw, sharpOptions);
+          if (first.some((code) => code.text && found(code.text))) return true;
+        } catch {
+          // Try the glare pass anyway.
+        }
+        try {
+          const second = await dense(glare(raw), sharpOptions);
+          return second.some((code) => code.text && found(code.text));
         } catch {
           return false;
         }
       };
+      const syncPreview = () => {
+        if (!android || !video.videoWidth) return;
+        const wanted = window.innerHeight >= window.innerWidth && video.videoWidth > video.videoHeight;
+        const frame = video.parentElement;
+        const width = frame?.clientWidth || video.clientWidth || 1;
+        const height = frame?.clientHeight || video.clientHeight || 1;
+        const scale = Math.max(width / height, height / width);
+        if (wanted === turnRef.current && Math.abs(scale - scaleRef.current) < 0.03) return;
+        turnRef.current = wanted;
+        scaleRef.current = scale;
+        setPreview(wanted ? { on: true, scale } : { on: false, scale: 1 });
+      };
+      const takeFrame = async (): Promise<Shot | null> => {
+        if (imageCapture) {
+          let ignoreLate = false;
+          let grabTimer = 0;
+          const grabbed = await Promise.race([
+            imageCapture.grabFrame().then((frame) => {
+              if (ignoreLate || !live) { frame.close(); return null; }
+              return frame;
+            }).catch(() => null),
+            new Promise<ImageBitmap | null>((resolve) => { grabTimer = window.setTimeout(() => { ignoreLate = true; resolve(null); }, 220); }),
+          ]);
+          window.clearTimeout(grabTimer);
+          if (grabbed && grabbed.width > 8 && grabbed.height > 8) {
+            const frame = grabbed;
+            return { source: frame, width: frame.width, height: frame.height, close: () => frame.close() };
+          }
+        }
+        if (!video.videoWidth) return null;
+        return { source: video, width: video.videoWidth, height: video.videoHeight, close: () => undefined };
+      };
+      let pass = 0;
       const scan = async () => {
         if (!live) return;
         let shot: Shot | null = null;
-        let bitmap: ImageBitmap | null = null;
         try {
-          if (video.videoWidth && context) {
-            const portrait = video.clientHeight >= video.clientWidth;
-            if (android && imageCapture) bitmap = await imageCapture.grabFrame().catch(() => null);
+          if (video.videoWidth && context && android && dense && alignContext) {
+            syncPreview();
+            shot = await takeFrame();
             if (!live) return;
-            if (bitmap && bitmap.width > 2) {
-              const grabbed = bitmap;
-              shot = { source: grabbed, width: grabbed.width, height: grabbed.height, close: () => grabbed.close() };
-              bitmap = null;
-            } else {
-              shot = orientToScreen(video, video.videoWidth, video.videoHeight, portrait);
+            if (shot) {
+              let source = shot.source;
+              let sourceWidth = shot.width;
+              let sourceHeight = shot.height;
+              const videoLandscape = video.videoWidth >= video.videoHeight;
+              const shotLandscape = sourceWidth >= sourceHeight;
+              if (videoLandscape !== shotLandscape) {
+                align.width = sourceHeight;
+                align.height = sourceWidth;
+                alignContext.setTransform(1, 0, 0, 1, 0, 0);
+                alignContext.imageSmoothingEnabled = false;
+                alignContext.translate(align.width, 0);
+                alignContext.rotate(Math.PI / 2);
+                alignContext.drawImage(source, 0, 0);
+                alignContext.setTransform(1, 0, 0, 1, 0, 0);
+                source = align;
+                sourceWidth = align.width;
+                sourceHeight = align.height;
+              }
+              const upright = turnRef.current ? pass % 4 !== 3 : pass % 4 === 3;
+              const full = pass % 3 === 2;
+              pass += 1;
+              const viewWidth = video.clientWidth || sourceWidth;
+              const viewHeight = video.clientHeight || sourceHeight;
+              paintAimed(source, sourceWidth, sourceHeight, viewWidth, viewHeight, canvas, context, upright, full);
+              if (blankFrame(canvas, context) && source !== video) {
+                paintAimed(video, video.videoWidth, video.videoHeight, viewWidth, viewHeight, canvas, context, turnRef.current, full);
+              }
+              if (await readSharp()) return;
             }
-            if (android && native && !nativePending) {
-              nativePending = read(native, video).finally(() => { nativePending = null; });
-              if (await within(nativePending, 400)) return;
-            }
+          } else if (video.videoWidth && context) {
+            const portrait = video.clientHeight >= video.clientWidth;
+            shot = orientToScreen(video, video.videoWidth, video.videoHeight, portrait);
             if (zxing) {
               paintStrip(shot.source, shot.width, shot.height, canvas, context);
-              if (blankFrame(canvas, context) && imageCapture && shot.source !== video) {
-                shot.close();
-                shot = orientToScreen(video, video.videoWidth, video.videoHeight, portrait);
-                paintStrip(shot.source, shot.width, shot.height, canvas, context);
-              }
               if (await read(zxing, canvas)) return;
-              if (!android && native && await read(native, canvas)) return;
-              if (android) {
-                const step = pass % 15;
-                pass += 1;
-                if (step < 5) paintBand(shot.source, shot.width, shot.height, canvas, context, bands[step]);
-                else if (step < 10) paintColumn(shot.source, shot.width, shot.height, canvas, context, columns[step - 5], 1);
-                else paintColumn(shot.source, shot.width, shot.height, canvas, context, columns[step - 10], -1);
-                if (await readDense()) return;
-                if (await read(zxing, canvas)) return;
-              } else {
-                paintTurned(shot.source, shot.width, shot.height, canvas, context);
-                if (await read(zxing, canvas)) return;
-                if (native && await read(native, canvas)) return;
-              }
+              if (native && await read(native, canvas)) return;
+              paintTurned(shot.source, shot.width, shot.height, canvas, context);
+              if (await read(zxing, canvas)) return;
+              if (native && await read(native, canvas)) return;
             } else if (native && await read(native, shot.source)) return;
           }
         } catch {
           // A missed frame is not a failure. Keep the camera open.
         } finally {
-          bitmap?.close();
           shot?.close();
         }
-        timer = window.setTimeout(() => void scan(), android ? 40 : 200);
+        if (!live) return;
+        timer = window.setTimeout(() => void scan(), android ? 30 : 200);
       };
-      timer = window.setTimeout(() => void scan(), 400);
+      window.addEventListener('resize', syncPreview);
+      window.addEventListener('orientationchange', syncPreview);
+      onChange = syncPreview;
+      syncPreview();
+      timer = window.setTimeout(() => void scan(), 300);
     };
     void open().catch(() => {
       if (live) setError('The camera could not start. Allow camera access and try again.');
@@ -351,17 +428,33 @@ export function WebVinScanner({ onVin }: Props) {
   }, []);
 
   return (
-    <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: '#111' }}>
+    <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: '#111', overflow: 'hidden' }}>
       {createElement('video', {
         ref: videoRef,
         autoPlay: true,
         playsInline: true,
         muted: true,
-        style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#111' },
+        style: preview.on ? {
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          backgroundColor: '#111',
+          transformOrigin: 'center center',
+          transform: `rotate(90deg) scale(${preview.scale})`,
+          zIndex: 0,
+        } : {
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          backgroundColor: '#111',
+        },
       })}
-      <View pointerEvents="none" style={{ position: 'absolute', left: '8%', right: '8%', top: '38%', height: 84, borderWidth: 3, borderColor: theme.white, borderRadius: 12 }} />
-      <View pointerEvents="none" style={{ position: 'absolute', left: '36%', width: '28%', top: '12%', bottom: '12%', borderWidth: 3, borderColor: theme.white, borderRadius: 12 }} />
-      {error ? <Text style={{ position: 'absolute', left: 16, right: 16, bottom: 16, color: theme.white, fontWeight: '700' }}>{error}</Text> : null}
+      <View pointerEvents="none" style={{ position: 'absolute', left: '8%', right: '8%', top: '38%', height: 84, borderWidth: 3, borderColor: theme.white, borderRadius: 12, zIndex: 2 }} />
+      <View pointerEvents="none" style={{ position: 'absolute', left: '36%', width: '28%', top: '12%', bottom: '12%', borderWidth: 3, borderColor: theme.white, borderRadius: 12, zIndex: 2 }} />
+      {error ? <Text style={{ position: 'absolute', left: 16, right: 16, bottom: 16, color: theme.white, fontWeight: '700', zIndex: 2 }}>{error}</Text> : null}
     </View>
   );
 }
