@@ -362,6 +362,11 @@ export function rentalIsReturned(rental: { status?: string; checkin?: unknown })
   return rental.status === 'closed' || !!rental.checkin;
 }
 
+/** A return saved on this phone that has not reached the server yet. The machine is available even if its saved status still says out. */
+export function pendingLocalReturn(rentals: { vehicleId?: string; status?: string; sync?: string; checkin?: unknown }[], vehicleId: string) {
+  return rentals.some((rental) => rental.vehicleId === vehicleId && rentalIsReturned(rental) && rental.sync !== 'synced');
+}
+
 function rentalIds(rental: LocalRental) {
   return [rental.localId, rental.remoteId].filter((item): item is string => !!item);
 }
@@ -548,8 +553,15 @@ export async function saveCheckin(localId: string, checkin: InspectionSide) {
     rental.localId === localId ? { ...rental, checkin: stamped, status: 'closed' as const, sync: 'pending' as const, syncError: undefined } : rental
   );
   await saveRentals(next);
+  const closed = next.find((rental) => rental.localId === localId);
+  const stillOut = !!closed && next.some((rental) => rental.vehicleId === closed.vehicleId && !rentalIsReturned(rental));
+  if (closed && !stillOut) {
+    const saved = await loadCachedVehicles();
+    const cleared = saved.map((vehicle) => (vehicle.id === closed.vehicleId ? { ...vehicle, status: 'Available', renterName: undefined } : vehicle));
+    await saveCachedVehicles(cleared).catch(() => undefined);
+  }
   void syncAll();
-  return next.find((rental) => rental.localId === localId);
+  return closed;
 }
 
 export async function rememberCover(vehicleId: string, sourceUri: string) {
