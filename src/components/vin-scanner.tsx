@@ -82,17 +82,40 @@ function paintTurned(source: CanvasImageSource, sourceWidth: number, sourceHeigh
   context.setTransform(1, 0, 0, 1, 0, 0);
 }
 
-function paintBlock(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
-  const cropW = Math.round(sourceWidth * 0.86);
-  const cropH = Math.round(sourceHeight * 0.5);
-  const x = Math.round((sourceWidth - cropW) / 2);
-  const y = Math.round((sourceHeight - cropH) / 2);
-  const scale = Math.max(1, Math.min(2.2, 1280 / cropW));
-  canvas.width = Math.max(2, Math.round(cropW * scale));
-  canvas.height = Math.max(2, Math.round(cropH * scale));
+function paintFull(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
+  const scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
+  canvas.width = Math.max(2, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(2, Math.round(sourceHeight * scale));
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.imageSmoothingEnabled = true;
+  context.drawImage(source, 0, 0, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+}
+
+function paintSpin(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
+  const scale = Math.min(1.6, 1600 / Math.max(sourceWidth, sourceHeight));
+  canvas.width = Math.max(2, Math.round(sourceHeight * scale));
+  canvas.height = Math.max(2, Math.round(sourceWidth * scale));
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.imageSmoothingEnabled = false;
-  context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.width, canvas.height);
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.translate(canvas.width, 0);
+  context.rotate(Math.PI / 2);
+  context.drawImage(source, 0, 0, sourceWidth, sourceHeight, 0, 0, canvas.height, canvas.width);
+  context.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+function orientToScreen(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, portrait: boolean): Shot {
+  const sourcePortrait = sourceHeight >= sourceWidth;
+  if (sourcePortrait === portrait) return { source, width: sourceWidth, height: sourceHeight, close: () => undefined };
+  const turned = document.createElement('canvas');
+  turned.width = sourceHeight;
+  turned.height = sourceWidth;
+  const turnedContext = turned.getContext('2d');
+  if (!turnedContext) return { source, width: sourceWidth, height: sourceHeight, close: () => undefined };
+  turnedContext.translate(turned.width, 0);
+  turnedContext.rotate(Math.PI / 2);
+  turnedContext.drawImage(source, 0, 0);
+  return { source: turned, width: turned.width, height: turned.height, close: () => undefined };
 }
 
 function punch(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
@@ -100,27 +123,12 @@ function punch(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
   const data = image.data;
   for (let index = 0; index < data.length; index += 4) {
     const gray = data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114;
-    const value = Math.max(0, Math.min(255, (gray - 128) * 1.85 + 128));
+    const value = Math.max(0, Math.min(255, (gray - 128) * 1.4 + 128));
     data[index] = value;
     data[index + 1] = value;
     data[index + 2] = value;
   }
   return image;
-}
-
-function matchSensor(bitmap: ImageBitmap, videoWidth: number, videoHeight: number): Shot {
-  const sameWay = videoWidth >= videoHeight === bitmap.width >= bitmap.height;
-  if (sameWay) return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
-  const turned = document.createElement('canvas');
-  turned.width = bitmap.height;
-  turned.height = bitmap.width;
-  const turnedContext = turned.getContext('2d');
-  if (!turnedContext) return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
-  turnedContext.translate(turned.width, 0);
-  turnedContext.rotate(Math.PI / 2);
-  turnedContext.drawImage(bitmap, 0, 0);
-  bitmap.close();
-  return { source: turned, width: turned.width, height: turned.height, close: () => undefined };
 }
 
 function blankFrame(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
@@ -258,41 +266,39 @@ export function WebVinScanner({ onVin }: Props) {
         let bitmap: ImageBitmap | null = null;
         try {
           if (video.videoWidth && context) {
+            const portrait = video.clientHeight >= video.clientWidth;
             if (android && imageCapture) {
               bitmap = await imageCapture.grabFrame().catch(() => null);
               if (!live) return;
-              if (bitmap) shot = matchSensor(bitmap, video.videoWidth, video.videoHeight);
+              if (bitmap) shot = orientToScreen(bitmap, bitmap.width, bitmap.height, portrait);
             }
-            if (!shot) shot = { source: video, width: video.videoWidth, height: video.videoHeight, close: () => undefined };
+            if (!shot) shot = orientToScreen(video, video.videoWidth, video.videoHeight, portrait);
             if (zxing) {
-              const mode = android ? pass % 3 : 0;
-              pass += 1;
-              if (!android || mode === 0) {
-                paintStrip(shot.source, shot.width, shot.height, canvas, context);
-                if (blankFrame(canvas, context) && imageCapture && shot.source === video) {
-                  const fallback = await imageCapture.grabFrame().catch(() => null);
-                  if (fallback) {
-                    shot.close();
-                    shot = matchSensor(fallback, video.videoWidth, video.videoHeight);
-                    paintStrip(shot.source, shot.width, shot.height, canvas, context);
-                  }
+              paintStrip(shot.source, shot.width, shot.height, canvas, context);
+              if (blankFrame(canvas, context) && imageCapture && !bitmap) {
+                const fallback = await imageCapture.grabFrame().catch(() => null);
+                if (fallback) {
+                  bitmap = fallback;
+                  shot.close();
+                  shot = orientToScreen(fallback, fallback.width, fallback.height, portrait);
+                  paintStrip(shot.source, shot.width, shot.height, canvas, context);
                 }
-                if (await read(zxing, canvas)) return;
-                if (native && await read(native, canvas)) return;
               }
-              if (android && mode === 1) {
-                paintBlock(shot.source, shot.width, shot.height, canvas, context);
+              if (await read(zxing, canvas)) return;
+              if (native && await read(native, canvas)) return;
+              if (android) {
+                const step = pass % 2;
+                pass += 1;
+                if (step === 0) paintFull(shot.source, shot.width, shot.height, canvas, context);
+                else paintSpin(shot.source, shot.width, shot.height, canvas, context);
                 if (await readDense()) return;
-                if (await read(zxing, canvas)) return;
-              }
-              if (!android || mode === 2) {
-                paintTurned(shot.source, shot.width, shot.height, canvas, context, android);
-                if (android && await readDense()) return;
+              } else {
+                paintTurned(shot.source, shot.width, shot.height, canvas, context);
                 if (await read(zxing, canvas)) return;
                 if (native && await read(native, canvas)) return;
               }
-            } else if (native && shot.source === video) {
-              if (await read(native, video)) return;
+            } else if (native) {
+              if (await read(native, shot.source)) return;
             }
           }
         } catch {
@@ -301,7 +307,7 @@ export function WebVinScanner({ onVin }: Props) {
           if (bitmap && shot?.source !== bitmap) bitmap.close();
           shot?.close();
         }
-        timer = window.setTimeout(() => void scan(), android ? 90 : 200);
+        timer = window.setTimeout(() => void scan(), android ? 80 : 200);
       };
       timer = window.setTimeout(() => void scan(), 400);
     };
