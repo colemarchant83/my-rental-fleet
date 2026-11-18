@@ -82,25 +82,25 @@ function paintTurned(source: CanvasImageSource, sourceWidth: number, sourceHeigh
   context.setTransform(1, 0, 0, 1, 0, 0);
 }
 
-function paintFull(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
-  const scale = Math.min(1, 1600 / Math.max(sourceWidth, sourceHeight));
-  canvas.width = Math.max(2, Math.round(sourceWidth * scale));
-  canvas.height = Math.max(2, Math.round(sourceHeight * scale));
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  context.imageSmoothingEnabled = true;
-  context.drawImage(source, 0, 0, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
-}
-
-function paintSpin(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
-  const scale = Math.min(1.6, 1600 / Math.max(sourceWidth, sourceHeight));
-  canvas.width = Math.max(2, Math.round(sourceHeight * scale));
-  canvas.height = Math.max(2, Math.round(sourceWidth * scale));
+function paintUpright(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, side: 'left' | 'center' | 'right', turn: 1 | -1) {
+  const cropW = Math.round(sourceWidth * (side === 'center' ? 0.62 : 0.5));
+  const cropH = Math.round(sourceHeight * 0.92);
+  const x = side === 'left' ? 0 : side === 'right' ? sourceWidth - cropW : Math.round((sourceWidth - cropW) / 2);
+  const y = Math.round((sourceHeight - cropH) / 2);
+  const scale = Math.min(2.6, 1800 / cropH);
+  canvas.width = Math.max(2, Math.round(cropH * scale));
+  canvas.height = Math.max(2, Math.round(cropW * scale));
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.imageSmoothingEnabled = false;
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.translate(canvas.width, 0);
-  context.rotate(Math.PI / 2);
-  context.drawImage(source, 0, 0, sourceWidth, sourceHeight, 0, 0, canvas.height, canvas.width);
+  if (turn < 0) {
+    context.translate(0, canvas.height);
+    context.rotate(-Math.PI / 2);
+  } else {
+    context.translate(canvas.width, 0);
+    context.rotate(Math.PI / 2);
+  }
+  context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.height, canvas.width);
   context.setTransform(1, 0, 0, 1, 0, 0);
 }
 
@@ -267,16 +267,12 @@ export function WebVinScanner({ onVin }: Props) {
         try {
           if (video.videoWidth && context) {
             const portrait = video.clientHeight >= video.clientWidth;
-            if (android && imageCapture) {
-              bitmap = await imageCapture.grabFrame().catch(() => null);
-              if (!live) return;
-              if (bitmap) shot = orientToScreen(bitmap, bitmap.width, bitmap.height, portrait);
-            }
-            if (!shot) shot = orientToScreen(video, video.videoWidth, video.videoHeight, portrait);
+            shot = orientToScreen(video, video.videoWidth, video.videoHeight, portrait);
             if (zxing) {
               paintStrip(shot.source, shot.width, shot.height, canvas, context);
-              if (blankFrame(canvas, context) && imageCapture && !bitmap) {
+              if (blankFrame(canvas, context) && imageCapture) {
                 const fallback = await imageCapture.grabFrame().catch(() => null);
+                if (!live) return;
                 if (fallback) {
                   bitmap = fallback;
                   shot.close();
@@ -287,10 +283,13 @@ export function WebVinScanner({ onVin }: Props) {
               if (await read(zxing, canvas)) return;
               if (native && await read(native, canvas)) return;
               if (android) {
-                const step = pass % 2;
+                const sides = ['left', 'center', 'right'] as const;
+                const side = sides[pass % sides.length];
+                const turn: 1 | -1 = pass % 6 < 3 ? 1 : -1;
                 pass += 1;
-                if (step === 0) paintFull(shot.source, shot.width, shot.height, canvas, context);
-                else paintSpin(shot.source, shot.width, shot.height, canvas, context);
+                paintUpright(shot.source, shot.width, shot.height, canvas, context, side, turn);
+                if (await read(zxing, canvas)) return;
+                if (native && await read(native, canvas)) return;
                 if (await readDense()) return;
               } else {
                 paintTurned(shot.source, shot.width, shot.height, canvas, context);
