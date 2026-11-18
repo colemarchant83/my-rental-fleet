@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { currentOwnerId } from '../account';
-import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, mergeRentalLists, rememberCover, rentalIsReturned, saveCachedVehicles, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, mergeRentalLists, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 
@@ -88,6 +88,8 @@ export default function VehicleDetail() {
           const remote = await fetchVehicleRentals(id);
           if (!live) return;
           await forgetRentalsRemovedElsewhere(id, remote);
+          if (!live) return;
+          await rememberRentals(remote);
           if (!live) return;
           setRentals((await loadRentals()).filter((rental) => rental.vehicleId === id));
           setOlder(remote);

@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, reconcilePhoneRentals, rentalIsReturned, saveCachedVehicles, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, reconcilePhoneRentals, rememberRentals, rentalIsReturned, saveCachedVehicles, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 
@@ -87,6 +87,7 @@ export default function VehicleListScreen() {
             const history = await fetchVehicleRentals(vehicleId).catch(() => null);
             if (!history) continue;
             await forgetRentalsRemovedElsewhere(vehicleId, history);
+            await rememberRentals(history);
             const local = (await loadRentals()).filter((rental) => rental.vehicleId === vehicleId);
             merged = [...merged.filter((rental) => rental.vehicleId !== vehicleId), ...mergeRentalLists(local, history)];
           }

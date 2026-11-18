@@ -318,8 +318,42 @@ async function prunePhoneRentals(rentals: LocalRental[]) {
     for (const rental of list.slice(0, HISTORY_ON_PHONE)) keep.add(rental.localId);
   }
   const next = rentals.filter((rental) => keep.has(rental.localId));
-  if (next.length !== rentals.length) await saveRentals(next);
   return next;
+}
+
+function rentalFingerprint(rental: LocalRental) {
+  const photos = (side?: InspectionSide) => (side ? SPOTS.map((spot) => side.spots[spot.id]?.photos?.length || 0).join(',') : '');
+  return [
+    rental.localId,
+    rental.remoteId || '',
+    rental.vehicleId,
+    rental.status,
+    rental.sync,
+    rental.renterName,
+    rental.checkout?.date || '',
+    rental.checkin?.date || '',
+    photos(rental.checkout),
+    photos(rental.checkin),
+  ].join('|');
+}
+
+function sameStoredRentals(a: LocalRental[], b: LocalRental[]) {
+  const left = a.map(rentalFingerprint).sort();
+  const right = b.map(rentalFingerprint).sort();
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+async function storeRentalsIfChanged(current: LocalRental[], next: LocalRental[]) {
+  const pruned = await prunePhoneRentals(next);
+  if (!sameStoredRentals(current, pruned)) await saveRentals(pruned);
+  return pruned;
+}
+
+/** Keep server rental cards on the phone so a machine still shows out on rent with no service. */
+export async function rememberRentals(incoming: LocalRental[]) {
+  const local = await loadRentals();
+  if (!incoming.length) return local;
+  return storeRentalsIfChanged(local, mergeRentalLists(local, incoming));
 }
 
 export function rentalIsReturned(rental: { status?: string; checkin?: unknown }) {
@@ -1018,19 +1052,21 @@ function rentalFromDoc(remoteId: string, data: Record<string, unknown>): LocalRe
 }
 
 export async function reconcilePhoneRentals(remoteOpen: LocalRental[]) {
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
   const keys = new Set<string>();
   for (const rental of remoteOpen) {
     keys.add(rental.localId);
     if (rental.remoteId) keys.add(rental.remoteId);
   }
   const local = await loadRentals();
-  const next = local.filter((rental) => {
-    if (rentalIsReturned(rental)) return true;
-    if (!rental.remoteId && rental.sync !== 'synced') return true;
-    return keys.has(rental.localId) || (!!rental.remoteId && keys.has(rental.remoteId));
-  });
-  if (next.length !== local.length) await saveRentals(next);
-  return mergeRentalLists(next, remoteOpen);
+  const kept = offline
+    ? local
+    : local.filter((rental) => {
+        if (rentalIsReturned(rental)) return true;
+        if (!rental.remoteId && rental.sync !== 'synced') return true;
+        return keys.has(rental.localId) || (!!rental.remoteId && keys.has(rental.remoteId));
+      });
+  return storeRentalsIfChanged(local, mergeRentalLists(kept, remoteOpen));
 }
 
 export async function fetchOpenRentals() {
