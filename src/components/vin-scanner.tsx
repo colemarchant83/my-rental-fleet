@@ -258,8 +258,6 @@ export function WebVinScanner({ onVin }: Props) {
       }
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d', { willReadFrequently: true });
-      const align = document.createElement('canvas');
-      const alignContext = align.getContext('2d', { willReadFrequently: true });
       const found = (value: string) => {
         const vin = extractVin(value);
         if (!vin) return false;
@@ -286,7 +284,7 @@ export function WebVinScanner({ onVin }: Props) {
       const sharpOptions: Record<string, unknown> = {
         formats: ['Code39', 'Code128', 'Code93'],
         tryHarder: true,
-        tryRotate: false,
+        tryRotate: true,
         tryInvert: true,
         tryDenoise: false,
         tryDownscale: false,
@@ -336,42 +334,26 @@ export function WebVinScanner({ onVin }: Props) {
         return { source: video, width: video.videoWidth, height: video.videoHeight, close: () => undefined };
       };
       let pass = 0;
+      let nativeBusy = false;
       const scan = async () => {
         if (!live) return;
         let shot: Shot | null = null;
         try {
-          if (video.videoWidth && context && android && dense && alignContext) {
+          if (video.videoWidth && context && android && dense) {
+            if (native && !nativeBusy) {
+              nativeBusy = true;
+              void read(native, video).finally(() => { nativeBusy = false; });
+            }
             shot = await takeFrame();
             if (!live) return;
             if (shot) {
-              let source = shot.source;
-              let sourceWidth = shot.width;
-              let sourceHeight = shot.height;
-              const videoLandscape = video.videoWidth >= video.videoHeight;
-              const shotLandscape = sourceWidth >= sourceHeight;
-              if (videoLandscape !== shotLandscape) {
-                align.width = sourceHeight;
-                align.height = sourceWidth;
-                alignContext.setTransform(1, 0, 0, 1, 0, 0);
-                alignContext.imageSmoothingEnabled = false;
-                alignContext.translate(align.width, 0);
-                alignContext.rotate(Math.PI / 2);
-                alignContext.drawImage(source, 0, 0);
-                alignContext.setTransform(1, 0, 0, 1, 0, 0);
-                source = align;
-                sourceWidth = align.width;
-                sourceHeight = align.height;
-              }
-              // Door barcodes are vertical, same as on the iPhone. Turn the picture
-              // for the reader only. Leave the camera preview as the truck looks.
-              const vertical = pass % 4 !== 3;
-              const full = pass % 3 === 2;
+              const full = pass % 2 === 1;
               pass += 1;
-              const viewWidth = video.clientWidth || sourceWidth;
-              const viewHeight = video.clientHeight || sourceHeight;
-              paintAimed(source, sourceWidth, sourceHeight, viewWidth, viewHeight, canvas, context, vertical, full);
-              if (blankFrame(canvas, context) && source !== video) {
-                paintAimed(video, video.videoWidth, video.videoHeight, viewWidth, viewHeight, canvas, context, vertical, full);
+              const viewWidth = video.clientWidth || shot.width;
+              const viewHeight = video.clientHeight || shot.height;
+              paintAimed(shot.source, shot.width, shot.height, viewWidth, viewHeight, canvas, context, false, full);
+              if (blankFrame(canvas, context) && shot.source !== video) {
+                paintAimed(video, video.videoWidth, video.videoHeight, viewWidth, viewHeight, canvas, context, false, full);
               }
               if (await readSharp()) return;
             }
