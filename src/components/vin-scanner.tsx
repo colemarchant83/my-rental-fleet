@@ -82,16 +82,29 @@ function paintTurned(source: CanvasImageSource, sourceWidth: number, sourceHeigh
   context.setTransform(1, 0, 0, 1, 0, 0);
 }
 
-function paintUpright(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, side: 'left' | 'center' | 'right', turn: 1 | -1) {
-  const cropW = Math.round(sourceWidth * (side === 'center' ? 0.62 : 0.5));
+function paintBand(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, across: number) {
+  const cropW = Math.round(sourceWidth * 0.94);
+  const cropH = Math.max(72, Math.round(sourceHeight * 0.38));
+  const x = Math.round((sourceWidth - cropW) / 2);
+  const y = Math.max(0, Math.min(sourceHeight - cropH, Math.round(sourceHeight * across - cropH / 2)));
+  const scale = Math.min(3, 1500 / cropW);
+  canvas.width = Math.max(2, Math.round(cropW * scale));
+  canvas.height = Math.max(2, Math.round(cropH * scale));
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.imageSmoothingEnabled = true;
+  context.drawImage(source, x, y, cropW, cropH, 0, 0, canvas.width, canvas.height);
+}
+
+function paintColumn(source: CanvasImageSource, sourceWidth: number, sourceHeight: number, canvas: HTMLCanvasElement, context: CanvasRenderingContext2D, across: number, turn: 1 | -1) {
+  const cropW = Math.max(72, Math.round(sourceWidth * 0.34));
   const cropH = Math.round(sourceHeight * 0.92);
-  const x = side === 'left' ? 0 : side === 'right' ? sourceWidth - cropW : Math.round((sourceWidth - cropW) / 2);
+  const x = Math.max(0, Math.min(sourceWidth - cropW, Math.round(sourceWidth * across - cropW / 2)));
   const y = Math.round((sourceHeight - cropH) / 2);
-  const scale = Math.min(2.6, 1800 / cropH);
+  const scale = Math.min(3, 1500 / cropH);
   canvas.width = Math.max(2, Math.round(cropH * scale));
   canvas.height = Math.max(2, Math.round(cropW * scale));
   context.setTransform(1, 0, 0, 1, 0, 0);
-  context.imageSmoothingEnabled = false;
+  context.imageSmoothingEnabled = true;
   context.clearRect(0, 0, canvas.width, canvas.height);
   if (turn < 0) {
     context.translate(0, canvas.height);
@@ -220,9 +233,10 @@ export function WebVinScanner({ onVin }: Props) {
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d', { willReadFrequently: true });
       const found = (value: string) => {
-        if (!extractVin(value)) return false;
+        const vin = extractVin(value);
+        if (!vin) return false;
         stop();
-        onVinRef.current(value);
+        onVinRef.current(vin);
         return true;
       };
       const read = async (detector: Detector, source: CanvasImageSource) => {
@@ -233,6 +247,15 @@ export function WebVinScanner({ onVin }: Props) {
           return false;
         }
       };
+      const within = async (work: Promise<boolean>, ms: number) => {
+        let timer = 0;
+        const result = await Promise.race([
+          work.catch(() => false),
+          new Promise<boolean>((resolve) => { timer = window.setTimeout(() => resolve(false), ms); }),
+        ]);
+        window.clearTimeout(timer);
+        return result;
+      };
       if (zxing && context) {
         canvas.width = 4;
         canvas.height = 4;
@@ -242,18 +265,22 @@ export function WebVinScanner({ onVin }: Props) {
         if (!ready) zxing = null;
       }
       let pass = 0;
+      let nativePending: Promise<boolean> | null = null;
+      const bands = [0.2, 0.38, 0.5, 0.62, 0.8];
+      const columns = [0.16, 0.34, 0.5, 0.66, 0.84];
       const readDense = async () => {
         if (!dense || !context) return false;
         try {
           const image = punch(canvas, context);
+          context.putImageData(image, 0, 0);
           const codes = await dense(image, {
-            formats: ['PDF417', 'MicroPDF417', 'Code39', 'Code128', 'Code93'],
+            formats: ['Code39', 'Code128', 'Code93'],
             tryHarder: true,
             tryRotate: true,
             tryInvert: true,
-            tryDenoise: true,
+            tryDenoise: false,
             tryDownscale: false,
-            maxNumberOfSymbols: 4,
+            maxNumberOfSymbols: 3,
           });
           return codes.some((code) => code.text && found(code.text));
         } catch {
@@ -267,46 +294,50 @@ export function WebVinScanner({ onVin }: Props) {
         try {
           if (video.videoWidth && context) {
             const portrait = video.clientHeight >= video.clientWidth;
-            shot = orientToScreen(video, video.videoWidth, video.videoHeight, portrait);
+            if (android && imageCapture) bitmap = await imageCapture.grabFrame().catch(() => null);
+            if (!live) return;
+            if (bitmap && bitmap.width > 2) {
+              const grabbed = bitmap;
+              shot = { source: grabbed, width: grabbed.width, height: grabbed.height, close: () => grabbed.close() };
+              bitmap = null;
+            } else {
+              shot = orientToScreen(video, video.videoWidth, video.videoHeight, portrait);
+            }
+            if (android && native && !nativePending) {
+              nativePending = read(native, video).finally(() => { nativePending = null; });
+              if (await within(nativePending, 400)) return;
+            }
             if (zxing) {
               paintStrip(shot.source, shot.width, shot.height, canvas, context);
-              if (blankFrame(canvas, context) && imageCapture) {
-                const fallback = await imageCapture.grabFrame().catch(() => null);
-                if (!live) return;
-                if (fallback) {
-                  bitmap = fallback;
-                  shot.close();
-                  shot = orientToScreen(fallback, fallback.width, fallback.height, portrait);
-                  paintStrip(shot.source, shot.width, shot.height, canvas, context);
-                }
+              if (blankFrame(canvas, context) && imageCapture && shot.source !== video) {
+                shot.close();
+                shot = orientToScreen(video, video.videoWidth, video.videoHeight, portrait);
+                paintStrip(shot.source, shot.width, shot.height, canvas, context);
               }
               if (await read(zxing, canvas)) return;
-              if (native && await read(native, canvas)) return;
+              if (!android && native && await read(native, canvas)) return;
               if (android) {
-                const sides = ['left', 'center', 'right'] as const;
-                const side = sides[pass % sides.length];
-                const turn: 1 | -1 = pass % 6 < 3 ? 1 : -1;
+                const step = pass % 15;
                 pass += 1;
-                paintUpright(shot.source, shot.width, shot.height, canvas, context, side, turn);
-                if (await read(zxing, canvas)) return;
-                if (native && await read(native, canvas)) return;
+                if (step < 5) paintBand(shot.source, shot.width, shot.height, canvas, context, bands[step]);
+                else if (step < 10) paintColumn(shot.source, shot.width, shot.height, canvas, context, columns[step - 5], 1);
+                else paintColumn(shot.source, shot.width, shot.height, canvas, context, columns[step - 10], -1);
                 if (await readDense()) return;
+                if (await read(zxing, canvas)) return;
               } else {
                 paintTurned(shot.source, shot.width, shot.height, canvas, context);
                 if (await read(zxing, canvas)) return;
                 if (native && await read(native, canvas)) return;
               }
-            } else if (native) {
-              if (await read(native, shot.source)) return;
-            }
+            } else if (native && await read(native, shot.source)) return;
           }
         } catch {
           // A missed frame is not a failure. Keep the camera open.
         } finally {
-          if (bitmap && shot?.source !== bitmap) bitmap.close();
+          bitmap?.close();
           shot?.close();
         }
-        timer = window.setTimeout(() => void scan(), android ? 80 : 200);
+        timer = window.setTimeout(() => void scan(), android ? 40 : 200);
       };
       timer = window.setTimeout(() => void scan(), 400);
     };
