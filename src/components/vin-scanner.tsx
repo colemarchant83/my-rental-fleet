@@ -95,6 +95,7 @@ export function WebVinScanner({ onVin }: Props) {
     };
     const open = async () => {
       const attempts: MediaStreamConstraints[] = [
+        { audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } },
         { audio: false, video: { facingMode: { ideal: 'environment' } } },
         { audio: false, video: true },
       ];
@@ -131,53 +132,39 @@ export function WebVinScanner({ onVin }: Props) {
       } catch {
         zxing = null;
       }
-      const ImageCaptureApi = (globalThis as { ImageCapture?: new (track: MediaStreamTrack) => { grabFrame: () => Promise<ImageBitmap> } }).ImageCapture;
-      const capture = track && ImageCaptureApi ? new ImageCaptureApi(track) : null;
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d', { willReadFrequently: true });
-      let pass = 0;
       const found = (value: string) => {
         if (!extractVin(value)) return false;
         stop();
         onVinRef.current(value);
         return true;
       };
+      const within = <T,>(work: Promise<T>, ms: number) => Promise.race([
+        work,
+        new Promise<null>((resolve) => window.setTimeout(() => resolve(null), ms)),
+      ]);
       const scan = async () => {
         if (!live) return;
         try {
-          if (pass % 2 === 0 && native && video.videoWidth) {
-            const codes = await native.detect(video);
-            if (codes.some((code) => code.rawValue && found(code.rawValue))) return;
-          } else if (zxing && context) {
-            let source: CanvasImageSource = video;
-            let sourceWidth = video.videoWidth;
-            let sourceHeight = video.videoHeight;
-            if (capture) {
-              const frame = await capture.grabFrame().catch(() => null);
-              if (frame) {
-                source = frame;
-                sourceWidth = frame.width;
-                sourceHeight = frame.height;
-              }
+          if (video.videoWidth) {
+            if (native) {
+              const codes = await within(native.detect(video), 800);
+              if (codes?.some((code) => code.rawValue && found(code.rawValue))) return;
             }
-            if (sourceWidth && sourceHeight) {
-              paintStrip(source, sourceWidth, sourceHeight, canvas, context);
-              const across = await zxing.detect(canvas);
-              if (across.some((code) => code.rawValue && found(code.rawValue))) {
-                if (source instanceof ImageBitmap) source.close();
-                return;
-              }
-              paintTurned(source, sourceWidth, sourceHeight, canvas, context);
-              const upright = await zxing.detect(canvas);
-              if (source instanceof ImageBitmap) source.close();
-              if (upright.some((code) => code.rawValue && found(code.rawValue))) return;
-            } else if (source instanceof ImageBitmap) source.close();
+            if (zxing && context) {
+              paintStrip(video, video.videoWidth, video.videoHeight, canvas, context);
+              const across = await within(zxing.detect(canvas), 800);
+              if (across?.some((code) => code.rawValue && found(code.rawValue))) return;
+              paintTurned(video, video.videoWidth, video.videoHeight, canvas, context);
+              const upright = await within(zxing.detect(canvas), 800);
+              if (upright?.some((code) => code.rawValue && found(code.rawValue))) return;
+            }
           }
         } catch {
           // A missed frame is not a failure. Keep the camera open.
         }
-        pass += 1;
-        timer = window.setTimeout(() => void scan(), 350);
+        timer = window.setTimeout(() => void scan(), 250);
       };
       timer = window.setTimeout(() => void scan(), 350);
     };
