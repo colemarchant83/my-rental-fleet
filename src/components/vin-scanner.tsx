@@ -185,9 +185,6 @@ function blankFrame(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D
 export function WebVinScanner({ onVin }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const onVinRef = useRef(onVin);
-  const turnRef = useRef(false);
-  const scaleRef = useRef(1);
-  const [preview, setPreview] = useState({ on: false, scale: 1 });
   const [error, setError] = useState('');
   onVinRef.current = onVin;
 
@@ -195,11 +192,8 @@ export function WebVinScanner({ onVin }: Props) {
     let live = true;
     let stream: MediaStream | null = null;
     let timer = 0;
-    let onChange = () => undefined;
     const stop = () => {
       window.clearTimeout(timer);
-      window.removeEventListener('resize', onChange);
-      window.removeEventListener('orientationchange', onChange);
       stream?.getTracks().forEach((track) => track.stop());
       stream = null;
     };
@@ -321,18 +315,6 @@ export function WebVinScanner({ onVin }: Props) {
           return false;
         }
       };
-      const syncPreview = () => {
-        if (!android || !video.videoWidth) return;
-        const wanted = window.innerHeight >= window.innerWidth && video.videoWidth > video.videoHeight;
-        const frame = video.parentElement;
-        const width = frame?.clientWidth || video.clientWidth || 1;
-        const height = frame?.clientHeight || video.clientHeight || 1;
-        const scale = Math.max(width / height, height / width);
-        if (wanted === turnRef.current && Math.abs(scale - scaleRef.current) < 0.03) return;
-        turnRef.current = wanted;
-        scaleRef.current = scale;
-        setPreview(wanted ? { on: true, scale } : { on: false, scale: 1 });
-      };
       const takeFrame = async (): Promise<Shot | null> => {
         if (imageCapture) {
           let ignoreLate = false;
@@ -359,7 +341,6 @@ export function WebVinScanner({ onVin }: Props) {
         let shot: Shot | null = null;
         try {
           if (video.videoWidth && context && android && dense && alignContext) {
-            syncPreview();
             shot = await takeFrame();
             if (!live) return;
             if (shot) {
@@ -381,14 +362,16 @@ export function WebVinScanner({ onVin }: Props) {
                 sourceWidth = align.width;
                 sourceHeight = align.height;
               }
-              const upright = turnRef.current ? pass % 4 !== 3 : pass % 4 === 3;
+              // Door barcodes are vertical, same as on the iPhone. Turn the picture
+              // for the reader only. Leave the camera preview as the truck looks.
+              const vertical = pass % 4 !== 3;
               const full = pass % 3 === 2;
               pass += 1;
               const viewWidth = video.clientWidth || sourceWidth;
               const viewHeight = video.clientHeight || sourceHeight;
-              paintAimed(source, sourceWidth, sourceHeight, viewWidth, viewHeight, canvas, context, upright, full);
+              paintAimed(source, sourceWidth, sourceHeight, viewWidth, viewHeight, canvas, context, vertical, full);
               if (blankFrame(canvas, context) && source !== video) {
-                paintAimed(video, video.videoWidth, video.videoHeight, viewWidth, viewHeight, canvas, context, turnRef.current, full);
+                paintAimed(video, video.videoWidth, video.videoHeight, viewWidth, viewHeight, canvas, context, vertical, full);
               }
               if (await readSharp()) return;
             }
@@ -412,10 +395,6 @@ export function WebVinScanner({ onVin }: Props) {
         if (!live) return;
         timer = window.setTimeout(() => void scan(), android ? 30 : 200);
       };
-      window.addEventListener('resize', syncPreview);
-      window.addEventListener('orientationchange', syncPreview);
-      onChange = syncPreview;
-      syncPreview();
       timer = window.setTimeout(() => void scan(), 300);
     };
     void open().catch(() => {
@@ -428,33 +407,17 @@ export function WebVinScanner({ onVin }: Props) {
   }, []);
 
   return (
-    <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: '#111', overflow: 'hidden' }}>
+    <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: '#111' }}>
       {createElement('video', {
         ref: videoRef,
         autoPlay: true,
         playsInline: true,
         muted: true,
-        style: preview.on ? {
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          backgroundColor: '#111',
-          transformOrigin: 'center center',
-          transform: `rotate(90deg) scale(${preview.scale})`,
-          zIndex: 0,
-        } : {
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          backgroundColor: '#111',
-        },
+        style: { width: '100%', height: '100%', objectFit: 'cover', backgroundColor: '#111' },
       })}
-      <View pointerEvents="none" style={{ position: 'absolute', left: '8%', right: '8%', top: '38%', height: 84, borderWidth: 3, borderColor: theme.white, borderRadius: 12, zIndex: 2 }} />
-      <View pointerEvents="none" style={{ position: 'absolute', left: '36%', width: '28%', top: '12%', bottom: '12%', borderWidth: 3, borderColor: theme.white, borderRadius: 12, zIndex: 2 }} />
-      {error ? <Text style={{ position: 'absolute', left: 16, right: 16, bottom: 16, color: theme.white, fontWeight: '700', zIndex: 2 }}>{error}</Text> : null}
+      <View pointerEvents="none" style={{ position: 'absolute', left: '8%', right: '8%', top: '38%', height: 84, borderWidth: 3, borderColor: theme.white, borderRadius: 12 }} />
+      <View pointerEvents="none" style={{ position: 'absolute', left: '36%', width: '28%', top: '12%', bottom: '12%', borderWidth: 3, borderColor: theme.white, borderRadius: 12 }} />
+      {error ? <Text style={{ position: 'absolute', left: 16, right: 16, bottom: 16, color: theme.white, fontWeight: '700' }}>{error}</Text> : null}
     </View>
   );
 }
