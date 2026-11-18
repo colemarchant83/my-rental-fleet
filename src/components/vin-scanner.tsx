@@ -156,7 +156,10 @@ export function WebVinScanner({ onVin }: Props) {
       const native = await nativeDetector();
       let zxing: Detector | null = null;
       try {
-        const { BarcodeDetector } = await import('barcode-detector/ponyfill');
+        const { BarcodeDetector, setZXingModuleOverrides } = await import('barcode-detector/ponyfill');
+        setZXingModuleOverrides({
+          locateFile: (path: string, prefix: string) => (String(path).includes('zxing_reader') ? '/zxing_reader.wasm' : prefix + path),
+        });
         zxing = new BarcodeDetector({
           formats: ['code_39', 'code_128', 'code_93', 'qr_code', 'data_matrix', 'pdf417'],
         });
@@ -174,43 +177,42 @@ export function WebVinScanner({ onVin }: Props) {
         onVinRef.current(value);
         return true;
       };
-      const within = <T,>(work: Promise<T>, ms: number) => Promise.race([
-        work,
-        new Promise<null>((resolve) => window.setTimeout(() => resolve(null), ms)),
-      ]);
       const read = async (detector: Detector, source: CanvasImageSource) => {
         try {
-          const codes = await within(detector.detect(source), 700);
+          const codes = await detector.detect(source);
           return Boolean(codes?.some((code) => code.rawValue && found(code.rawValue)));
         } catch {
           return false;
         }
       };
-      const snapshot = async (): Promise<Shot> => {
-        const fromVideo = () => ({ source: video, width: video.videoWidth, height: video.videoHeight, close: () => undefined });
-        if (!android || !imageCapture) return fromVideo();
-        try {
-          const bitmap = await within(imageCapture.grabFrame(), 700);
-          if (!bitmap) return fromVideo();
-          return matchSensor(bitmap, video.videoWidth, video.videoHeight);
-        } catch {
-          return fromVideo();
-        }
-      };
+      if (zxing && context) {
+        canvas.width = 4;
+        canvas.height = 4;
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, 4, 4);
+        const ready = await zxing.detect(canvas).then(() => true).catch(() => false);
+        if (!ready) zxing = null;
+      }
       const scan = async () => {
         if (!live) return;
         let shot: Shot | null = null;
+        let bitmap: ImageBitmap | null = null;
         try {
           if (video.videoWidth && context) {
-            shot = await snapshot();
-            if (!live) return;
+            if (android && imageCapture) {
+              bitmap = await imageCapture.grabFrame().catch(() => null);
+              if (!live) return;
+              if (bitmap && native && await read(native, bitmap)) return;
+              if (bitmap) shot = matchSensor(bitmap, video.videoWidth, video.videoHeight);
+            }
+            if (!shot) shot = { source: video, width: video.videoWidth, height: video.videoHeight, close: () => undefined };
             if (zxing) {
               paintStrip(shot.source, shot.width, shot.height, canvas, context);
               if (blankFrame(canvas, context) && imageCapture && shot.source === video) {
-                const bitmap = await within(imageCapture.grabFrame(), 700);
-                if (bitmap) {
+                const fallback = await imageCapture.grabFrame().catch(() => null);
+                if (fallback) {
                   shot.close();
-                  shot = matchSensor(bitmap, video.videoWidth, video.videoHeight);
+                  shot = matchSensor(fallback, video.videoWidth, video.videoHeight);
                   paintStrip(shot.source, shot.width, shot.height, canvas, context);
                 }
               }
@@ -219,18 +221,17 @@ export function WebVinScanner({ onVin }: Props) {
               paintTurned(shot.source, shot.width, shot.height, canvas, context);
               if (await read(zxing, canvas)) return;
               if (native && await read(native, canvas)) return;
-            }
-            if (!zxing && native) {
-              if (shot.source !== video) paintStrip(shot.source, shot.width, shot.height, canvas, context);
-              if (await read(native, shot.source === video ? video : canvas)) return;
+            } else if (native && shot.source === video) {
+              if (await read(native, video)) return;
             }
           }
         } catch {
           // A missed frame is not a failure. Keep the camera open.
         } finally {
+          if (bitmap && shot?.source !== bitmap) bitmap.close();
           shot?.close();
         }
-        timer = window.setTimeout(() => void scan(), 280);
+        timer = window.setTimeout(() => void scan(), 200);
       };
       timer = window.setTimeout(() => void scan(), 400);
     };
