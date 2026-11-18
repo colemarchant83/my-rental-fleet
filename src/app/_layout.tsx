@@ -98,7 +98,7 @@ export default function RootLayout() {
       // A phone that cannot store this still shows the animation once.
     }
   }, [opening]);
-  const openAccount = useCallback((uid: string, justSignedIn: boolean) => {
+  const openAccount = useCallback((uid: string, _justSignedIn: boolean) => {
     setSignedIn(true);
     setVerified(true);
     if (claimed.current === uid) {
@@ -106,8 +106,8 @@ export default function RootLayout() {
       return;
     }
     claimed.current = uid;
-    setAccountReady(!justSignedIn);
-    void claimExistingRecords(uid).finally(() => setAccountReady(true));
+    setAccountReady(true);
+    void claimExistingRecords(uid);
   }, []);
   const finishVerification = useCallback(() => {
     const uid = auth.currentUser?.uid;

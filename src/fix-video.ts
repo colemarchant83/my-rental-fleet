@@ -12,19 +12,21 @@ export async function remoteLooksFragmented(url: string) {
 export async function flattenIfFragmented(blob: Blob): Promise<Blob> {
   const head = new Uint8Array(await blob.slice(0, 8192).arrayBuffer());
   if (!looksFragmented(head)) return blob;
-  const { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Mp4OutputFormat, Output } = await import('mediabunny');
-  const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
-  const target = new BufferTarget();
-  const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
   try {
-    const conversion = await Conversion.init({ input, output });
-    if (!conversion.isValid) return blob;
-    await conversion.execute();
-    if (!target.buffer?.byteLength) return blob;
-    return new Blob([target.buffer], { type: 'video/mp4' });
+    const { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Mp4OutputFormat, Output } = await import('mediabunny');
+    const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
+    const target = new BufferTarget();
+    const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target });
+    try {
+      const conversion = await Conversion.init({ input, output });
+      if (!conversion.isValid) return blob;
+      await conversion.execute();
+      if (!target.buffer?.byteLength) return blob;
+      return new Blob([target.buffer], { type: 'video/mp4' });
+    } finally {
+      input.dispose();
+    }
   } catch {
     return blob;
-  } finally {
-    input.dispose();
   }
 }

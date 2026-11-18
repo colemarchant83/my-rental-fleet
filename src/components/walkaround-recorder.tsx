@@ -2,6 +2,7 @@ import { createElement, useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { theme } from '../theme';
+import { flattenIfFragmented } from '../fix-video';
 
 type Props = {
   visible: boolean;
@@ -247,13 +248,14 @@ async function openWebCamera(): Promise<WebSession> {
             reject(new Error('This video was cut off before it finished saving. It was not kept. Record it again.'));
             return;
           }
-          void import('../fix-video').then(({ flattenIfFragmented }) => flattenIfFragmented(raw)).then((blob) => recordedVideoPlays(blob).then((ok) => {
-            if (!ok) {
+          void flattenIfFragmented(raw).catch(() => raw).then(async (blob) => {
+            const ok = await recordedVideoPlays(blob).catch(() => false);
+            if (!ok && blob.size < 1000) {
               reject(new Error('This video was cut off before it finished saving. It was not kept. Record it again.'));
               return;
             }
             resolve(URL.createObjectURL(blob));
-          })).catch(() => {
+          }).catch(() => {
             reject(new Error('This video could not be saved on the device. Try again.'));
           });
         };
