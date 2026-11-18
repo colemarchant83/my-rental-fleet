@@ -85,19 +85,6 @@ export function WebVinScanner({ onVin }: Props) {
   onVinRef.current = onVin;
 
   useEffect(() => {
-    if (typeof document === 'undefined') return;
-    document.body.dataset.vinScan = '1';
-    const orientation = window.screen?.orientation as { unlock?: () => void; lock?: (orientation: string) => Promise<void> } | undefined;
-    orientation?.unlock?.();
-    window.dispatchEvent(new Event('resize'));
-    return () => {
-      delete document.body.dataset.vinScan;
-      orientation?.lock?.('portrait').catch(() => undefined);
-      window.dispatchEvent(new Event('resize'));
-    };
-  }, []);
-
-  useEffect(() => {
     let live = true;
     let stream: MediaStream | null = null;
     let timer = 0;
