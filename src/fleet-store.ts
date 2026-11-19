@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
+import { Platform } from 'react-native';
 import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { currentOwnerId } from './account';
@@ -1008,7 +1009,7 @@ export function watchConnection() {
   const unsub = NetInfo.addEventListener((state) => {
     if (state.isConnected) void syncAll();
   });
-  if (typeof window === 'undefined') return unsub;
+  if (Platform.OS !== 'web' || typeof document === 'undefined') return unsub;
   const online = () => void syncAll();
   const visible = () => {
     if (document.visibilityState === 'visible') void syncAll();

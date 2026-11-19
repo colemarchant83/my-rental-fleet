@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
@@ -156,7 +156,7 @@ export default function RootLayout() {
       router.prefetch('/vehicle');
       router.prefetch('/rental-history');
     }
-    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
@@ -179,7 +179,7 @@ export default function RootLayout() {
       const message = reason instanceof Error ? reason.message : String(reason || 'A background task failed.');
       void reportProblem(message, 'background');
     };
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.addEventListener('online', refreshAfterReconnect);
       window.addEventListener('error', reportPageError);
       window.addEventListener('unhandledrejection', reportRejection);
@@ -187,7 +187,7 @@ export default function RootLayout() {
     const stopWatching = watchConnection();
     let cover: HTMLDivElement | undefined;
     let updateCover: (() => void) | undefined;
-    if (typeof document !== 'undefined') {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const manifest = document.createElement('link');
       manifest.rel = 'manifest';
       manifest.href = '/manifest.webmanifest?v=3';
@@ -219,7 +219,7 @@ export default function RootLayout() {
       }
     }
     return () => {
-      if (typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.removeEventListener('online', refreshAfterReconnect);
         window.removeEventListener('error', reportPageError);
         window.removeEventListener('unhandledrejection', reportRejection);

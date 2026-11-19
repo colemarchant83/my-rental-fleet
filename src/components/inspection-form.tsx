@@ -48,7 +48,7 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
   const isOut = mode === 'checkout';
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (Platform.OS !== 'web') {
       let live = true;
       const unsub = NetInfo.addEventListener((state) => {
         if (live) setOnline(state.isConnected !== false);
