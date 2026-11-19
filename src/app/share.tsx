@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { createElement, useEffect, useRef, useState } from 'react';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { VideoPreview } from '../components/inspection-form';
 import { SPOTS, formatDay, formatStamp, vehicleIdLine, type InspectionSide, type LocalRental } from '../fleet-store';
@@ -7,6 +7,27 @@ import { buildMaintenanceCard, buildRentalCard, deliverRentalFile, downloadInBro
 import { isMaintenanceShare, loadSharedCard, type SharedCard, type SharedMaintenance } from '../share-link';
 import { OfflineGate } from '../components/offline-gate';
 import { theme } from '../theme';
+
+function CardPhoto({ uri }: { uri?: string }) {
+  if (!uri) return null;
+  if (Platform.OS === 'web') {
+    return createElement('img', {
+      alt: '',
+      src: uri,
+      style: {
+        display: 'block',
+        width: '100%',
+        height: 'auto',
+        maxHeight: 420,
+        objectFit: 'contain',
+        borderRadius: 12,
+        marginTop: 10,
+        backgroundColor: '#1c1917',
+      },
+    });
+  }
+  return <Image source={{ uri }} style={styles.photo} resizeMode="cover" />;
+}
 
 function SidePhotos({ title, side }: { title: string; side?: InspectionSide }) {
   if (!side) return <Text style={styles.muted}>Not returned yet</Text>;
@@ -27,7 +48,7 @@ function SidePhotos({ title, side }: { title: string; side?: InspectionSide }) {
             </Text>
             {photos.map((photo) => (
               <View key={photo.id || photo.remoteUrl}>
-                <Image source={{ uri: photo.remoteUrl }} style={styles.photo} resizeMode="cover" />
+                <CardPhoto uri={photo.remoteUrl} />
                 {photo.addedAt ? <Text style={styles.muted}>Phone {formatStamp(photo.addedAt)}</Text> : null}
                 {photo.serverAddedAt ? <Text style={styles.muted}>Server {formatStamp(photo.serverAddedAt)}</Text> : null}
               </View>
@@ -48,6 +69,8 @@ function SharedRental() {
   const [saving, setSaving] = useState(false);
   const [ready, setReady] = useState(false);
   const [note, setNote] = useState('');
+  const { width } = useWindowDimensions();
+  const wide = width >= 860;
   const built = useRef<File | null>(null);
 
   useEffect(() => {
@@ -166,7 +189,7 @@ function SharedRental() {
           {note ? <Text style={styles.muted}>{note}</Text> : null}
           <Text style={styles.muted}>This saves the record and the receipt photos onto this phone or computer.</Text>
           {card.photos.map((photo) => (
-            <Image key={photo.id || photo.remoteUrl} source={{ uri: photo.remoteUrl }} style={styles.photo} resizeMode="cover" />
+            <CardPhoto key={photo.id || photo.remoteUrl} uri={photo.remoteUrl} />
           ))}
         </>
       ) : (
@@ -186,8 +209,14 @@ function SharedRental() {
       </Pressable>
       {note ? <Text style={styles.muted}>{note}</Text> : null}
       <Text style={styles.muted}>This saves the card, the photos, and the videos onto this phone or computer.</Text>
-      <SidePhotos title="Check out" side={card.checkout} />
-      <SidePhotos title="Check in" side={card.checkin} />
+      <View style={wide ? styles.columns : undefined}>
+        <View style={wide ? styles.column : undefined}>
+          <SidePhotos title="Check out" side={card.checkout} />
+        </View>
+        <View style={wide ? styles.column : undefined}>
+          <SidePhotos title="Check in" side={card.checkin} />
+        </View>
+      </View>
         </>
       )}
     </ScrollView>
@@ -196,13 +225,15 @@ function SharedRental() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: theme.bg },
-  content: { padding: 20, paddingBottom: 48 },
+  content: { padding: 20, paddingBottom: 48, width: '100%', maxWidth: 980, alignSelf: 'center' },
   title: { color: theme.text, fontSize: 32, fontWeight: '800' },
   machine: { color: theme.text, fontSize: 16, marginTop: 8 },
   muted: { color: theme.muted, marginTop: 8, lineHeight: 20 },
   save: { marginTop: 18, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveText: { color: theme.white, fontWeight: '800' },
   sideTitle: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 28 },
+  columns: { flexDirection: 'row', alignItems: 'flex-start', gap: 16 },
+  column: { flex: 1, minWidth: 0 },
   spot: { backgroundColor: theme.card, borderRadius: 16, padding: 14, marginTop: 12 },
   spotTitle: { color: theme.text, fontSize: 17, fontWeight: '700' },
   issue: { color: theme.danger, fontWeight: '800' },
