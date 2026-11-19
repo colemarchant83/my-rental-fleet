@@ -509,7 +509,7 @@ async function videoBlob(uri: string) {
   return blob.type.startsWith('video/') ? blob : new Blob([blob], { type: 'video/mp4' });
 }
 
-function WebVideo({ src, large, onStuck, onClose }: { src: string; large: boolean; onStuck: () => void; onClose: () => void }) {
+function WebVideo({ src, large, onLarge, onStuck, onClose }: { src: string; large: boolean; onLarge: () => void; onStuck: () => void; onClose: () => void }) {
   const host = useRef<View>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stuckRef = useRef(onStuck);
@@ -522,7 +522,7 @@ function WebVideo({ src, large, onStuck, onClose }: { src: string; large: boolea
     const video = document.createElement('video');
     video.controls = true;
     video.playsInline = true;
-    video.setAttribute('controlsList', 'nofullscreen');
+    if (window.innerWidth < 900) video.setAttribute('controlsList', 'nofullscreen');
     video.disablePictureInPicture = true;
     video.preload = 'auto';
     video.style.cssText = 'position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;object-fit:contain;background:#1c1917';
@@ -605,7 +605,33 @@ function WebVideo({ src, large, onStuck, onClose }: { src: string; large: boolea
       if (playing) void video.play().catch(() => undefined);
     };
   }, [large]);
-  return <View ref={host} style={styles.videoFrame} />;
+  const fillScreen = () => {
+    const video = videoRef.current;
+    if (window.innerWidth >= 900 && video) {
+      const request = video.requestFullscreen?.bind(video);
+      if (request) {
+        try {
+          const result = request() as Promise<void> | void;
+          if (result && typeof result.catch === 'function') void result.catch(() => onLarge());
+          return;
+        } catch {
+          onLarge();
+          return;
+        }
+      }
+    }
+    onLarge();
+  };
+  return (
+    <View>
+      <View ref={host} style={styles.videoFrame} />
+      {large ? null : (
+        <Pressable style={styles.videoSize} onPress={fillScreen}>
+          <Text style={styles.videoSizeText}>Full screen</Text>
+        </Pressable>
+      )}
+    </View>
+  );
 }
 
 export function VideoPreview({ uri }: { uri?: string }) {
@@ -718,12 +744,7 @@ export function VideoPreview({ uri }: { uri?: string }) {
   if (Platform.OS === 'web') {
     return (
       <View>
-        <WebVideo src={src} large={large} onClose={() => setLarge(false)} onStuck={() => { if (uri && openedVideos.has(uri)) setFailed(true); else void openWholeFile(); }} />
-        {large ? null : (
-          <Pressable style={styles.videoSize} onPress={() => setLarge(true)}>
-            <Text style={styles.videoSizeText}>Full screen</Text>
-          </Pressable>
-        )}
+        <WebVideo src={src} large={large} onLarge={() => setLarge(true)} onClose={() => setLarge(false)} onStuck={() => { if (uri && openedVideos.has(uri)) setFailed(true); else void openWholeFile(); }} />
       </View>
     );
   }
