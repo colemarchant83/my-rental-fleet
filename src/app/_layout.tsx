@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackLink, HomeButton, RefreshButton } from '../components/back-link';
@@ -89,6 +90,8 @@ export default function RootLayout() {
   const [signedIn, setSignedIn] = useState(false);
   const [verified, setVerified] = useState(false);
   const sharing = path.startsWith('/share');
+  const { width } = useWindowDimensions();
+  const desktopColumn = Platform.OS === 'web' && !sharing && width >= 900;
   const claimed = useRef('');
   useEffect(() => {
     if (!opening) return;
@@ -147,6 +150,17 @@ export default function RootLayout() {
       clearTimeout(giveUp);
     };
   }, [openAccount]);
+  useEffect(() => {
+    if (Platform.OS === 'web' || !FileSystem.documentDirectory) return;
+    const file = `${FileSystem.documentDirectory}crash.txt`;
+    void FileSystem.readAsStringAsync(file)
+      .then((text) => {
+        const line = text.split('\n').slice(0, 3).join(' ').replace(/\s+/g, ' ').trim();
+        if (line) void reportProblem(`The app closed on the phone. ${line}`, 'crash');
+        return FileSystem.deleteAsync(file, { idempotent: true });
+      })
+      .catch(() => undefined);
+  }, []);
   useEffect(() => {
     if ((signedIn && verified) || sharing) void syncAll();
   }, [signedIn, verified, sharing]);
@@ -235,7 +249,8 @@ export default function RootLayout() {
 
   const showApp = sharing || (accountReady && signedIn && verified);
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+    <View style={desktopColumn ? { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' } : { flex: 1 }}>
     {showApp ? (
     <View style={{ flex: 1 }}>
     <Stack
@@ -268,6 +283,7 @@ export default function RootLayout() {
     ) : (
       <SignInScreen />
     )}
+    </View>
     {opening ? <OpeningSplash onDone={() => setOpening(false)} /> : null}
     </View>
   );
