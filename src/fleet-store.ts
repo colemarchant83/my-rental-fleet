@@ -576,7 +576,7 @@ export async function rememberCover(vehicleId: string, sourceUri: string) {
 }
 
 function readableSyncError(error?: string) {
-  if (!error || /expo-file-system|native dependencies|Could not read the saved photo/i.test(error)) return '';
+  if (!error || /expo-file-system|native dependencies|Could not read the saved photo|client is offline|Failed to get document|unavailable/i.test(error)) return '';
   if (/abort|did not finish/i.test(error)) return 'The video is still on this phone. Leave this screen open while it uploads.';
   return error;
 }
@@ -971,7 +971,7 @@ export async function syncAll() {
     do {
       queued = false;
       const net = await NetInfo.fetch();
-      if (net.isConnected === false && (typeof navigator === 'undefined' || navigator.onLine === false)) return;
+      if (net.isConnected === false || net.isInternetReachable === false) return;
       await pushCovers();
       await cacheProfilePhotos();
       const rentals = await loadRentals();
