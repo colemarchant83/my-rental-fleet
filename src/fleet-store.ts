@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
-import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { currentOwnerId } from './account';
 import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
@@ -366,6 +366,13 @@ export function rentalIsReturned(rental: { status?: string; checkin?: unknown })
 /** A return saved on this phone that has not reached the server yet. The machine is available even if its saved status still says out. */
 export function pendingLocalReturn(rentals: { vehicleId?: string; status?: string; sync?: string; checkin?: unknown }[], vehicleId: string) {
   return rentals.some((rental) => rental.vehicleId === vehicleId && rentalIsReturned(rental) && rental.sync !== 'synced');
+}
+
+/** A rental saved on this phone, but not yet on the server, keeps the machine out. A return made somewhere else does not. */
+export function machineShowsOut(vehicle: { status?: string; renterName?: string } | null | undefined, rentals: { vehicleId?: string; status?: string; sync?: string; checkin?: unknown }[], vehicleId: string) {
+  const pendingCheckout = rentals.some((rental) => rental.vehicleId === vehicleId && !rentalIsReturned(rental) && rental.sync !== 'synced');
+  const recordedOut = isOutStatus(vehicle?.status) || !!vehicle?.renterName;
+  return pendingCheckout || (recordedOut && !pendingLocalReturn(rentals, vehicleId));
 }
 
 function rentalIds(rental: LocalRental) {
@@ -1105,6 +1112,34 @@ function rentalFromDoc(remoteId: string, data: Record<string, unknown>): LocalRe
     serverReceivedAt: createdMillis(data.serverReceivedAt) || undefined,
     checkout: sideFromRemote(checkout, String(data.checkoutDate || '')),
     checkin: checkinRaw ? sideFromRemote(checkinRaw, String(data.checkinDate || '')) : undefined,
+  };
+}
+
+let remoteRentalTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** While the app is open, a checkout or return saved on another screen updates this phone. */
+export function watchRemoteRentals() {
+  let uid = '';
+  try {
+    uid = currentOwnerId();
+  } catch {
+    return () => undefined;
+  }
+  const unsub = onSnapshot(
+    query(collection(db, 'rentals'), where('ownerId', '==', uid)),
+    (snap) => {
+      if (!snap.docs.length && snap.metadata.fromCache) return;
+      const remote = snap.docs.map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>));
+      if (remoteRentalTimer) clearTimeout(remoteRentalTimer);
+      remoteRentalTimer = setTimeout(() => {
+        void reconcilePhoneRentals(remote.filter((item) => !rentalIsReturned(item)));
+      }, 400);
+    },
+    () => undefined,
+  );
+  return () => {
+    if (remoteRentalTimer) clearTimeout(remoteRentalTimer);
+    unsub();
   };
 }
 

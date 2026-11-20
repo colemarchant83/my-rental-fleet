@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { currentOwnerId } from '../account';
-import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, mergeRentalLists, openRentalFor, pendingLocalReturn, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, machineShowsOut, mergeRentalLists, openRentalFor, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 
@@ -211,8 +211,7 @@ export default function VehicleDetail() {
   const visibleRentals = newestFirst.slice(0, shownCount);
   const hiddenRentals = newestFirst.length - visibleRentals.length;
   const showMore = hiddenRentals > 0;
-  const recordedOut = isOutStatus(vehicle?.status) || !!vehicle?.renterName;
-  const out = !!open || (recordedOut && !pendingLocalReturn(combined, id || ''));
+  const out = machineShowsOut(vehicle, combined, id || '');
   const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
   const display = useDisplayUri(cover?.localUri, cover?.remoteUrl || vehicle?.photoUrl);
 

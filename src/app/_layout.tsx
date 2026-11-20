@@ -8,7 +8,7 @@ import { SignInScreen, VerifyEmailScreen } from '../components/sign-in';
 import { claimExistingRecords, consumeOpeningAccount, needsEmailVerification, watchAccount } from '../account';
 import { reportProblem } from '../problem-report';
 import { auth } from '../firebase';
-import { syncAll, watchConnection } from '../fleet-store';
+import { syncAll, watchConnection, watchRemoteRentals } from '../fleet-store';
 import { OfflineWall } from '../components/offline-gate';
 import { OpeningSplash } from '../components/opening-splash';
 import { theme } from '../theme';
@@ -164,6 +164,10 @@ export default function RootLayout() {
   useEffect(() => {
     if ((signedIn && verified) || sharing) void syncAll();
   }, [signedIn, verified, sharing]);
+  useEffect(() => {
+    if (!signedIn || !verified) return undefined;
+    return watchRemoteRentals();
+  }, [signedIn, verified]);
   useEffect(() => {
     if (typeof navigator === 'undefined' || navigator.onLine !== false) {
       router.prefetch('/inspection');

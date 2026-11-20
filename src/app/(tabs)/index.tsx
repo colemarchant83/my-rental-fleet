@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, openRentalFor, pendingLocalReturn, reconcilePhoneRentals, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, openRentalFor, machineShowsOut, reconcilePhoneRentals, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 
@@ -167,7 +167,7 @@ export default function VehicleListScreen() {
       {vehicles.map((vehicle) => {
         const open = rentals.find((rental) => rental.vehicleId === vehicle.id && !rentalIsReturned(rental));
         const recordedOut = isOutStatus(vehicle.status) || !!vehicle.renterName;
-        const out = !!open || (recordedOut && !pendingLocalReturn(rentals, vehicle.id));
+        const out = machineShowsOut(vehicle, rentals, vehicle.id);
         const shop = !out && (vehicle.status === 'In the shop' || vehicle.status === 'In Shop');
         const renter = open?.renterName || (recordedOut ? vehicle.renterName : undefined);
         const cover = covers.find((item) => item.vehicleId === vehicle.id);

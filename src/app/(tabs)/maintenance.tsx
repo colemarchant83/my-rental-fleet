@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { isOutStatus, loadCachedVehicles, loadCovers, loadRentals, pendingLocalReturn, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { isOutStatus, loadCachedVehicles, loadCovers, loadRentals, machineShowsOut, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { OfflineGate } from '../../components/offline-gate';
 import { theme } from '../../theme';
@@ -95,7 +95,7 @@ export default function MaintenanceScreen() {
       {vehicles.map((vehicle) => {
         const open = rentals.find((rental) => rental.vehicleId === vehicle.id && !rentalIsReturned(rental));
         const recordedOut = isOutStatus(vehicle.status) || !!vehicle.renterName;
-        const out = !!open || (recordedOut && !pendingLocalReturn(rentals, vehicle.id));
+        const out = machineShowsOut(vehicle, rentals, vehicle.id);
         const shop = !out && (vehicle.status === 'In the shop' || vehicle.status === 'In Shop');
         const renter = open?.renterName || (recordedOut ? vehicle.renterName : undefined);
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
