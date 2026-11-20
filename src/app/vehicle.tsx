@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -10,6 +11,43 @@ import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 
 type Vehicle = CachedVehicle;
+
+type UnsavedInspection = { mode: 'checkout' | 'checkin'; renterName: string };
+
+function startedDraft(raw: string | null, mode: 'checkout' | 'checkin'): UnsavedInspection | null {
+  if (!raw) return null;
+  try {
+    const saved = JSON.parse(raw) as {
+      renterName?: string;
+      side?: {
+        fuel?: string;
+        miles?: string;
+        hours?: string;
+        notes?: string;
+        videoUri?: string;
+        videoUrl?: string;
+        spots?: Record<string, { status?: string; note?: string; photos?: { localUri?: string; remoteUrl?: string }[] }>;
+      };
+    };
+    const side = saved.side;
+    const name = saved.renterName?.trim() || '';
+    const spots = Object.values(side?.spots || {});
+    const started = !!(
+      name ||
+      side?.miles?.trim() ||
+      side?.hours?.trim() ||
+      side?.notes?.trim() ||
+      side?.videoUri ||
+      side?.videoUrl ||
+      (side?.fuel && side.fuel !== 'Not recorded') ||
+      spots.some((spot) => spot.status === 'issue' || spot.note?.trim() || spot.photos?.some((photo) => photo.localUri || photo.remoteUrl))
+    );
+    return started ? { mode, renterName: name } : null;
+  } catch {
+    return null;
+  }
+}
+
 
 export default function VehicleDetail() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -31,6 +69,26 @@ export default function VehicleDetail() {
   const [returnNote, setReturnNote] = useState('');
   const [older, setOlder] = useState<LocalRental[]>([]);
   const [olderLoaded, setOlderLoaded] = useState(false);
+  const [unsaved, setUnsaved] = useState<UnsavedInspection[]>([]);
+
+  useFocusEffect(useCallback(() => {
+    if (!id) return undefined;
+    let live = true;
+    void (async () => {
+      const next: UnsavedInspection[] = [];
+      for (const mode of ['checkout', 'checkin'] as const) {
+        const key = `fleet-inspection-draft:${id}:${mode}`;
+        const raw = Platform.OS === 'web' ? (typeof localStorage === 'undefined' ? null : localStorage.getItem(key)) : await AsyncStorage.getItem(key);
+        const found = startedDraft(raw, mode);
+        if (found) next.push(found);
+      }
+      if (live) setUnsaved(next);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [id]));
+
 
   useEffect(() => {
     if (!id) {
@@ -319,6 +377,20 @@ export default function VehicleDetail() {
         <Text style={styles.saveText}>{out ? 'Start return inspection' : 'Start pre-rental inspection'}</Text>
       </Pressable>
       {returnNote ? <Text style={styles.nicknameError}>{returnNote}</Text> : null}
+      {unsaved.map((item) => (
+        <Pressable key={item.mode} style={styles.folder} onPress={() => router.push({ pathname: '/inspection', params: { vehicleId: id, type: item.mode } })}>
+          <View style={styles.folderTabUnsaved}>
+            <Text style={styles.folderTabText} numberOfLines={1}>{item.renterName || 'Not saved'}</Text>
+          </View>
+          <View style={styles.folderBodyUnsaved}>
+            <View style={styles.folderMeta}>
+              <Text style={styles.specs}>{item.mode === 'checkin' ? 'Return inspection' : 'Pre-rental inspection'}</Text>
+              <Text style={styles.unsavedLabel}>Not saved</Text>
+            </View>
+            <Text style={styles.link}>Open</Text>
+          </View>
+        </Pressable>
+      ))}
 
       {newestFirst.length === 0 ? <Text style={styles.muted}>{olderLoaded ? 'No rentals yet.' : 'Loading rental files...'}</Text> : visibleRentals.map((rental) => (
         <Pressable key={rental.localId} style={styles.folder} onPress={() => router.push({ pathname: '/rental-history', params: { localId: rental.localId } })}>
@@ -395,6 +467,9 @@ const styles = StyleSheet.create({
   folderTab: { alignSelf: 'flex-start', maxWidth: '78%', marginBottom: -1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, borderTopLeftRadius: 12, borderTopRightRadius: 12, borderWidth: 1, borderBottomWidth: 0, backgroundColor: '#c4b49a', borderColor: '#b5a588' },
   folderTabOpen: { backgroundColor: '#7ea36a', borderColor: '#5d8648' },
   folderTabText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
+  folderTabUnsaved: { alignSelf: 'flex-start', maxWidth: '78%', marginBottom: -1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, borderTopLeftRadius: 12, borderTopRightRadius: 12, borderWidth: 1, borderBottomWidth: 0, backgroundColor: '#f6d36b', borderColor: '#c2410c' },
+  folderBodyUnsaved: { backgroundColor: '#fff4dc', borderWidth: 1, borderColor: '#c2410c', borderTopRightRadius: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, padding: 14 },
+  unsavedLabel: { color: theme.danger, fontWeight: '800', fontSize: 13 },
   folderBody: { backgroundColor: '#d5c7b0', borderWidth: 1, borderColor: '#b5a588', borderTopRightRadius: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, padding: 14 },
   folderBodyOpen: { backgroundColor: '#d3ebc4', borderColor: '#5d8648' },
   folderMeta: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
