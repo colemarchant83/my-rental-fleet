@@ -68,8 +68,10 @@ export default function VehicleListScreen() {
 
   useEffect(() => {
     const refresh = () => {
-      void loadCachedVehicles().then((saved) => {
+      void (async () => {
+        const saved = await loadCachedVehicles();
         const mine = saved.filter((item) => item.ownerId === currentOwnerId());
+        const onPhone = await loadRentals();
         if (!mine.length) return;
         setVehicles((current) => {
           const byId = new Map(current.map((item) => [item.id, item]));
@@ -81,14 +83,15 @@ export default function VehicleListScreen() {
               changed = true;
               continue;
             }
-            if ((isOutStatus(item.status) || item.renterName) && (!isOutStatus(existing.status) || existing.renterName !== item.renterName)) {
+            const pendingCheckout = onPhone.some((rental) => rental.vehicleId === item.id && !rentalIsReturned(rental) && rental.sync !== 'synced');
+            if (pendingCheckout && (isOutStatus(item.status) || item.renterName) && !isOutStatus(existing.status)) {
               byId.set(item.id, { ...existing, status: item.status, renterName: item.renterName });
               changed = true;
             }
           }
           return changed ? [...byId.values()] : current;
         });
-      });
+      })();
       void (async () => {
         const local = mergeRentalLists(await loadRentals(), await savedOpenRentals());
         setRentals(local);

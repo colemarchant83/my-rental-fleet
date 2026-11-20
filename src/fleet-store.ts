@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
-import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, getDocsFromServer, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { currentOwnerId } from './account';
 import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
@@ -1128,7 +1128,7 @@ export function watchRemoteRentals() {
   const unsub = onSnapshot(
     query(collection(db, 'rentals'), where('ownerId', '==', uid)),
     (snap) => {
-      if (!snap.docs.length && snap.metadata.fromCache) return;
+      if (snap.metadata.fromCache) return;
       const remote = snap.docs.map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>));
       if (remoteRentalTimer) clearTimeout(remoteRentalTimer);
       remoteRentalTimer = setTimeout(() => {
@@ -1206,7 +1206,8 @@ export async function markVehiclesOutForRentals(openRentals: LocalRental[]) {
 
 export async function fetchOpenRentals() {
   const uid = currentOwnerId();
-  const snap = await getDocs(query(collection(db, 'rentals'), where('ownerId', '==', uid)));
+  const rentalsQuery = query(collection(db, 'rentals'), where('ownerId', '==', uid));
+  const snap = await getDocsFromServer(rentalsQuery).catch(() => getDocs(rentalsQuery));
   return snap.docs
     .map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>))
     .filter((item) => !rentalIsReturned(item));
