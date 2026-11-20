@@ -609,6 +609,18 @@ async function noteLargeVideo(bytes: number, folder: string) {
   }).catch(() => undefined);
 }
 
+function earliestServerStamp(side: InspectionSide, videoAt?: string, receivedAt?: string) {
+  if (side.serverSavedAt) return side.serverSavedAt;
+  const stamps = [videoAt, receivedAt];
+  for (const spot of SPOTS) {
+    for (const photo of side.spots[spot.id]?.photos ?? []) {
+      if (photo.serverAddedAt) stamps.push(photo.serverAddedAt);
+    }
+  }
+  const times = stamps.filter((item): item is string => !!item).map((item) => Date.parse(item)).filter((item) => !Number.isNaN(item));
+  return times.length ? new Date(Math.min(...times)).toISOString() : undefined;
+}
+
 async function uploadSide(side: InspectionSide, folder: string, onStep?: (side: InspectionSide) => Promise<void>): Promise<InspectionSide> {
   const receivedAt = await serverNow();
   const spots = { ...side.spots } as Record<SpotId, SpotRecord>;
@@ -654,7 +666,8 @@ async function uploadSide(side: InspectionSide, folder: string, onStep?: (side: 
   } else if (videoOverLimit) {
     lastUploadError = 'A video is over 100 MB, so that video stays on this phone and was not uploaded.';
   }
-  currentSide = { ...currentSide, spots, videoUrl, videoUri, videoServerAddedAt, videoOverLimit };
+  const serverSavedAt = earliestServerStamp(side, videoServerAddedAt, receivedAt);
+  currentSide = { ...currentSide, spots, videoUrl, videoUri, videoServerAddedAt, videoOverLimit, serverSavedAt };
   if (onStep) await onStep(currentSide);
   return currentSide;
 }
@@ -976,7 +989,7 @@ export async function syncAll() {
       await cacheProfilePhotos();
       const rentals = await loadRentals();
       for (const rental of rentals) {
-        if (rental.sync === 'synced') continue;
+        if (rental.sync === 'synced' && rental.checkout.serverSavedAt && (!rental.checkin || rental.checkin.serverSavedAt)) continue;
         try {
           await pushRental(rental);
           const latest = (await loadRentals()).find((item) => item.localId === rental.localId);
