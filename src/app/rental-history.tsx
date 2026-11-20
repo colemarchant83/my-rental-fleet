@@ -572,7 +572,7 @@ const styles = StyleSheet.create({
   enlarge: { position: 'absolute', right: 6, bottom: 6, color: theme.white, backgroundColor: 'rgba(0,0,0,0.45)', overflow: 'hidden', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, fontSize: 11 },
   state: { color: theme.muted, fontWeight: '700', marginTop: 6 },
   ok: { color: theme.green },
-  issue: { color: '#c47d00' },
+  issue: { color: theme.danger, fontWeight: '800' },
   notes: { color: theme.text, marginTop: 8, lineHeight: 20 },
   save: { marginTop: 22, marginBottom: 10, backgroundColor: theme.text, borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   saveWaiting: { opacity: 0.55 },
