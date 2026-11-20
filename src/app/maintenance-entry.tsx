@@ -170,7 +170,7 @@ export default function MaintenanceEntryScreen() {
                   : 'Server time is recorded when the next internet connection is made.'}
               </Text>
             ) : null}
-            {clocksDisagree(savedAt, serverSavedAt) ? <Text style={styles.error}>Phone time does not match the server.</Text> : null}
+            {clocksDisagree(savedAt, serverSavedAt) ? <Text style={styles.error}>Phone time does not match the server. Inspection may have been done offline.</Text> : null}
           </View>
         </>
       ) : (

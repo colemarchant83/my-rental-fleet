@@ -55,7 +55,7 @@ export default function MaintenanceRecordScreen() {
             <Text style={styles.date}>Miles {record.miles || '—'} · Hours {record.hours || '—'}{record.cost ? ` · ${record.cost.startsWith('$') ? record.cost : `$${record.cost}`}` : ''}</Text>
             <Text style={styles.date}>Phone {formatStamp(record.savedAt)}</Text>
             <Text style={styles.date}>{record.serverSavedAt ? `Server ${formatStamp(record.serverSavedAt)}` : 'Server time is recorded when the next internet connection is made.'}</Text>
-            {clocksDisagree(record.savedAt, record.serverSavedAt) ? <Text style={styles.warn}>Phone time does not match the server.</Text> : null}
+            {clocksDisagree(record.savedAt, record.serverSavedAt) ? <Text style={styles.warn}>Phone time does not match the server. Inspection may have been done offline.</Text> : null}
             {record.notes ? <Text style={styles.notes} numberOfLines={2}>{record.notes}</Text> : null}
             {record.photos?.length ? <Text style={styles.date}>{record.photos.length === 1 ? '1 photo' : `${record.photos.length} photos`}</Text> : null}
             <Text style={styles.link}>Details</Text>

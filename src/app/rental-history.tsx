@@ -115,10 +115,10 @@ export default function RentalHistory() {
       </Text>
       {rental.checkout.savedAt ? <Text style={styles.stampLine}>Checkout recorded on this phone {formatStamp(rental.checkout.savedAt)}</Text> : null}
       {rental.checkout.serverSavedAt ? <Text style={styles.stampLine}>Server time {formatStamp(rental.checkout.serverSavedAt)}</Text> : null}
-      {clocksDisagree(rental.checkout.savedAt, rental.checkout.serverSavedAt) ? <Text style={styles.mismatch}>Phone time does not match the server.</Text> : null}
+      {clocksDisagree(rental.checkout.savedAt, rental.checkout.serverSavedAt) ? <Text style={styles.mismatch}>Phone time does not match the server. Inspection may have been done offline.</Text> : null}
       {rental.checkin?.savedAt ? <Text style={styles.stampLine}>Return recorded on this phone {formatStamp(rental.checkin.savedAt)}</Text> : null}
       {rental.checkin?.serverSavedAt ? <Text style={styles.stampLine}>Server time {formatStamp(rental.checkin.serverSavedAt)}</Text> : null}
-      {rental.checkin && clocksDisagree(rental.checkin.savedAt, rental.checkin.serverSavedAt) ? <Text style={styles.mismatch}>Phone time does not match the server.</Text> : null}
+      {rental.checkin && clocksDisagree(rental.checkin.savedAt, rental.checkin.serverSavedAt) ? <Text style={styles.mismatch}>Phone time does not match the server. Inspection may have been done offline.</Text> : null}
       {rental.sync !== 'synced' ? (
         <Text style={styles.waiting}>
           {rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo|client is offline|Failed to get document/i.test(rental.syncError)

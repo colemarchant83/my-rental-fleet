@@ -189,7 +189,7 @@ function sideBlock(title: string, side: InspectionSide | undefined, shown: Map<s
     <p>${esc(formatDay(side.date))}</p>
     <p>${esc(side.savedAt ? `Recorded on this phone ${formatStamp(side.savedAt)}` : '')}</p>
     <p>${esc(side.serverSavedAt ? `Server time ${formatStamp(side.serverSavedAt)}` : '')}</p>
-    ${clocksDisagree(side.savedAt, side.serverSavedAt) ? '<p class="warn">Phone time does not match the server.</p>' : ''}
+    ${clocksDisagree(side.savedAt, side.serverSavedAt) ? '<p class="warn">Phone time does not match the server. Inspection may have been done offline.</p>' : ''}
     <ul>${readings.map(([label, value]) => `<li>${esc(label)}: ${esc(value)}</li>`).join('')}</ul>
     ${video?.startsWith('data:') ? `<video controls playsinline src="${video}"></video>` : videoName ? `<p>The walk-around video is the file named ${esc(videoName)}, next to this card.</p>` : ''}
     ${video ? clockLines(side.videoAddedAt, side.videoServerAddedAt, serverFallback, side.videoSha256?.slice(0, 8)) : ''}
@@ -408,7 +408,7 @@ export async function buildMaintenanceCard(
     <p>${esc(record.notes.trim() || 'No notes')}${record.notesAt ? ` · ${esc(formatStamp(record.notesAt))}` : ''}</p>
     <p class="stamp">Phone ${esc(formatStamp(record.savedAt) || '—')}</p>
     <p class="stamp">${esc(record.serverSavedAt ? `Server ${formatStamp(record.serverSavedAt)}` : 'No server time')}</p>
-    ${clocksDisagree(record.savedAt, record.serverSavedAt) ? '<p class="warn">Phone time does not match the server.</p>' : ''}
+    ${clocksDisagree(record.savedAt, record.serverSavedAt) ? '<p class="warn">Phone time does not match the server. Inspection may have been done offline.</p>' : ''}
     ${figures || '<p>No photos</p>'}
   </section>
 </main>
