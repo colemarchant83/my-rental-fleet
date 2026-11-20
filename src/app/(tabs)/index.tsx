@@ -92,8 +92,13 @@ export default function VehicleListScreen() {
       void (async () => {
         const local = mergeRentalLists(await loadRentals(), await savedOpenRentals());
         setRentals(local);
+        if (local.length) setRentalsReady(true);
         try {
-          const remote = await fetchOpenRentals();
+          const remote = await Promise.race([
+            fetchOpenRentals(),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+          ]);
+          if (!remote) return;
           let merged = await reconcilePhoneRentals(remote);
           const openVehicleIds = [...new Set(merged.filter((rental) => !rentalIsReturned(rental)).map((rental) => rental.vehicleId))];
           for (const vehicleId of openVehicleIds) {
@@ -108,8 +113,9 @@ export default function VehicleListScreen() {
           setRentals(merged);
         } catch {
           // Keep the rentals already on this phone when the server cannot be reached.
+        } finally {
+          setRentalsReady(true);
         }
-        setRentalsReady(true);
       })();
       void loadCovers().then(async (next) => {
         await Promise.all(next.map((cover) => warmDisplayUri(cover.localUri)));

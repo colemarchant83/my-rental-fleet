@@ -989,7 +989,7 @@ export async function syncAll() {
       await cacheProfilePhotos();
       const rentals = await loadRentals();
       for (const rental of rentals) {
-        if (rental.sync === 'synced' && rental.checkout.serverSavedAt && (!rental.checkin || rental.checkin.serverSavedAt)) continue;
+        if (rental.sync === 'synced') continue;
         try {
           await pushRental(rental);
           const latest = (await loadRentals()).find((item) => item.localId === rental.localId);
