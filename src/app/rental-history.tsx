@@ -1,5 +1,5 @@
 import { createElement, useEffect, useRef, useState } from 'react';
-import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -19,6 +19,8 @@ export default function RentalHistory() {
   const localId = Array.isArray(params.localId) ? params.localId[0] : params.localId;
   const remoteId = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 900;
   const [rental, setRental] = useState<LocalRental | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
   const [warned, setWarned] = useState(false);
@@ -126,7 +128,7 @@ export default function RentalHistory() {
             : 'Files are saved on this phone. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.'}
         </Text>
       ) : rental.syncError ? <Text style={styles.waiting}>{rental.syncError}</Text> : null}
-      {rentalIsReturned(rental) ? null : (
+      {rentalIsReturned(rental) || desktop ? null : (
         <Pressable
           style={styles.checkin}
           onPress={() => router.push({ pathname: '/inspection', params: { vehicleId: rental.vehicleId, type: 'checkin' } })}

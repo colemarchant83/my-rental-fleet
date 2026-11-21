@@ -352,6 +352,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
       <View style={styles.keepNotice}>
         <Text style={styles.keepNoticeText}>Rental cards, photos, and videos are deleted after one year. Save a card to files if you need to keep it.</Text>
       </View>
+      {desktop ? null : (
       <Pressable
         style={styles.save}
         onPress={() => {
@@ -378,8 +379,9 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
       >
         <Text style={styles.saveText}>{out ? 'Start return inspection' : 'Start pre-rental inspection'}</Text>
       </Pressable>
+      )}
       {returnNote ? <Text style={styles.nicknameError}>{returnNote}</Text> : null}
-      {unsaved.map((item) => (
+      {desktop ? null : unsaved.map((item) => (
         <Pressable key={item.mode} style={styles.folder} onPress={() => router.push({ pathname: '/inspection', params: { vehicleId: id, type: item.mode } })}>
           <View style={styles.folderTabUnsaved}>
             <Text style={styles.folderTabText} numberOfLines={1}>{item.renterName || 'Not saved'}</Text>

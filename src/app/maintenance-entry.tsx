@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { clocksDisagree, formatDay, formatStamp, keepPhoto, loadCachedVehicles, todayIso, type CachedVehicle, type PhotoRef } from '../fleet-store';
@@ -40,6 +40,8 @@ export default function MaintenanceEntryScreen() {
   const [linking, setLinking] = useState(false);
   const [linkNote, setLinkNote] = useState('');
   const builtFile = useRef<File | null>(null);
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 900;
 
   useEffect(() => {
     void loadCachedVehicles().then((vehicles) => {
@@ -196,7 +198,7 @@ export default function MaintenanceEntryScreen() {
             multiline
           />
           <Text style={styles.label}>Receipts and invoices</Text>
-          <Text style={styles.help}>Photos only. Take a picture or add one from your library. Up to 8.</Text>
+          <Text style={styles.help}>{desktop ? 'Photos only. Add one from your files. Up to 8.' : 'Photos only. Take a picture or add one from your library. Up to 8.'}</Text>
           {photos.length ? (
             <View style={styles.photoRow}>
               {photos.map((photo) => (
@@ -206,9 +208,11 @@ export default function MaintenanceEntryScreen() {
           ) : null}
           {photos.length < 8 ? (
             <View style={styles.photoActions}>
-              <Pressable style={styles.photoButton} onPress={() => void addPhotos(true)}>
-                <Text style={styles.photoButtonText}>Take photo</Text>
-              </Pressable>
+              {desktop ? null : (
+                <Pressable style={styles.photoButton} onPress={() => void addPhotos(true)}>
+                  <Text style={styles.photoButtonText}>Take photo</Text>
+                </Pressable>
+              )}
               <Pressable style={styles.photoButton} onPress={() => setLibraryOpen(true)}>
                 <Text style={styles.photoButtonText}>Photo library</Text>
               </Pressable>
@@ -322,7 +326,9 @@ export default function MaintenanceEntryScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.spotTitle}>Photo library</Text>
             <Text style={styles.help}>
-              A photo from your library or files is stamped when you add it to this record, not when the camera first took it. Take Photo if you want the time the picture was made.
+              {desktop
+                ? 'A photo from your files is stamped when you add it to this record, not when the camera first took it.'
+                : 'A photo from your library or files is stamped when you add it to this record, not when the camera first took it. Take Photo if you want the time the picture was made.'}
             </Text>
             <Pressable
               style={styles.save}
