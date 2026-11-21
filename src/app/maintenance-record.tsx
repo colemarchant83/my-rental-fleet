@@ -6,10 +6,11 @@ import { loadMaintenance, type MaintenanceRecord } from '../maintenance-store';
 import { OfflineGate } from '../components/offline-gate';
 import { theme } from '../theme';
 
-export default function MaintenanceRecordScreen() {
+export default function MaintenanceRecordScreen({ vehicleId: vehicleIdProp }: { vehicleId?: string } = {}) {
   const router = useRouter();
   const params = useLocalSearchParams<{ vehicleId?: string | string[] }>();
-  const vehicleId = Array.isArray(params.vehicleId) ? params.vehicleId[0] : params.vehicleId;
+  const paramId = Array.isArray(params.vehicleId) ? params.vehicleId[0] : params.vehicleId;
+  const vehicleId = vehicleIdProp || paramId;
   const [vehicle, setVehicle] = useState<CachedVehicle | null>(null);
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [shown, setShown] = useState(5);

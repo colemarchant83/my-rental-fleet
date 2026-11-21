@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -54,6 +54,8 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   const paramId = Array.isArray(params.id) ? params.id[0] : params.id;
   const id = vehicleId || paramId;
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 900;
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [missing, setMissing] = useState(false);
   const [rentals, setRentals] = useState<LocalRental[]>([]);
@@ -270,7 +272,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       {display.uri ? (
-        <Image key={display.attempt} source={{ uri: display.uri }} style={styles.photo} resizeMode="contain" onError={display.failRemote} />
+        <Image key={display.attempt} source={{ uri: display.uri }} style={desktop ? styles.photoDesktop : styles.photo} resizeMode="contain" onError={display.failRemote} />
       ) : (
         <View style={styles.placeholder}>
           <Text style={styles.muted}>No photo yet — add one so the crew can spot this machine at a glance.</Text>
@@ -430,6 +432,7 @@ const styles = StyleSheet.create({
   loadingTitle: { color: theme.text, fontSize: 22, fontWeight: '800' },
   content: { padding: 16, paddingBottom: 48 },
   photo: { width: '100%', height: 220, borderRadius: 16, backgroundColor: theme.input },
+  photoDesktop: { width: '100%', height: 280, borderRadius: 16, backgroundColor: 'transparent', alignSelf: 'center' },
   placeholder: { backgroundColor: theme.input, borderRadius: 16, padding: 18 },
   nickname: { color: theme.accent, fontWeight: '800', marginTop: 14, fontSize: 15 },
   nicknameError: { color: theme.danger, marginTop: 8 },
