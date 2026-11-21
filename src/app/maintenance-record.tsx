@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { clocksDisagree, formatDay, formatStamp, loadCachedVehicles, type CachedVehicle } from '../fleet-store';
+import { clocksDisagree, formatDay, formatStamp, loadCachedVehicles, loadCovers, type CachedVehicle } from '../fleet-store';
 import { loadMaintenance, type MaintenanceRecord } from '../maintenance-store';
+import { useDisplayUri } from '../media';
 import { OfflineGate } from '../components/offline-gate';
 import { theme } from '../theme';
 
@@ -11,13 +12,21 @@ export default function MaintenanceRecordScreen({ vehicleId: vehicleIdProp }: { 
   const params = useLocalSearchParams<{ vehicleId?: string | string[] }>();
   const paramId = Array.isArray(params.vehicleId) ? params.vehicleId[0] : params.vehicleId;
   const vehicleId = vehicleIdProp || paramId;
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 900;
   const [vehicle, setVehicle] = useState<CachedVehicle | null>(null);
+  const [cover, setCover] = useState<{ localUri?: string; remoteUrl?: string }>({});
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [shown, setShown] = useState(5);
+  const photo = useDisplayUri(cover.localUri, cover.remoteUrl || vehicle?.photoUrl);
 
   const load = useCallback(() => {
     void loadCachedVehicles().then((vehicles) => {
       setVehicle(vehicles.find((item) => item.id === vehicleId) ?? null);
+    });
+    void loadCovers().then((covers) => {
+      const found = covers.find((item) => item.vehicleId === vehicleId);
+      setCover({ localUri: found?.localUri, remoteUrl: found?.remoteUrl });
     });
     if (!vehicleId) return;
     void loadMaintenance(vehicleId).then(setRecords);
@@ -32,6 +41,7 @@ export default function MaintenanceRecordScreen({ vehicleId: vehicleIdProp }: { 
   return (
     <OfflineGate>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      {desktop && photo.uri ? <Image key={photo.attempt} source={{ uri: photo.uri }} style={styles.photo} resizeMode="contain" onError={photo.failRemote} /> : null}
       <Text style={styles.kicker}>{name}</Text>
       {vehicle?.yearMakeModel && vehicle.nickname ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}
       <Pressable
@@ -76,6 +86,7 @@ export default function MaintenanceRecordScreen({ vehicleId: vehicleIdProp }: { 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg },
   content: { padding: 16, paddingBottom: 48 },
+  photo: { width: '100%', height: 240, borderRadius: 16, backgroundColor: 'transparent', marginBottom: 12 },
   kicker: { color: theme.accent, fontWeight: '800', fontSize: 15 },
   model: { color: theme.text, fontSize: 28, fontWeight: '800', marginTop: 2 },
   newButton: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 16 },

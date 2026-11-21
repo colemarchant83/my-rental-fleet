@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -9,9 +9,10 @@ import { BrandMenu } from '../../components/brand-menu';
 import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { deleteVehicleRecord, loadCachedVehicles, rememberCover, saveCachedVehicles, vehicleIdLine, type CachedVehicle } from '../../fleet-store';
+import { deleteVehicleRecord, loadCachedVehicles, loadCovers, rememberCover, saveCachedVehicles, vehicleIdLine, type CachedVehicle, type CoverPhoto } from '../../fleet-store';
 import { deleteMaintenance, loadMaintenance } from '../../maintenance-store';
 import { OfflineGate } from '../../components/offline-gate';
+import { useDisplayUri } from '../../media';
 import { WebVinScanner, extractVin } from '../../components/vin-scanner';
 import { theme } from '../../theme';
 
@@ -54,10 +55,13 @@ async function decodeVin(vin: string) {
 export default function AddScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 900;
   const camera = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [step, setStep] = useState<Step>('menu');
   const [vehicles, setVehicles] = useState<CachedVehicle[]>([]);
+  const [covers, setCovers] = useState<CoverPhoto[]>([]);
   const [nickname, setNickname] = useState('');
   const [yearMakeModel, setYearMakeModel] = useState('');
   const [specs, setSpecs] = useState('');
@@ -79,6 +83,7 @@ export default function AddScreen() {
       setVehicles(next);
       void saveCachedVehicles(next, true);
     }).catch(() => undefined);
+    void loadCovers().then(setCovers);
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -258,7 +263,37 @@ export default function AddScreen() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       ) : (
-      <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
+      <View style={desktop ? styles.split : styles.screen}>
+      {desktop ? (
+        <View style={styles.splitList}>
+          <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
+            <Text style={styles.heading}>Machines</Text>
+            {vehicles.length === 0 ? <Text style={styles.help}>No machines saved yet.</Text> : null}
+            {vehicles.map((vehicle) => {
+              const cover = covers.find((item) => item.vehicleId === vehicle.id);
+              const picked = vehicle.id === warnId || vehicle.id === confirmId;
+              return (
+                <Pressable
+                  key={vehicle.id}
+                  style={[styles.machineCard, picked && styles.machineOn]}
+                  onPress={() => {
+                    if (step !== 'delete') return;
+                    setError('');
+                    setWarnId(vehicle.id);
+                  }}
+                >
+                  <ListPhoto localUri={cover?.localUri} remoteUrl={cover?.remoteUrl || vehicle.photoUrl} />
+                  <View style={styles.rowText}>
+                    <Text style={styles.nick}>{vehicle.nickname || 'Untitled'}</Text>
+                    {vehicle.yearMakeModel ? <Text style={styles.meta}>{vehicle.yearMakeModel}</Text> : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+      <ScrollView style={desktop ? styles.splitDetail : styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
         {step === 'menu' ? (
           <View style={styles.menuBar}>
             <BrandMenu />
@@ -271,19 +306,21 @@ export default function AddScreen() {
         {step === 'menu' ? (
           <>
             <Text style={styles.heading}>Add or delete a vehicle</Text>
-            <Pressable style={styles.choice} onPress={() => { resetForm(); setStep('add'); }}>
-              <Text style={styles.choiceText}>Add vehicle</Text>
-            </Pressable>
-            <Pressable style={styles.deleteChoice} onPress={() => { setError(''); setStep('delete'); }}>
-              <Text style={styles.deleteChoiceText}>Delete vehicle</Text>
-            </Pressable>
+            <View style={desktop ? styles.boxRow : undefined}>
+              <Pressable style={desktop ? styles.addBox : styles.choice} onPress={() => { resetForm(); setStep('add'); }}>
+                <Text style={desktop ? styles.boxText : styles.choiceText}>Add vehicle</Text>
+              </Pressable>
+              <Pressable style={desktop ? styles.deleteBox : styles.deleteChoice} onPress={() => { setError(''); setStep('delete'); }}>
+                <Text style={desktop ? styles.boxTextLight : styles.deleteChoiceText}>Delete vehicle</Text>
+              </Pressable>
+            </View>
           </>
         ) : null}
 
         {step === 'add' ? (
           <>
             <Text style={styles.heading}>Add vehicle</Text>
-            <Pressable style={styles.choice} onPress={() => void openCamera()}><Text style={styles.choiceText}>Scan VIN barcode</Text></Pressable>
+            {desktop ? null : <Pressable style={styles.choice} onPress={() => void openCamera()}><Text style={styles.choiceText}>Scan VIN barcode</Text></Pressable>}
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('vin'); }}><Text style={styles.choiceText}>Enter VIN</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('hull'); }}><Text style={styles.choiceText}>Enter boat hull numbers</Text></Pressable>
             <Pressable style={styles.choice} onPress={() => { setError(''); setStep('manual'); }}><Text style={styles.choiceText}>Enter year, make, and model</Text></Pressable>
@@ -336,6 +373,12 @@ export default function AddScreen() {
         ) : null}
 
         {step === 'delete' ? (
+          desktop ? (
+            <>
+              <Text style={styles.heading}>Delete a vehicle</Text>
+              <Text style={styles.help}>Tap a machine on the left. You still get both warnings before anything is deleted.</Text>
+            </>
+          ) : (
           <>
             <Text style={styles.heading}>Delete a vehicle</Text>
             {vehicles.length === 0 ? <Text style={styles.help}>No machines saved yet.</Text> : null}
@@ -352,10 +395,12 @@ export default function AddScreen() {
               </View>
             ))}
           </>
+          )
         ) : null}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
       </ScrollView>
+      </View>
       )}
 
       <Modal visible={!!warned && !confirming} transparent animationType="fade" onRequestClose={() => setWarnId('')}>
@@ -391,6 +436,12 @@ export default function AddScreen() {
   );
 }
 
+function ListPhoto({ localUri, remoteUrl }: { localUri?: string; remoteUrl?: string }) {
+  const display = useDisplayUri(localUri, remoteUrl);
+  if (!display.uri) return <View style={styles.thumb} />;
+  return <Image source={{ uri: display.uri }} style={styles.thumb} resizeMode="contain" onError={display.failRemote} />;
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg },
   scanScreen: { flex: 1, backgroundColor: theme.bg, padding: 16 },
@@ -412,6 +463,18 @@ const styles = StyleSheet.create({
   choiceText: { color: theme.ink, fontWeight: '800', fontSize: 17 },
   deleteChoice: { backgroundColor: theme.danger, borderRadius: 14, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
   deleteChoiceText: { color: theme.white, fontWeight: '800', fontSize: 17 },
+  boxRow: { flexDirection: 'row', gap: 16, marginTop: 8 },
+  addBox: { flex: 1, minHeight: 160, borderRadius: 18, backgroundColor: theme.action, alignItems: 'center', justifyContent: 'center', padding: 16 },
+  deleteBox: { flex: 1, minHeight: 160, borderRadius: 18, backgroundColor: theme.danger, alignItems: 'center', justifyContent: 'center', padding: 16 },
+  boxText: { color: theme.ink, fontWeight: '800', fontSize: 22, textAlign: 'center' },
+  boxTextLight: { color: theme.white, fontWeight: '800', fontSize: 22, textAlign: 'center' },
+  split: { flex: 1, flexDirection: 'row', backgroundColor: theme.bg },
+  splitList: { width: 440, maxWidth: '42%', borderRightWidth: 1, borderRightColor: theme.line },
+  splitDetail: { flex: 1, minWidth: 0 },
+  machineCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.card, borderRadius: 16, borderWidth: 1, borderColor: theme.line, padding: 10, marginBottom: 10 },
+  machineOn: { borderColor: theme.accent, borderWidth: 2 },
+  thumb: { width: 96, height: 72, borderRadius: 12, backgroundColor: theme.input },
+  nick: { color: theme.accent, fontWeight: '800', fontSize: 16 },
   cameraFrame: { width: '100%', height: 420, borderRadius: 16, overflow: 'hidden', marginTop: 12, backgroundColor: '#111' },
   cameraFill: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   wideBox: { position: 'absolute', left: '8%', right: '8%', top: '38%', height: 84, borderWidth: 3, borderColor: theme.white, borderRadius: 12 },
