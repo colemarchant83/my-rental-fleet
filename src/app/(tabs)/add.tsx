@@ -405,7 +405,7 @@ export default function AddScreen() {
 
       <Modal visible={!!warned && !confirming} transparent animationType="fade" onRequestClose={() => setWarnId('')}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, desktop && styles.modalCardDesktop]}>
             <Text style={styles.modalTitle}>Delete {warned?.nickname || warned?.yearMakeModel || 'this vehicle'}?</Text>
             <Text style={styles.help}>Deleting will erase all associated files, photos, and video. Any necessary files should be saved to files on the phone or computer before deleting.</Text>
             <Pressable style={styles.deleteWide} onPress={() => { setConfirmId(warnId); setWarnId(''); }}>
@@ -420,7 +420,7 @@ export default function AddScreen() {
 
       <Modal visible={!!confirming} transparent animationType="fade" onRequestClose={() => { if (!deleting) setConfirmId(''); }}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, desktop && styles.modalCardDesktop]}>
             <Text style={styles.modalTitle}>Confirm delete</Text>
             <Text style={styles.help}>This permanently deletes {confirming?.nickname || confirming?.yearMakeModel || 'this vehicle'} and everything stored with it.</Text>
             <Pressable style={styles.deleteWide} disabled={deleting} onPress={() => confirming && void removeVehicle(confirming.id)}>
@@ -492,5 +492,6 @@ const styles = StyleSheet.create({
   cancelText: { color: theme.text, fontWeight: '700' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(28,25,23,0.45)', justifyContent: 'center', padding: 24 },
   modalCard: { backgroundColor: theme.card, borderRadius: 16, padding: 18 },
+  modalCardDesktop: { width: '50%', alignSelf: 'center' },
   modalTitle: { fontWeight: '800', color: theme.text, fontSize: 20 },
 });
