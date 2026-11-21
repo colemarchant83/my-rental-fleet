@@ -283,8 +283,8 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
       </Pressable>
       {cover?.addedAt || vehicle.photoAddedAt ? <Text style={styles.specs}>Photo added {formatStamp(cover?.addedAt || vehicle.photoAddedAt)}</Text> : null}
 
-      <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
-      {vehicle.yearMakeModel ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}
+      {vehicle.nickname && vehicle.yearMakeModel ? <Text style={styles.nickname}>{vehicle.yearMakeModel}</Text> : null}
+      <Text style={styles.model}>{vehicle.nickname || vehicle.yearMakeModel || 'Untitled'}</Text>
       {vehicle.vin ? <Text style={styles.vin}>{vehicleIdLine(vehicle.vin)}</Text> : null}
 
       <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>

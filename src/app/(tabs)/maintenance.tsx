@@ -123,14 +123,14 @@ export default function MaintenanceScreen() {
             <CoverImage localUri={cover?.localUri} remoteUrl={cover?.remoteUrl || vehicle.photoUrl} compact={desktop} />
             <View style={[styles.cardBody, desktop && styles.cardBodyDesktop]}>
               <View style={styles.titleRow}>
-                <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
+                <Text style={styles.nickname}>{vehicle.nickname && vehicle.yearMakeModel ? vehicle.yearMakeModel : ''}</Text>
                 <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>
                   <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
                 </View>
               </View>
-              {vehicle.yearMakeModel || (out && renter) ? (
+              {vehicle.nickname || vehicle.yearMakeModel || (out && renter) ? (
                 <View style={styles.modelRow}>
-                  <Text style={styles.model}>{vehicle.yearMakeModel || ''}</Text>
+                  <Text style={styles.model}>{vehicle.nickname || vehicle.yearMakeModel || 'Untitled'}</Text>
                   {out && renter ? <Text style={styles.renter}>{renter}</Text> : null}
                 </View>
               ) : null}
