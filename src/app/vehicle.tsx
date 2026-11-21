@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createElement, useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -278,8 +278,23 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      {desktop && display.uri ? (
+        <View style={styles.photoBlock}>
+          {createElement('img', {
+            key: display.attempt,
+            src: display.uri,
+            alt: '',
+            onError: display.failRemote,
+            style: { height: 280, width: 'auto', maxWidth: '100%', display: 'block', borderRadius: 16 },
+          })}
+          <Pressable style={styles.photoButton} onPress={() => void addCover()}>
+            <Text style={styles.ghostText}>Change photo</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <>
       {display.uri ? (
-        <Image key={display.attempt} source={{ uri: display.uri }} style={desktop ? styles.photoDesktop : styles.photo} resizeMode="contain" onError={display.failRemote} />
+        <Image key={display.attempt} source={{ uri: display.uri }} style={styles.photo} resizeMode="contain" onError={display.failRemote} />
       ) : (
         <View style={styles.placeholder}>
           <Text style={styles.muted}>No photo yet — add one so the crew can spot this machine at a glance.</Text>
@@ -288,6 +303,8 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
       <Pressable style={styles.ghost} onPress={() => void addCover()}>
         <Text style={styles.ghostText}>{display.uri ? 'Change photo' : 'Add photo'}</Text>
       </Pressable>
+        </>
+      )}
       {cover?.addedAt || vehicle.photoAddedAt ? <Text style={styles.specs}>Photo added {formatStamp(cover?.addedAt || vehicle.photoAddedAt)}</Text> : null}
 
       {vehicle.nickname && vehicle.yearMakeModel ? <Text style={styles.nickname}>{vehicle.yearMakeModel}</Text> : null}
@@ -449,7 +466,8 @@ const styles = StyleSheet.create({
   loadingTitle: { color: theme.text, fontSize: 22, fontWeight: '800' },
   content: { padding: 16, paddingBottom: 48 },
   photo: { width: '100%', height: 220, borderRadius: 16, backgroundColor: theme.input },
-  photoDesktop: { width: '100%', height: 280, borderRadius: 16, backgroundColor: 'transparent', alignSelf: 'center' },
+  photoBlock: { alignSelf: 'center', maxWidth: '100%', width: 'fit-content' },
+  photoButton: { borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 10, alignItems: 'center', marginTop: 8, backgroundColor: theme.card },
   placeholder: { backgroundColor: theme.input, borderRadius: 16, padding: 18 },
   nickname: { color: theme.accent, fontWeight: '800', marginTop: 14, fontSize: 15 },
   nicknameError: { color: theme.danger, marginTop: 8 },
