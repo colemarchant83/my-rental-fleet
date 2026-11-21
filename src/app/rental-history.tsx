@@ -149,6 +149,25 @@ export default function RentalHistory({ localId: localIdProp, onBack }: { localI
         </Pressable>
       )}
 
+      {desktop && (rental.checkout.videoUri || rental.checkout.videoUrl || rental.checkin?.videoUri || rental.checkin?.videoUrl) ? (
+        <View style={styles.compare}>
+          <VideoColumn
+            title="Check out"
+            addedAt={rental.checkout.videoAddedAt}
+            sha={rental.checkout.videoSha256}
+            serverAt={rental.checkout.videoServerAddedAt || receivedIso(rental.serverReceivedAt)}
+            uri={deleting ? undefined : rental.checkout.videoUri || rental.checkout.videoUrl}
+          />
+          <VideoColumn
+            title="Check in"
+            addedAt={rental.checkin?.videoAddedAt}
+            sha={rental.checkin?.videoSha256}
+            serverAt={rental.checkin?.videoServerAddedAt || (rental.checkin ? receivedIso(rental.serverReceivedAt) : undefined)}
+            uri={deleting ? undefined : rental.checkin?.videoUri || rental.checkin?.videoUrl}
+          />
+        </View>
+      ) : (
+        <>
       {rental.checkout.videoUri || rental.checkout.videoUrl ? (
         <View>
           <Text style={styles.videoTitle}>Check out</Text>
@@ -165,6 +184,8 @@ export default function RentalHistory({ localId: localIdProp, onBack }: { localI
           {deleting ? null : <VideoPreview uri={rental.checkin.videoUri || rental.checkin.videoUrl} />}
         </View>
       ) : null}
+        </>
+      )}
 
       <View style={styles.readings}>
         <View style={styles.compare}>
@@ -186,7 +207,7 @@ export default function RentalHistory({ localId: localIdProp, onBack }: { localI
             <View style={styles.compare}>
               <View style={styles.sideCol}>
                 <Text style={styles.sideLabel}>Check out</Text>
-                <PhotoStack photos={photosOf(rental.checkout, spot.id, receivedIso(rental.serverReceivedAt))} empty="No photo" onOpen={setZoom} />
+                <PhotoStack photos={photosOf(rental.checkout, spot.id, receivedIso(rental.serverReceivedAt))} empty="No photo" onOpen={setZoom} boxed={desktop} />
                 <View style={styles.noteBox}>
                   <Text style={out.note.trim() ? styles.noteText : styles.noteEmpty}>{out.note.trim() || 'No note'}</Text>
                   {out.note.trim() && out.notedAt ? <Text style={styles.noteWhen}>{formatStamp(out.notedAt)}</Text> : null}
@@ -195,7 +216,7 @@ export default function RentalHistory({ localId: localIdProp, onBack }: { localI
               </View>
               <View style={styles.sideCol}>
                 <Text style={styles.sideLabel}>Check in</Text>
-                <PhotoStack photos={rental.checkin ? photosOf(rental.checkin, spot.id, receivedIso(rental.serverReceivedAt)) : []} empty={rental.checkin ? 'No photo' : 'Not returned yet'} onOpen={setZoom} />
+                <PhotoStack photos={rental.checkin ? photosOf(rental.checkin, spot.id, receivedIso(rental.serverReceivedAt)) : []} empty={rental.checkin ? 'No photo' : 'Not returned yet'} onOpen={setZoom} boxed={desktop} />
                 <View style={styles.noteBox}>
                   <Text style={back?.note.trim() ? styles.noteText : styles.noteEmpty}>{back?.note.trim() || 'No note'}</Text>
                   {back?.note.trim() && back.notedAt ? <Text style={styles.noteWhen}>{formatStamp(back.notedAt)}</Text> : null}
@@ -403,6 +424,23 @@ function receivedIso(value?: number | string) {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
+function VideoColumn({ title, addedAt, sha, serverAt, uri }: { title: string; addedAt?: string; sha?: string; serverAt?: string; uri?: string }) {
+  return (
+    <View style={styles.sideCol}>
+      <Text style={styles.columnTitle}>{title}</Text>
+      {uri ? (
+        <>
+          <Text style={styles.stampLine}>{formatStamp(addedAt)}{sha ? ` · File ${sha.slice(0, 8)}` : ''}</Text>
+          {serverAt ? <Text style={styles.stampLine}>Server received this video {formatStamp(serverAt)}</Text> : null}
+          <VideoPreview uri={uri} boxed />
+        </>
+      ) : (
+        <View style={styles.videoEmpty}><Text style={styles.empty}>No video</Text></View>
+      )}
+    </View>
+  );
+}
+
 function photosOf(side: InspectionSide, spotId: (typeof SPOTS)[number]['id'], receivedAt?: string): StampedPhoto[] {
   return (side.spots[spotId]?.photos ?? [])
     .map((photo) => ({
@@ -420,7 +458,7 @@ function labelStatus(status: string) {
   return '—';
 }
 
-function HistoryPhoto({ photo, style, onOpen, empty, compact }: { photo: StampedPhoto; style: object; onOpen: (uri: string) => void; empty: string; compact?: boolean }) {
+function HistoryPhoto({ photo, style, onOpen, empty, compact, boxed }: { photo: StampedPhoto; style: object; onOpen: (uri: string) => void; empty: string; compact?: boolean; boxed?: boolean }) {
   const display = useDisplayUri(photo.localUri, photo.remoteUrl);
   const localThumb = display.uri.startsWith('blob:') || display.uri.startsWith('data:') ? display.uri : '';
   const remote = photo.remoteUrl?.startsWith('http') ? photo.remoteUrl : '';
@@ -448,9 +486,11 @@ function HistoryPhoto({ photo, style, onOpen, empty, compact }: { photo: Stamped
               decoding: 'async',
               style: {
                 width: '100%',
-                height: compact ? 48 : 140,
-                objectFit: 'cover',
+                height: boxed ? 'auto' : compact ? 48 : 140,
+                aspectRatio: boxed ? '1' : undefined,
+                objectFit: boxed ? 'contain' : 'cover',
                 display: 'block',
+                background: '#f3efe6',
               },
             })
           : <Image source={{ uri: shown }} style={style} resizeMode="cover" onError={display.failRemote} />}
@@ -462,14 +502,14 @@ function HistoryPhoto({ photo, style, onOpen, empty, compact }: { photo: Stamped
   );
 }
 
-function PhotoStack({ photos, empty, onOpen }: { photos: StampedPhoto[]; empty: string; onOpen: (uri: string) => void }) {
+function PhotoStack({ photos, empty, onOpen, boxed }: { photos: StampedPhoto[]; empty: string; onOpen: (uri: string) => void; boxed?: boolean }) {
   if (!photos.length) {
-    return <View style={styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
+    return <View style={boxed ? styles.frameBox : styles.frame}><Text style={styles.empty}>{empty}</Text></View>;
   }
   const extras = photos.slice(1, 4);
   return (
     <View style={styles.stack}>
-      <HistoryPhoto photo={photos[0]} style={styles.shot} onOpen={onOpen} empty={empty} />
+      <HistoryPhoto photo={photos[0]} style={styles.shot} onOpen={onOpen} empty={empty} boxed={boxed} />
       {extras.length ? (
         <View style={styles.extraRow}>
           {extras.map((photo, index) => (
@@ -583,6 +623,7 @@ const styles = StyleSheet.create({
   noteEmpty: { color: theme.muted, fontSize: 13 },
   noteWhen: { color: theme.muted, fontSize: 11, marginTop: 4 },
   frame: { width: '100%', backgroundColor: theme.input, borderRadius: 12, minHeight: 120, overflow: 'hidden' },
+  frameBox: { width: '100%', aspectRatio: 1, backgroundColor: theme.input, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   shot: { width: '100%', height: 140 },
   stack: { width: '100%' },
   extraRow: { flexDirection: 'row', gap: 4, marginTop: 4 },
@@ -599,6 +640,8 @@ const styles = StyleSheet.create({
   saveText: { color: theme.white, fontWeight: '800' },
   stampLine: { color: theme.muted, marginTop: 4, fontSize: 13 },
   videoTitle: { color: theme.text, fontSize: 22, fontWeight: '800', marginTop: 18 },
+  columnTitle: { color: theme.text, fontSize: 16, fontWeight: '800', marginTop: 14 },
+  videoEmpty: { width: '100%', aspectRatio: 1, marginTop: 8, borderRadius: 12, backgroundColor: theme.input, alignItems: 'center', justifyContent: 'center' },
   mismatch: { color: theme.danger, marginTop: 4, fontSize: 13, fontWeight: '700' },
   photoStamp: { color: theme.muted, fontSize: 10, paddingHorizontal: 6, paddingBottom: 4 },
   extraStamp: { color: theme.muted, fontSize: 8, width: 42 },

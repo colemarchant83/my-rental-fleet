@@ -1,4 +1,4 @@
-const CACHE = 'fleet-shell-v35';
+const CACHE = 'fleet-shell-v36';
 const PHOTO_CACHE = 'fleet-photos-v1';
 
 self.addEventListener('install', () => {

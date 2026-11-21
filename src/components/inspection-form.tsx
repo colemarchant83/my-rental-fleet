@@ -509,7 +509,7 @@ async function videoBlob(uri: string) {
   return blob.type.startsWith('video/') ? blob : new Blob([blob], { type: 'video/mp4' });
 }
 
-function WebVideo({ src, large, onLarge, onStuck, onClose }: { src: string; large: boolean; onLarge: () => void; onStuck: () => void; onClose: () => void }) {
+function WebVideo({ src, large, boxed, onLarge, onStuck, onClose }: { src: string; large: boolean; boxed?: boolean; onLarge: () => void; onStuck: () => void; onClose: () => void }) {
   const host = useRef<View>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stuckRef = useRef(onStuck);
@@ -624,7 +624,7 @@ function WebVideo({ src, large, onLarge, onStuck, onClose }: { src: string; larg
   };
   return (
     <View>
-      <View ref={host} style={styles.videoFrame} />
+      <View ref={host} style={boxed ? styles.videoBox : styles.videoFrame} />
       {large ? null : (
         <Pressable style={styles.videoSize} onPress={fillScreen}>
           <Text style={styles.videoSizeText}>Full screen</Text>
@@ -634,7 +634,7 @@ function WebVideo({ src, large, onLarge, onStuck, onClose }: { src: string; larg
   );
 }
 
-export function VideoPreview({ uri }: { uri?: string }) {
+export function VideoPreview({ uri, boxed }: { uri?: string; boxed?: boolean }) {
   const [play, setPlay] = useState(false);
   const [src, setSrc] = useState('');
   const [opening, setOpening] = useState(false);
@@ -722,21 +722,21 @@ export function VideoPreview({ uri }: { uri?: string }) {
   };
   if (!play || (!src && !opening && !failed)) {
     return (
-      <Pressable style={styles.videoFrame} onPress={() => setPlay(true)}>
+      <Pressable style={boxed ? styles.videoBox : styles.videoFrame} onPress={() => setPlay(true)}>
         <Text style={styles.playMark}>Play</Text>
       </Pressable>
     );
   }
   if (opening) {
     return (
-      <View style={styles.videoFrame}>
+      <View style={boxed ? styles.videoBox : styles.videoFrame}>
         <Text style={styles.playMark}>Opening Video</Text>
       </View>
     );
   }
   if (failed || !src) {
     return (
-      <View style={styles.videoFrame}>
+      <View style={boxed ? styles.videoBox : styles.videoFrame}>
         <Text style={styles.playMark}>This video could not be opened</Text>
       </View>
     );
@@ -744,7 +744,7 @@ export function VideoPreview({ uri }: { uri?: string }) {
   if (Platform.OS === 'web') {
     return (
       <View>
-        <WebVideo src={src} large={large} onLarge={() => setLarge(true)} onClose={() => setLarge(false)} onStuck={() => { if (uri && openedVideos.has(uri)) setFailed(true); else void openWholeFile(); }} />
+        <WebVideo src={src} large={large} boxed={boxed} onLarge={() => setLarge(true)} onClose={() => setLarge(false)} onStuck={() => { if (uri && openedVideos.has(uri)) setFailed(true); else void openWholeFile(); }} />
       </View>
     );
   }
@@ -925,6 +925,7 @@ const styles = StyleSheet.create({
   ghostText: { color: theme.text, fontWeight: '600' },
   count: { color: theme.green, marginTop: 6, fontSize: 13 },
   videoFrame: { position: 'relative', marginTop: 10, height: 220, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1c1917', alignItems: 'center', justifyContent: 'center' },
+  videoBox: { position: 'relative', marginTop: 8, width: '100%', aspectRatio: 1, borderRadius: 12, overflow: 'hidden', backgroundColor: '#1c1917', alignItems: 'center', justifyContent: 'center' },
   videoSize: { alignSelf: 'flex-end', marginTop: 8, paddingHorizontal: 12, paddingVertical: 8 },
   videoSizeText: { color: theme.action, fontWeight: '800', fontSize: 15 },
   playMark: { color: '#fff', fontWeight: '800', fontSize: 18 },
