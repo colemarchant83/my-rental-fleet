@@ -266,7 +266,7 @@ export default function AddScreen() {
       <View style={desktop ? styles.split : styles.screen}>
       {desktop ? (
         <View style={styles.splitList}>
-          <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
+          <ScrollView style={styles.screen} contentContainerStyle={[styles.content, { paddingTop: desktop ? 8 : insets.top + 8 }]}>
             <Text style={styles.heading}>Machines</Text>
             {vehicles.length === 0 ? <Text style={styles.help}>No machines saved yet.</Text> : null}
             {vehicles.map((vehicle) => {
@@ -293,15 +293,15 @@ export default function AddScreen() {
           </ScrollView>
         </View>
       ) : null}
-      <ScrollView style={desktop ? styles.splitDetail : styles.screen} contentContainerStyle={[styles.content, { paddingTop: insets.top + 8 }]}>
-        {step === 'menu' ? (
+      <ScrollView style={desktop ? styles.splitDetail : styles.screen} contentContainerStyle={[styles.content, { paddingTop: desktop ? 8 : insets.top + 8 }]}>
+        {step === 'menu' && !desktop ? (
           <View style={styles.menuBar}>
             <BrandMenu />
             <RefreshButton />
           </View>
-        ) : (
+        ) : step !== 'menu' ? (
           <PageBar onBack={goBack} />
-        )}
+        ) : null}
 
         {step === 'menu' ? (
           <>

@@ -1,7 +1,7 @@
-import { Tabs } from 'expo-router';
-import { Text, View } from 'react-native';
+import { Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { enableFreeze } from 'react-native-screens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Tabs, usePathname, useRouter } from 'expo-router';
 import { RefreshButton, HomeButton } from '../../components/back-link';
 import { BrandMenu } from '../../components/brand-menu';
 import { theme } from '../../theme';
@@ -27,8 +27,36 @@ function HeaderActions({ home }: { home?: boolean }) {
   );
 }
 
+function TopTab({ href, focused, children }: { href: '/' | '/maintenance' | '/add'; focused: boolean; children: string }) {
+  const router = useRouter();
+  return (
+    <Pressable onPress={() => router.push(href)} style={{ backgroundColor: focused ? theme.ink : 'transparent', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 8 }}>
+      <Text style={{ color: focused ? theme.white : theme.text, fontSize: 14, fontWeight: '800' }}>{children}</Text>
+    </Pressable>
+  );
+}
+
+function DesktopHeader() {
+  const path = usePathname();
+  return (
+    <View style={{ backgroundColor: theme.bg, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 }}>
+        <BrandMenu />
+        <RefreshButton />
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+        <TopTab href="/" focused={path === '/' || path === ''}>Rentals</TopTab>
+        <TopTab href="/maintenance" focused={path.includes('maintenance')}>Maintenance</TopTab>
+        <TopTab href="/add" focused={path.includes('/add')}>Add/Delete Vehicle</TopTab>
+      </View>
+    </View>
+  );
+}
+
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 900;
   const safeBottom = Math.max(insets.bottom, 10);
   const labelSpace = 52;
 
@@ -43,20 +71,23 @@ export default function TabLayout() {
         headerTintColor: theme.text,
         headerShadowVisible: false,
         headerTitleAlign: 'left',
-        headerTitle: () => <BrandMenu />,
-        headerRight: () => <HeaderActions />,
+        header: desktop ? () => <DesktopHeader /> : undefined,
+        headerTitle: desktop ? undefined : () => <BrandMenu />,
+        headerRight: desktop ? undefined : () => <HeaderActions />,
         headerRightContainerStyle: { paddingRight: 16 },
         tabBarIcon: () => <View />,
         tabBarIconStyle: { width: 0, height: 0, display: 'none', overflow: 'hidden' },
         tabBarItemStyle: { paddingHorizontal: 2, paddingTop: 2, justifyContent: 'flex-start', alignItems: 'center' },
-        tabBarStyle: {
-          backgroundColor: theme.card,
-          borderTopColor: theme.line,
-          borderTopWidth: 1,
-          height: labelSpace + safeBottom,
-          paddingTop: 2,
-          paddingBottom: safeBottom,
-        },
+        tabBarStyle: desktop
+          ? { display: 'none', height: 0 }
+          : {
+              backgroundColor: theme.card,
+              borderTopColor: theme.line,
+              borderTopWidth: 1,
+              height: labelSpace + safeBottom,
+              paddingTop: 2,
+              paddingBottom: safeBottom,
+            },
         sceneStyle: { backgroundColor: theme.bg },
       }}
     >
@@ -77,7 +108,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="add"
         options={{
-          headerShown: false,
+          headerShown: desktop,
           tabBarLabel: ({ focused }) => <PillLabel focused={focused}>{'Add/Delete\nVehicle'}</PillLabel>,
         }}
       />
