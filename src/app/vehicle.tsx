@@ -304,8 +304,9 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
           const selected = status === current;
           const shopSelected = selected && status === 'In the shop';
           const outSelected = selected && status === 'Out on rent';
+          const inSelected = selected && status === 'Available';
           return (
-            <Pressable key={status} style={[styles.statusBtn, selected && styles.statusOn, shopSelected && styles.statusShop, outSelected && styles.statusOut]} onPress={() => void setStatus(status)}>
+            <Pressable key={status} style={[styles.statusBtn, selected && styles.statusOn, shopSelected && styles.statusShop, outSelected && styles.statusOut, inSelected && styles.statusIn]} onPress={() => void setStatus(status)}>
               <Text style={[styles.statusText, selected && styles.statusTextOn, shopSelected && styles.statusShopText]}>{status}</Text>
             </Pressable>
           );
@@ -471,6 +472,7 @@ const styles = StyleSheet.create({
   statusRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   statusBtn: { flex: 1, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.line, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   statusOn: { backgroundColor: theme.ink, borderColor: theme.ink },
+  statusIn: { backgroundColor: theme.green, borderColor: theme.green },
   statusOut: { backgroundColor: theme.rent, borderColor: theme.rent },
   statusShop: { backgroundColor: '#eab308', borderColor: '#eab308' },
   statusText: { color: theme.text, fontWeight: '700', fontSize: 12 },
