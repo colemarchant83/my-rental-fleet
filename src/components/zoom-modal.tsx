@@ -1,16 +1,21 @@
-import { useState, type ComponentType } from 'react';
-import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { createElement, useEffect, useState } from 'react';
+import { Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { theme } from '../theme';
 
 export function ZoomModal({ uri, onClose }: { uri: string | null; onClose: () => void }) {
   const [zoomed, setZoomed] = useState(false);
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 900;
+  useEffect(() => {
+    setZoomed(false);
+  }, [uri]);
   if (!uri) return null;
 
   return (
     <Modal visible animationType="fade" onRequestClose={onClose} transparent>
       <View style={styles.backdrop}>
         {Platform.OS === 'web' ? (
-          <WebZoom uri={uri} zoomed={zoomed} onToggle={() => setZoomed((value) => !value)} />
+          <WebZoom uri={uri} zoomed={zoomed} desktop={desktop} onToggle={() => setZoomed((value) => !value)} />
         ) : (
           <ScrollView
             style={styles.zoomScroll}
@@ -24,7 +29,7 @@ export function ZoomModal({ uri, onClose }: { uri: string | null; onClose: () =>
             </Pressable>
           </ScrollView>
         )}
-        <Text style={styles.hint}>{Platform.OS === 'web' ? 'Double-tap the photo to zoom' : 'Pinch or double-tap to zoom'}</Text>
+        <Text style={styles.hint}>{desktop ? (zoomed ? 'Click the photo to shrink it' : 'Click the photo to zoom') : Platform.OS === 'web' ? 'Double-tap the photo to zoom' : 'Pinch or double-tap to zoom'}</Text>
         <Pressable style={styles.close} onPress={onClose}>
           <Text style={styles.closeText}>Close</Text>
         </Pressable>
@@ -33,16 +38,21 @@ export function ZoomModal({ uri, onClose }: { uri: string | null; onClose: () =>
   );
 }
 
-function WebZoom({ uri, zoomed, onToggle }: { uri: string; zoomed: boolean; onToggle: () => void }) {
-  const Img = 'img' as unknown as ComponentType<{ src: string; alt: string; style: object; onDoubleClick: () => void }>;
+function WebZoom({ uri, zoomed, desktop, onToggle }: { uri: string; zoomed: boolean; desktop: boolean; onToggle: () => void }) {
   return (
-    <View style={styles.webFrame}>
-      <Img
-        src={uri}
-        alt="Inspection photo"
-        onDoubleClick={onToggle}
-        style={{ width: zoomed ? '180%' : '100%', height: '100%', objectFit: 'contain' }}
-      />
+    <View style={[styles.webFrame, zoomed ? styles.webFrameZoomed : null]}>
+      {createElement('img', {
+        src: uri,
+        alt: 'Inspection photo',
+        onClick: desktop ? onToggle : undefined,
+        onDoubleClick: desktop ? undefined : onToggle,
+        style: {
+          width: zoomed ? '200%' : '100%',
+          height: zoomed ? '200%' : '100%',
+          objectFit: 'contain',
+          cursor: desktop ? (zoomed ? 'zoom-out' : 'zoom-in') : 'default',
+        },
+      })}
     </View>
   );
 }
@@ -53,7 +63,8 @@ const styles = StyleSheet.create({
   zoomContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center' },
   image: { width: 360, height: 480 },
   imageZoomed: { width: 900, height: 1200 },
-  webFrame: { flex: 1, overflow: 'scroll', alignItems: 'center', justifyContent: 'center' },
+  webFrame: { flex: 1, overflow: 'auto', alignItems: 'center', justifyContent: 'center' },
+  webFrameZoomed: { alignItems: 'flex-start', justifyContent: 'flex-start' },
   hint: { color: '#e7e1d6', textAlign: 'center', marginBottom: 12 },
   close: {
     alignSelf: 'center',
