@@ -58,7 +58,7 @@ export default function TabLayout() {
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 900;
   const safeBottom = Math.max(insets.bottom, 10);
-  const labelSpace = 52;
+  const labelSpace = 66;
 
   return (
     <Tabs
