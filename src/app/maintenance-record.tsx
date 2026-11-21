@@ -42,8 +42,8 @@ export default function MaintenanceRecordScreen({ vehicleId: vehicleIdProp }: { 
     <OfflineGate>
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       {desktop && photo.uri ? <Image key={photo.attempt} source={{ uri: photo.uri }} style={styles.photo} resizeMode="contain" onError={photo.failRemote} /> : null}
-      <Text style={styles.kicker}>{name}</Text>
-      {vehicle?.yearMakeModel && vehicle.nickname ? <Text style={styles.model}>{vehicle.yearMakeModel}</Text> : null}
+      {vehicle?.nickname && vehicle?.yearMakeModel ? <Text style={styles.kicker}>{vehicle.yearMakeModel}</Text> : null}
+      <Text style={styles.model}>{vehicle?.nickname || vehicle?.yearMakeModel || name}</Text>
       <Pressable
         style={styles.newButton}
         onPress={() => router.push({ pathname: '/maintenance-entry', params: { vehicleId: vehicleId || '' } })}
