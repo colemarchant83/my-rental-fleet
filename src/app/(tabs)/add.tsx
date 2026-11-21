@@ -376,7 +376,7 @@ export default function AddScreen() {
           desktop ? (
             <>
               <Text style={styles.heading}>Delete a vehicle</Text>
-              <Text style={styles.help}>Tap a machine on the left. You still get both warnings before anything is deleted.</Text>
+              <Text style={styles.deletePrompt}>Tap a vehicle/machine on the left to delete</Text>
             </>
           ) : (
           <>
@@ -453,6 +453,7 @@ const styles = StyleSheet.create({
   pageSlotEnd: { alignItems: 'flex-end' },
   menuBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, marginBottom: 8 },
   help: { color: theme.muted, marginTop: 8, lineHeight: 20 },
+  deletePrompt: { color: theme.text, marginTop: 12, fontSize: 22, fontWeight: '700', lineHeight: 30 },
   label: { color: theme.text, fontWeight: '600', marginTop: 14, marginBottom: 6 },
   input: { backgroundColor: theme.input, color: theme.text, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 16 },
   preview: { width: '100%', height: 260, borderRadius: 16, marginTop: 8, backgroundColor: theme.input },
