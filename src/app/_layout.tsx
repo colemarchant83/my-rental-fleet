@@ -91,7 +91,6 @@ export default function RootLayout() {
   const [verified, setVerified] = useState(false);
   const sharing = path.startsWith('/share');
   const { width } = useWindowDimensions();
-  const desktopColumn = Platform.OS === 'web' && !sharing && width >= 900;
   const claimed = useRef('');
   useEffect(() => {
     if (!opening) return;
@@ -252,6 +251,7 @@ export default function RootLayout() {
   }, [router]);
 
   const showApp = sharing || (accountReady && signedIn && verified);
+  const desktopColumn = Platform.OS === 'web' && !sharing && width >= 900 && !showApp;
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
     <View style={desktopColumn ? { flex: 1, width: '100%', maxWidth: 560, alignSelf: 'center' } : { flex: 1 }}>

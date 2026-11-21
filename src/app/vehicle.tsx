@@ -49,9 +49,10 @@ function startedDraft(raw: string | null, mode: 'checkout' | 'checkin'): Unsaved
 }
 
 
-export default function VehicleDetail() {
+export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}) {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
-  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const paramId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const id = vehicleId || paramId;
   const router = useRouter();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [missing, setMissing] = useState(false);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -7,11 +7,14 @@ import { currentOwnerId } from '../../account';
 import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, openRentalFor, machineShowsOut, reconcilePhoneRentals, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
+import VehicleDetail from '../vehicle';
 
 type Vehicle = CachedVehicle;
 
 export default function VehicleListScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === 'web' && width >= 900;
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [rentals, setRentals] = useState<LocalRental[]>([]);
   const [rentalsReady, setRentalsReady] = useState(false);
@@ -20,6 +23,7 @@ export default function VehicleListScreen() {
   const [returnNote, setReturnNote] = useState('');
   const [ready, setReady] = useState(false);
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [selectedId, setSelectedId] = useState('');
   const [visit, setVisit] = useState(0);
   useFocusEffect(useCallback(() => setVisit((value) => value + 1), []));
 
@@ -137,6 +141,11 @@ export default function VehicleListScreen() {
     }
   }, [rentalsReady, vehicles]);
 
+  useEffect(() => {
+    if (!desktop || !vehicles.length) return;
+    setSelectedId((current) => (current && vehicles.some((item) => item.id === current) ? current : vehicles[0].id));
+  }, [desktop, vehicles]);
+
   const openInspection = (vehicle: Vehicle, mode: 'checkout' | 'checkin') => {
     if (mode !== 'checkin') {
       setReturnNote('');
@@ -159,7 +168,7 @@ export default function VehicleListScreen() {
     void openRentalFor(vehicle.id).then((rental) => go(!!rental));
   };
 
-  return (
+  const list = (
     <ScrollView key={visit} style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Rentals</Text>
       {ready ? <Text style={styles.count}>{vehicles.length} {vehicles.length === 1 ? 'machine' : 'machines'}</Text> : null}
@@ -176,9 +185,19 @@ export default function VehicleListScreen() {
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
         const waiting = !!open && open.sync !== 'synced';
         return (
-          <Pressable key={vehicle.id} style={styles.card} onPress={() => router.push({ pathname: '/vehicle', params: { id: vehicle.id } })}>
-            <CoverImage localUri={cover?.localUri} remoteUrl={cover?.remoteUrl || vehicle.photoUrl} />
-            <View style={styles.cardBody}>
+          <Pressable
+            key={vehicle.id}
+            style={[styles.card, desktop && styles.cardDesktop, desktop && selectedId === vehicle.id && styles.cardOn]}
+            onPress={() => {
+              if (desktop) {
+                setSelectedId(vehicle.id);
+                return;
+              }
+              router.push({ pathname: '/vehicle', params: { id: vehicle.id } });
+            }}
+          >
+            <CoverImage localUri={cover?.localUri} remoteUrl={cover?.remoteUrl || vehicle.photoUrl} compact={desktop} />
+            <View style={[styles.cardBody, desktop && styles.cardBodyDesktop]}>
               <View style={styles.titleRow}>
                 <Text style={styles.nickname}>{vehicle.nickname || 'Untitled'}</Text>
                 <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>
@@ -192,7 +211,8 @@ export default function VehicleListScreen() {
                 </View>
               ) : null}
               {vehicle.vin ? <Text style={styles.vin}>{vehicleIdLine(vehicle.vin)}</Text> : null}
-              {savedIds.includes(vehicle.id) ? <Text style={styles.offline}>Saved on this phone for offline use.</Text> : null}
+              {savedIds.includes(vehicle.id) && !desktop ? <Text style={styles.offline}>Saved on this phone for offline use.</Text> : null}
+              {desktop ? null : (
               <Pressable
                 style={[styles.action, !rentalsReady && !out && styles.actionWait]}
                 disabled={!rentalsReady && !out}
@@ -204,19 +224,31 @@ export default function VehicleListScreen() {
               >
                 <Text style={styles.actionText}>{!rentalsReady && !out ? 'Checking rental...' : out ? 'Check in — return inspection' : 'Check out — pre-rental inspection'}</Text>
               </Pressable>
-              {waiting ? <Text style={styles.waiting}>Files are saved on this phone. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.</Text> : null}
+              )}
+              {waiting && !desktop ? <Text style={styles.waiting}>Files are saved on this phone. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.</Text> : null}
             </View>
           </Pressable>
         );
       })}
     </ScrollView>
   );
+
+  if (!desktop) return list;
+
+  return (
+    <View style={styles.split}>
+      <View style={styles.splitList}>{list}</View>
+      <View style={styles.splitDetail}>
+        {selectedId ? <VehicleDetail key={selectedId} vehicleId={selectedId} /> : <Text style={styles.intro}>Tap a machine.</Text>}
+      </View>
+    </View>
+  );
 }
 
-function CoverImage({ localUri, remoteUrl }: { localUri?: string; remoteUrl?: string }) {
+function CoverImage({ localUri, remoteUrl, compact }: { localUri?: string; remoteUrl?: string; compact?: boolean }) {
   const display = useDisplayUri(localUri, remoteUrl);
-  if (!display.uri) return null;
-  return <Image key={display.attempt} source={{ uri: display.uri }} style={styles.photo} resizeMode="contain" onError={display.failRemote} />;
+  if (!display.uri) return compact ? <View style={styles.thumb} /> : null;
+  return <Image key={display.attempt} source={{ uri: display.uri }} style={compact ? styles.thumb : styles.photo} resizeMode="contain" onError={display.failRemote} />;
 }
 
 const styles = StyleSheet.create({
@@ -227,7 +259,14 @@ const styles = StyleSheet.create({
   count: { color: theme.text, marginTop: 16, marginBottom: 10, fontWeight: '600' },
   error: { color: theme.danger, marginBottom: 8 },
   card: { backgroundColor: theme.card, borderRadius: 18, borderWidth: 1, borderColor: theme.line, marginBottom: 14, overflow: 'hidden' },
+  cardDesktop: { flexDirection: 'row', alignItems: 'center' },
+  cardOn: { borderColor: theme.accent, borderWidth: 2 },
+  cardBodyDesktop: { flex: 1, paddingVertical: 10 },
   photo: { width: '100%', height: 210, backgroundColor: theme.input },
+  thumb: { width: 96, height: 72, backgroundColor: theme.input },
+  split: { flex: 1, flexDirection: 'row', backgroundColor: theme.bg },
+  splitList: { width: 440, maxWidth: '42%', borderRightWidth: 1, borderRightColor: theme.line },
+  splitDetail: { flex: 1, minWidth: 0 },
   cardBody: { padding: 16 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' },
   nickname: { color: theme.accent, fontWeight: '800', flex: 1, fontSize: 15 },
