@@ -121,7 +121,7 @@ export default function RentalHistory({ localId: localIdProp, onBack }: { localI
       ) : null}
       <View style={styles.titleRow}>
         <Text style={styles.renter}>{rental.renterName || 'Renter'}</Text>
-        <View style={styles.pill}><Text style={styles.pillText}>{rentalIsReturned(rental) ? 'Returned' : 'Out'}</Text></View>
+        <View style={[styles.pill, rentalIsReturned(rental) ? null : styles.pillOut]}><Text style={[styles.pillText, rentalIsReturned(rental) ? null : styles.pillOutText]}>{rentalIsReturned(rental) ? 'Returned' : 'Out on rent'}</Text></View>
       </View>
       <Text style={styles.muted}>
         Out {formatDay(rental.checkout?.date)}
@@ -602,7 +602,9 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   renter: { fontSize: 28, fontWeight: '800', color: theme.text, flex: 1 },
   pill: { backgroundColor: theme.input, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  pillOut: { backgroundColor: theme.rent },
   pillText: { fontWeight: '700', color: theme.text },
+  pillOutText: { color: theme.white },
   muted: { color: theme.muted, marginTop: 6 },
   waiting: { color: theme.rent, marginTop: 8 },
   checkin: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 14 },
