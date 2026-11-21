@@ -63,30 +63,37 @@ export default function RentalHistory({ localId: localIdProp, onBack }: { localI
   }, [deleting]);
   const builtFile = useRef<File | null>(null);
   const openedVehicle = useRef('');
+  const shown = useRef<LocalRental | null>(null);
 
   useEffect(() => {
     const refresh = async () => {
       if (localId) {
         const found = await rentalByLocalId(localId);
-        if (!found) {
+        if (found) {
+          openedVehicle.current = found.vehicleId;
+          shown.current = found;
+          setRental(found);
           const remote = await fetchRentalByLocalId(localId).catch(() => undefined);
-          const stored = remote || await getDoc(doc(db, 'rentals', localId)).then((snap) => (snap.exists() ? fromRemote(localId, snap.data() as Record<string, unknown>) : undefined)).catch(() => undefined);
-          if (stored) {
-            openedVehicle.current = stored.vehicleId;
-            setRental(stored);
-            return;
+          if (remote) {
+            const merged = withRemoteMedia(found, remote);
+            shown.current = merged;
+            setRental(merged);
           }
-          if (openedVehicle.current) {
-            if (onBack) onBack();
-            else router.replace({ pathname: '/vehicle', params: { id: openedVehicle.current } });
-          }
-          else setRental(null);
           return;
         }
-        openedVehicle.current = found.vehicleId;
-        setRental(found);
+        if (shown.current && (shown.current.localId === localId || shown.current.remoteId === localId)) return;
         const remote = await fetchRentalByLocalId(localId).catch(() => undefined);
-        if (remote) setRental(withRemoteMedia(found, remote));
+        const stored = remote || await getDoc(doc(db, 'rentals', localId)).then((snap) => (snap.exists() ? fromRemote(localId, snap.data() as Record<string, unknown>) : undefined)).catch(() => undefined);
+        if (stored) {
+          openedVehicle.current = stored.vehicleId;
+          shown.current = stored;
+          setRental(stored);
+          return;
+        }
+        if (openedVehicle.current) {
+          if (onBack) onBack();
+          else router.replace({ pathname: '/vehicle', params: { id: openedVehicle.current } });
+        } else setRental(null);
         return;
       }
       if (!remoteId) return;

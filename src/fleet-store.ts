@@ -903,6 +903,7 @@ export async function forgetRentalsRemovedElsewhere(vehicleId: string, remote: L
   const next = local.filter((rental) => {
     if (rental.vehicleId !== vehicleId) return true;
     if (!rental.remoteId && rental.sync !== 'synced') return true;
+    if (!rentalIsReturned(rental) && Date.now() - (rental.createdAt || 0) < 2 * 60 * 1000) return true;
     return remoteIds.has(rental.localId) || (!!rental.remoteId && remoteIds.has(rental.remoteId));
   });
   if (next.length !== local.length) await saveRentals(next);
@@ -916,14 +917,23 @@ export async function settleVehicleRentalStatus(vehicleId: string, vehicle?: { s
   if (!out && !vehicle?.renterName) return;
   if (settlingOut.has(vehicleId)) return;
   settlingOut.add(vehicleId);
+  const startedStatus = vehicle?.status || '';
+  const startedRenter = vehicle?.renterName || '';
   try {
-    const remote = await fetchVehicleRentals(vehicleId);
+    const remote = await fetchVehicleRentals(vehicleId, true);
     if (remote.length) await forgetRentalsRemovedElsewhere(vehicleId, remote);
     const openRemote = remote.filter((rental) => !rentalIsReturned(rental));
     if (openRemote.length) await rememberRentals(openRemote);
     const local = (await loadRentals()).filter((rental) => rental.vehicleId === vehicleId);
     if (local.some((rental) => !rentalIsReturned(rental) && rental.sync !== 'synced' && !rental.remoteId)) return;
     if (mergeRentalLists(local, remote).some((rental) => !rentalIsReturned(rental))) return;
+    const again = await fetchVehicleRentals(vehicleId, true);
+    if (again.some((rental) => !rentalIsReturned(rental))) {
+      await rememberRentals(again.filter((rental) => !rentalIsReturned(rental)));
+      return;
+    }
+    const fresh = await getDoc(doc(db, 'vehicles', vehicleId));
+    if ((fresh.get('status') || '') !== startedStatus || (fresh.get('renterName') || '') !== startedRenter) return;
     if (shop) {
       await updateDoc(doc(db, 'vehicles', vehicleId), { renterName: deleteField() });
       return;
@@ -1213,9 +1223,10 @@ export async function fetchOpenRentals() {
     .filter((item) => !rentalIsReturned(item));
 }
 
-export async function fetchVehicleRentals(vehicleId: string) {
+export async function fetchVehicleRentals(vehicleId: string, fromServer = false) {
   const uid = currentOwnerId();
-  const snap = await getDocs(query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId)));
+  const rentalsQuery = query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId));
+  const snap = fromServer ? await getDocsFromServer(rentalsQuery).catch(() => getDocs(rentalsQuery)) : await getDocs(rentalsQuery);
   return snap.docs
     .map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>))
     .filter((item, index) => {
