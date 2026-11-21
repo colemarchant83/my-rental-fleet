@@ -9,6 +9,7 @@ import { currentOwnerId } from '../account';
 import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, machineShowsOut, mergeRentalLists, openRentalFor, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
+import RentalHistory from './rental-history';
 
 type Vehicle = CachedVehicle;
 
@@ -73,6 +74,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   const [older, setOlder] = useState<LocalRental[]>([]);
   const [olderLoaded, setOlderLoaded] = useState(false);
   const [unsaved, setUnsaved] = useState<UnsavedInspection[]>([]);
+  const [openRentalId, setOpenRentalId] = useState('');
 
   useFocusEffect(useCallback(() => {
     if (!id) return undefined;
@@ -175,6 +177,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   }, [id]);
 
   useEffect(() => {
+    setOpenRentalId('');
     setShownCount(5);
     setOlder([]);
     setOlderLoaded(false);
@@ -267,6 +270,10 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
         {missing ? null : <Text style={styles.muted}>This machine is opening.</Text>}
       </View>
     );
+  }
+
+  if (desktop && openRentalId) {
+    return <RentalHistory key={openRentalId} localId={openRentalId} onBack={() => setOpenRentalId('')} />;
   }
 
   return (
@@ -397,7 +404,13 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
       ))}
 
       {newestFirst.length === 0 ? <Text style={styles.muted}>{olderLoaded ? 'No rentals yet.' : 'Loading rental files...'}</Text> : visibleRentals.map((rental) => (
-        <Pressable key={rental.localId} style={styles.folder} onPress={() => router.push({ pathname: '/rental-history', params: { localId: rental.localId } })}>
+        <Pressable key={rental.localId} style={styles.folder} onPress={() => {
+          if (desktop) {
+            setOpenRentalId(rental.localId);
+            return;
+          }
+          router.push({ pathname: '/rental-history', params: { localId: rental.localId } });
+        }}>
           <View style={[styles.folderTab, !rentalIsReturned(rental) && styles.folderTabOpen]}>
             <Text style={styles.folderTabText} numberOfLines={1}>{rental.renterName || 'Renter'}</Text>
           </View>

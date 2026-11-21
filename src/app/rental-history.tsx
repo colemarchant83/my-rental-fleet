@@ -14,9 +14,10 @@ import { theme } from '../theme';
 type RemotePhoto = string | { url?: string; addedAt?: string; serverAddedAt?: string; sha256?: string };
 type RemoteSpot = { status?: string; note?: string; notedAt?: string; photos?: RemotePhoto[] };
 
-export default function RentalHistory() {
+export default function RentalHistory({ localId: localIdProp, onBack }: { localId?: string; onBack?: () => void } = {}) {
   const params = useLocalSearchParams<{ localId?: string | string[]; id?: string | string[] }>();
-  const localId = Array.isArray(params.localId) ? params.localId[0] : params.localId;
+  const paramLocalId = Array.isArray(params.localId) ? params.localId[0] : params.localId;
+  const localId = localIdProp || paramLocalId;
   const remoteId = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -45,7 +46,10 @@ export default function RentalHistory() {
     const target = pendingDelete.current;
     const timer = setTimeout(() => {
       void deleteRental(target)
-        .then(() => router.replace({ pathname: '/vehicle', params: { id: target.vehicleId } }))
+        .then(() => {
+          if (onBack) onBack();
+          else router.replace({ pathname: '/vehicle', params: { id: target.vehicleId } });
+        })
         .catch((error: unknown) => {
           pendingDelete.current = null;
           setDeleting(false);
@@ -72,7 +76,10 @@ export default function RentalHistory() {
             setRental(stored);
             return;
           }
-          if (openedVehicle.current) router.replace({ pathname: '/vehicle', params: { id: openedVehicle.current } });
+          if (openedVehicle.current) {
+            if (onBack) onBack();
+            else router.replace({ pathname: '/vehicle', params: { id: openedVehicle.current } });
+          }
           else setRental(null);
           return;
         }
@@ -107,6 +114,11 @@ export default function RentalHistory() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      {onBack ? (
+        <Pressable onPress={onBack} hitSlop={10}>
+          <Text style={styles.back}>‹ Back</Text>
+        </Pressable>
+      ) : null}
       <View style={styles.titleRow}>
         <Text style={styles.renter}>{rental.renterName || 'Renter'}</Text>
         <View style={styles.pill}><Text style={styles.pillText}>{rentalIsReturned(rental) ? 'Returned' : 'Out'}</Text></View>
@@ -284,6 +296,12 @@ export default function RentalHistory() {
               return publishShareLink(rental, machine);
             })
             .then(async (url) => {
+              if (desktop && typeof window !== 'undefined') {
+                const subject = encodeURIComponent(`${rental.renterName || 'Rental'} card`);
+                const body = encodeURIComponent(`Open this link to view the rental card and save the photos and video.\n\n${url}`);
+                window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                return;
+              }
               if (typeof navigator !== 'undefined' && navigator.share) {
                 await navigator.share({
                   title: `${rental.renterName || 'Rental'} card`,
@@ -301,7 +319,7 @@ export default function RentalHistory() {
             .finally(() => setLinking(false));
         }}
       >
-        <Text style={styles.linkText}>{linking ? 'Making the link...' : 'Text or email this card'}</Text>
+        <Text style={styles.linkText}>{linking ? 'Making the link...' : desktop ? 'Email this card' : 'Text or email this card'}</Text>
       </Pressable>
       {linkNote ? <Text style={styles.help}>{linkNote}</Text> : null}
       <Pressable style={styles.delete} onPress={() => setWarned(true)}>
@@ -539,6 +557,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: theme.bg },
   loading: { flex: 1, backgroundColor: theme.bg, padding: 24, justifyContent: 'center' },
   loadingTitle: { color: theme.text, fontSize: 22, fontWeight: '800' },
+  back: { color: theme.accent, fontSize: 16, fontWeight: '700', marginBottom: 12 },
   content: { padding: 16, paddingBottom: 40 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   renter: { fontSize: 28, fontWeight: '800', color: theme.text, flex: 1 },

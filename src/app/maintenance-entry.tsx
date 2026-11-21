@@ -279,6 +279,12 @@ export default function MaintenanceEntryScreen() {
                 vehicle ? { nickname: vehicle.nickname, yearMakeModel: vehicle.yearMakeModel, vin: vehicle.vin } : undefined,
               )
                 .then(async (url) => {
+                  if (desktop && typeof window !== 'undefined') {
+                    const subject = encodeURIComponent(`${work.trim() || 'Maintenance'} record`);
+                    const body = encodeURIComponent(`Open this link to view the maintenance record and save the photos.\n\n${url}`);
+                    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+                    return;
+                  }
                   if (typeof navigator !== 'undefined' && navigator.share) {
                     await navigator.share({
                       title: `${work.trim() || 'Maintenance'} record`,
@@ -296,7 +302,7 @@ export default function MaintenanceEntryScreen() {
                 .finally(() => setLinking(false));
             }}
           >
-            <Text style={styles.fileLinkText}>{linking ? 'Making the link...' : 'Text or email this card'}</Text>
+            <Text style={styles.fileLinkText}>{linking ? 'Making the link...' : desktop ? 'Email this card' : 'Text or email this card'}</Text>
           </Pressable>
           {linkNote ? <Text style={styles.help}>{linkNote}</Text> : null}
           <Pressable style={styles.delete} onPress={() => setConfirming(true)}>
