@@ -18,6 +18,7 @@ export default function VehicleListScreen() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [rentals, setRentals] = useState<LocalRental[]>([]);
   const [rentalsReady, setRentalsReady] = useState(false);
+  const [cardsChecked, setCardsChecked] = useState(false);
   const [covers, setCovers] = useState<CoverPhoto[]>([]);
   const [error, setError] = useState('');
   const [returnNote, setReturnNote] = useState('');
@@ -106,6 +107,7 @@ export default function VehicleListScreen() {
             new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
           ]);
           if (!remote) return;
+          setCardsChecked(true);
           let merged = await reconcilePhoneRentals(remote);
           const openVehicleIds = [...new Set(merged.filter((rental) => !rentalIsReturned(rental)).map((rental) => rental.vehicleId))];
           for (const vehicleId of openVehicleIds) {
@@ -178,10 +180,9 @@ export default function VehicleListScreen() {
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {vehicles.map((vehicle) => {
         const open = rentals.find((rental) => rental.vehicleId === vehicle.id && !rentalIsReturned(rental));
-        const recordedOut = isOutStatus(vehicle.status) || !!vehicle.renterName;
-        const out = machineShowsOut(vehicle, rentals, vehicle.id);
+        const out = !rentalsReady ? false : cardsChecked ? !!open : machineShowsOut(vehicle, rentals, vehicle.id);
         const shop = !out && (vehicle.status === 'In the shop' || vehicle.status === 'In Shop');
-        const renter = open?.renterName || (recordedOut ? vehicle.renterName : undefined);
+        const renter = open?.renterName;
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
         const waiting = !!open && open.sync !== 'synced';
         return (

@@ -217,7 +217,8 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   const visibleRentals = newestFirst.slice(0, shownCount);
   const hiddenRentals = newestFirst.length - visibleRentals.length;
   const showMore = hiddenRentals > 0;
-  const out = machineShowsOut(vehicle, combined, id || '');
+  const cardsKnown = rentals.length > 0 || olderLoaded;
+  const out = cardsKnown ? machineShowsOut(vehicle, combined, id || '') : false;
   const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
   const display = useDisplayUri(cover?.localUri, cover?.remoteUrl || vehicle?.photoUrl);
 

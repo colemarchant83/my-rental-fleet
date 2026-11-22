@@ -368,11 +368,12 @@ export function pendingLocalReturn(rentals: { vehicleId?: string; status?: strin
   return rentals.some((rental) => rental.vehicleId === vehicleId && rentalIsReturned(rental) && rental.sync !== 'synced');
 }
 
-/** A rental saved on this phone, but not yet on the server, keeps the machine out. A return made somewhere else does not. */
+/** A rental saved on this phone, but not yet on the server, keeps the machine out. A returned card wins over an old out-on-rent flag. */
 export function machineShowsOut(vehicle: { status?: string; renterName?: string } | null | undefined, rentals: { vehicleId?: string; status?: string; sync?: string; checkin?: unknown }[], vehicleId: string) {
-  const pendingCheckout = rentals.some((rental) => rental.vehicleId === vehicleId && !rentalIsReturned(rental) && rental.sync !== 'synced');
-  const recordedOut = isOutStatus(vehicle?.status) || !!vehicle?.renterName;
-  return pendingCheckout || (recordedOut && !pendingLocalReturn(rentals, vehicleId));
+  const mine = rentals.filter((rental) => rental.vehicleId === vehicleId);
+  if (mine.some((rental) => !rentalIsReturned(rental))) return true;
+  if (mine.some((rental) => rentalIsReturned(rental))) return false;
+  return isOutStatus(vehicle?.status) || !!vehicle?.renterName;
 }
 
 function rentalIds(rental: LocalRental) {
