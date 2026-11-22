@@ -368,10 +368,22 @@ export function pendingLocalReturn(rentals: { vehicleId?: string; status?: strin
   return rentals.some((rental) => rental.vehicleId === vehicleId && rentalIsReturned(rental) && rental.sync !== 'synced');
 }
 
-/** A rental saved on this phone, but not yet on the server, keeps the machine out. A returned card wins over an old out-on-rent flag. */
-export function machineShowsOut(vehicle: { status?: string; renterName?: string } | null | undefined, rentals: { vehicleId?: string; status?: string; sync?: string; checkin?: unknown }[], vehicleId: string) {
+/** An older checkout does not keep the machine out once a later rental for that machine was returned. */
+export function activeOpenRental<T extends { vehicleId?: string; status?: string; checkin?: unknown; createdAt?: number; localId?: string }>(rentals: T[], vehicleId: string) {
   const mine = rentals.filter((rental) => rental.vehicleId === vehicleId);
-  if (mine.some((rental) => !rentalIsReturned(rental))) return true;
+  let newestReturn = 0;
+  for (const rental of mine) {
+    if (rentalIsReturned(rental)) newestReturn = Math.max(newestReturn, rental.createdAt || 0);
+  }
+  return mine
+    .filter((rental) => !rentalIsReturned(rental) && (rental.createdAt || 0) > newestReturn)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+}
+
+/** A rental saved on this phone, but not yet on the server, keeps the machine out. A returned card wins over an old out-on-rent flag. */
+export function machineShowsOut(vehicle: { status?: string; renterName?: string } | null | undefined, rentals: { vehicleId?: string; status?: string; sync?: string; checkin?: unknown; createdAt?: number }[], vehicleId: string) {
+  const mine = rentals.filter((rental) => rental.vehicleId === vehicleId);
+  if (activeOpenRental(rentals, vehicleId)) return true;
   if (mine.some((rental) => rentalIsReturned(rental))) return false;
   return isOutStatus(vehicle?.status) || !!vehicle?.renterName;
 }
@@ -414,8 +426,9 @@ function coveredByReturned(rental: LocalRental, others: LocalRental[]) {
   if (rentalIsReturned(rental)) return false;
   const name = rental.renterName.trim().toLowerCase();
   const day = rental.checkout?.date || '';
-  if (!name || !day) return false;
-  return others.some((other) => other !== rental && rentalIsReturned(other) && other.renterName.trim().toLowerCase() === name && (other.checkout?.date || '') === day);
+  if (name && day && others.some((other) => other !== rental && rentalIsReturned(other) && other.renterName.trim().toLowerCase() === name && (other.checkout?.date || '') === day)) return true;
+  const newestReturn = others.reduce((max, other) => other !== rental && other.vehicleId === rental.vehicleId && rentalIsReturned(other) ? Math.max(max, other.createdAt || 0) : max, 0);
+  return newestReturn > 0 && (rental.createdAt || 0) <= newestReturn;
 }
 
 function preferRental(a: LocalRental, b: LocalRental): LocalRental {
@@ -926,11 +939,10 @@ export async function settleVehicleRentalStatus(vehicleId: string, vehicle?: { s
     const openRemote = remote.filter((rental) => !rentalIsReturned(rental));
     if (openRemote.length) await rememberRentals(openRemote);
     const local = (await loadRentals()).filter((rental) => rental.vehicleId === vehicleId);
-    if (local.some((rental) => !rentalIsReturned(rental) && rental.sync !== 'synced' && !rental.remoteId)) return;
-    if (mergeRentalLists(local, remote).some((rental) => !rentalIsReturned(rental))) return;
+    if (activeOpenRental(mergeRentalLists(local, remote), vehicleId)) return;
     const again = await fetchVehicleRentals(vehicleId, true);
-    if (again.some((rental) => !rentalIsReturned(rental))) {
-      await rememberRentals(again.filter((rental) => !rentalIsReturned(rental)));
+    if (activeOpenRental(again, vehicleId)) {
+      await rememberRentals(again.filter((rental) => !rentalIsReturned(rental) && activeOpenRental(again, vehicleId)?.localId === rental.localId));
       return;
     }
     const fresh = await getDoc(doc(db, 'vehicles', vehicleId));
@@ -1187,11 +1199,13 @@ export async function reconcilePhoneRentals(remoteOpen: LocalRental[]) {
 
 /** The rental card is what makes a machine out. Copy that onto the saved machine so it still shows out with no service. */
 export async function markVehiclesOutForRentals(openRentals: LocalRental[]) {
+  const all = mergeRentalLists(await loadRentals(), openRentals);
   const byVehicle = new Map<string, LocalRental>();
   for (const rental of openRentals) {
     if (!rental.vehicleId || rentalIsReturned(rental)) continue;
-    const current = byVehicle.get(rental.vehicleId);
-    if (!current || rental.createdAt >= current.createdAt) byVehicle.set(rental.vehicleId, rental);
+    const active = activeOpenRental(all, rental.vehicleId);
+    if (!active || active.localId !== rental.localId) continue;
+    byVehicle.set(rental.vehicleId, rental);
   }
   if (!byVehicle.size) return;
   const saved = await loadCachedVehicles();

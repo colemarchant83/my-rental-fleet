@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { currentOwnerId } from '../account';
-import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, machineShowsOut, mergeRentalLists, openRentalFor, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, activeOpenRental, machineShowsOut, mergeRentalLists, openRentalFor, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 import RentalHistory from './rental-history';
@@ -206,7 +206,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   }, [showSpecs, vehicle?.vin, facts]);
 
   const combined = mergeRentalLists(rentals, older);
-  const open = combined.find((rental) => !rentalIsReturned(rental));
+  const open = activeOpenRental(combined, id || '');
   const newestFirst = [...combined].sort((a, b) => {
     const aOpen = !rentalIsReturned(a);
     const bOpen = !rentalIsReturned(b);

@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { loadCachedVehicles, loadCovers, loadRentals, machineShowsOut, rentalIsReturned, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, activeOpenRental, machineShowsOut, saveCachedVehicles, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { OfflineGate } from '../../components/offline-gate';
 import { theme } from '../../theme';
@@ -101,7 +101,7 @@ export default function MaintenanceScreen() {
       {!ready && !error ? <Text style={styles.intro}>Loading machines...</Text> : null}
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {vehicles.map((vehicle) => {
-        const open = rentals.find((rental) => rental.vehicleId === vehicle.id && !rentalIsReturned(rental));
+        const open = activeOpenRental(rentals, vehicle.id);
         const out = machineShowsOut(vehicle, rentals, vehicle.id);
         const shop = !out && (vehicle.status === 'In the shop' || vehicle.status === 'In Shop');
         const renter = open?.renterName;
