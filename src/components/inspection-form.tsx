@@ -693,7 +693,8 @@ export function VideoPreview({ uri, boxed }: { uri?: string; boxed?: boolean }) 
         objectUrl = '';
         setSrc(openedVideos.get(uri) || '');
       } catch {
-        if (live) setFailed(true);
+        if (live && direct.current.startsWith('http')) setSrc(direct.current);
+        else if (live) setFailed(true);
       } finally {
         if (live) setOpening(false);
       }
@@ -715,7 +716,8 @@ export function VideoPreview({ uri, boxed }: { uri?: string; boxed?: boolean }) 
       openedVideos.set(uri, objectUrl);
       setSrc(objectUrl);
     } catch {
-      setFailed(true);
+      if (direct.current.startsWith('http')) setSrc(direct.current);
+      else setFailed(true);
     } finally {
       setOpening(false);
     }
