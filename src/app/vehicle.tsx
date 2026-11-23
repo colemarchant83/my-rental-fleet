@@ -1,5 +1,5 @@
 import { createElement, useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Alert, FlatList, Image, Platform, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -275,7 +275,58 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content} removeClippedSubviews={false}>
+    <FlatList
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      data={visibleRentals}
+      keyExtractor={(item) => item.localId}
+      initialNumToRender={40}
+      maxToRenderPerBatch={40}
+      windowSize={21}
+      removeClippedSubviews={false}
+      keyboardShouldPersistTaps="handled"
+      renderItem={({ item: rental }) => (
+        <Pressable style={styles.folder} onPress={() => {
+          if (desktop) {
+            setOpenRentalId(rental.localId);
+            return;
+          }
+          router.push({ pathname: '/rental-history', params: { localId: rental.localId } });
+        }}>
+          <View style={[styles.folderTab, !rentalIsReturned(rental) && styles.folderTabOpen]}>
+            <Text style={styles.folderTabText} numberOfLines={1}>{rental.renterName || 'Renter'}</Text>
+          </View>
+          <View style={[styles.folderBody, !rentalIsReturned(rental) && styles.folderBodyOpen]}>
+            <View style={styles.folderMeta}>
+              <Text style={styles.specs}>
+                Out {formatDay(rental.checkout?.date)}
+                {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
+              </Text>
+              <Text style={styles.folderStatus}>{rentalIsReturned(rental) ? 'Returned' : 'Out'}</Text>
+            </View>
+            <Text style={styles.link}>Details</Text>
+            {rental.sync !== 'synced' ? <Text style={styles.waiting}>{rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo|client is offline|Failed to get document/i.test(rental.syncError) ? rental.syncError : 'Files are saved on this phone. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.'}</Text> : null}
+          </View>
+        </Pressable>
+      )}
+      ListEmptyComponent={<Text style={styles.muted}>{olderLoaded ? 'No rentals yet.' : 'Loading rental files...'}</Text>}
+      ListFooterComponent={moreOnServer ? (
+        <Pressable
+          style={styles.more}
+          onPress={() => {
+            if (!id) return;
+            void fetchOlderVehicleRentals(id).then(async (page) => {
+              if (page.length) {
+                await rememberRentals(page);
+                setOlder((current) => mergeRentalLists(current, page));
+              }
+            });
+          }}
+        >
+          <Text style={styles.ghostText}>Show older rentals</Text>
+        </Pressable>
+      ) : null}
+      ListHeaderComponent={<View>
       {desktop && display.uri ? (
         <View style={styles.photoBlock}>
           {createElement('img', {
@@ -420,47 +471,8 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
         </Pressable>
       ))}
 
-      {newestFirst.length === 0 ? <Text style={styles.muted}>{olderLoaded ? 'No rentals yet.' : 'Loading rental files...'}</Text> : visibleRentals.map((rental) => (
-        <Pressable key={rental.localId} style={styles.folder} onPress={() => {
-          if (desktop) {
-            setOpenRentalId(rental.localId);
-            return;
-          }
-          router.push({ pathname: '/rental-history', params: { localId: rental.localId } });
-        }}>
-          <View style={[styles.folderTab, !rentalIsReturned(rental) && styles.folderTabOpen]}>
-            <Text style={styles.folderTabText} numberOfLines={1}>{rental.renterName || 'Renter'}</Text>
-          </View>
-          <View style={[styles.folderBody, !rentalIsReturned(rental) && styles.folderBodyOpen]}>
-            <View style={styles.folderMeta}>
-              <Text style={styles.specs}>
-                Out {formatDay(rental.checkout?.date)}
-                {rental.checkin ? ` · Back ${formatDay(rental.checkin.date)}` : ''}
-              </Text>
-              <Text style={styles.folderStatus}>{rentalIsReturned(rental) ? 'Returned' : 'Out'}</Text>
-            </View>
-            <Text style={styles.link}>Details</Text>
-            {rental.sync !== 'synced' ? <Text style={styles.waiting}>{rental.syncError && !/expo-file-system|native dependencies|Could not read the saved photo|client is offline|Failed to get document/i.test(rental.syncError) ? rental.syncError : 'Files are saved on this phone. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.'}</Text> : null}
-          </View>
-        </Pressable>
-      ))}
-      {moreOnServer ? (
-        <Pressable
-          style={styles.more}
-          onPress={() => {
-            if (!id) return;
-            void fetchOlderVehicleRentals(id).then(async (page) => {
-              if (page.length) {
-                await rememberRentals(page);
-                setOlder((current) => mergeRentalLists(current, page));
-              }
-            });
-          }}
-        >
-          <Text style={styles.ghostText}>Show older rentals</Text>
-        </Pressable>
-      ) : null}
-    </ScrollView>
+    </View>}
+    />
   );
 }
 
