@@ -985,13 +985,19 @@ let queued = false;
 async function purgeExpiredRentals() {
   const stamp = await AsyncStorage.getItem('fleet-retention-checked').catch(() => null);
   if (stamp && Date.now() - Number(stamp) < 12 * 60 * 60 * 1000) return;
+  await adoptReturnedCopies().catch(() => undefined);
+  await dropRentalsDeletedElsewhere().catch(() => undefined);
   const uid = currentOwnerId();
-  const snap = await getDocs(query(collection(db, 'rentals'), where('ownerId', '==', uid)));
   const now = Date.now();
+  let snap;
+  try {
+    snap = await getDocs(query(collection(db, 'rentals'), where('ownerId', '==', uid), where('deleteAfter', '<=', now)));
+  } catch {
+    await AsyncStorage.setItem('fleet-retention-checked', String(Date.now())).catch(() => undefined);
+    return;
+  }
   let failed = false;
   for (const item of snap.docs) {
-    const started = createdMillis(item.get('serverReceivedAt')) || createdMillis(item.get('createdAt'));
-    if (!rentalPastOneYear(started, now)) continue;
     try {
       await deleteRental(rentalFromDoc(item.id, item.data() as Record<string, unknown>));
     } catch (error) {
@@ -1043,8 +1049,6 @@ export async function syncAll() {
         }
       }
       await prunePhoneRentals(await loadRentals());
-      await adoptReturnedCopies();
-      await dropRentalsDeletedElsewhere();
       await purgeExpiredRentals();
     } while (queued);
   } finally {

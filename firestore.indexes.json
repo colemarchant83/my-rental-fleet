@@ -15,6 +15,14 @@
         { "fieldPath": "ownerId", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "rentals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "deleteAfter", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

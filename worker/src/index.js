@@ -26,20 +26,32 @@ const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 async function deleteOldRentalMedia(env) {
   const cutoff = new Date(Date.now() - YEAR_MS);
+  const marker = await env.BUCKET.get('maintenance/cleanup-cursor');
+  const saved = marker ? await marker.text() : '';
+  const [savedPrefix, savedCursor] = saved.split('\n');
+  const prefixes = ['rentals/', 'captures/'];
+  let prefixIndex = Math.max(0, prefixes.indexOf(savedPrefix));
+  let cursor = savedCursor || undefined;
+  let examined = 0;
   let removed = 0;
-  for (const prefix of ['rentals/', 'captures/']) {
-    let cursor;
-    do {
-      const listed = await env.BUCKET.list({ prefix, cursor, limit: 200 });
-      for (const object of listed.objects) {
-        if (object.uploaded < cutoff) {
-          await env.BUCKET.delete(object.key);
-          removed += 1;
-        }
+  while (prefixIndex < prefixes.length && examined < 2000) {
+    const listed = await env.BUCKET.list({ prefix: prefixes[prefixIndex], cursor, limit: 200 });
+    for (const object of listed.objects) {
+      examined += 1;
+      if (object.uploaded < cutoff) {
+        await env.BUCKET.delete(object.key);
+        removed += 1;
       }
-      cursor = listed.truncated ? listed.cursor : undefined;
-    } while (cursor && removed < 500);
+    }
+    if (listed.truncated) {
+      cursor = listed.cursor;
+    } else {
+      prefixIndex += 1;
+      cursor = undefined;
+    }
   }
+  const finished = prefixIndex >= prefixes.length;
+  await env.BUCKET.put('maintenance/cleanup-cursor', finished ? '' : `${prefixes[prefixIndex]}\n${cursor || ''}`);
   return removed;
 }
 
