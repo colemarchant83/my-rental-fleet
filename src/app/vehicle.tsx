@@ -278,15 +278,16 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
     <FlatList
       style={styles.screen}
       contentContainerStyle={styles.content}
-      data={visibleRentals}
+      data={olderLoaded ? visibleRentals : []}
       keyExtractor={(item) => item.localId}
       initialNumToRender={40}
       maxToRenderPerBatch={40}
       windowSize={21}
       removeClippedSubviews={false}
       keyboardShouldPersistTaps="handled"
+      getItemLayout={(_, index) => ({ length: 160, offset: 160 * index, index })}
       renderItem={({ item: rental }) => (
-        <Pressable style={styles.folder} onPress={() => {
+        <Pressable style={[styles.folder, styles.folderSlot]} collapsable={false} onPress={() => {
           if (desktop) {
             setOpenRentalId(rental.localId);
             return;
@@ -520,6 +521,7 @@ const styles = StyleSheet.create({
   save: { backgroundColor: theme.action, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 12 },
   saveText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
   folder: { marginTop: 14 },
+  folderSlot: { height: 146 },
   folderTab: { alignSelf: 'flex-start', maxWidth: '78%', marginBottom: -1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, borderTopLeftRadius: 12, borderTopRightRadius: 12, borderWidth: 1, borderBottomWidth: 0, backgroundColor: '#c4b49a', borderColor: '#b5a588' },
   folderTabOpen: { backgroundColor: '#7ea36a', borderColor: '#5d8648' },
   folderTabText: { color: theme.ink, fontWeight: '800', fontSize: 16 },
