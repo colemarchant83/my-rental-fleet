@@ -72,6 +72,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   const [returnNote, setReturnNote] = useState('');
   const [older, setOlder] = useState<LocalRental[]>([]);
   const [olderLoaded, setOlderLoaded] = useState(false);
+  const [moreOnServer, setMoreOnServer] = useState(false);
   const [unsaved, setUnsaved] = useState<UnsavedInspection[]>([]);
   const [openRentalId, setOpenRentalId] = useState('');
 
@@ -148,14 +149,15 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
         if (!live) return;
         setRentals(local);
         try {
-          const remote = await fetchVehicleRentals(id);
+          const remote = await fetchVehicleRentals(id, true);
           if (!live) return;
-          if (remote.length) await forgetRentalsRemovedElsewhere(id, remote);
+          if (remote.length && !vehicleHistoryHasMore(id)) await forgetRentalsRemovedElsewhere(id, remote);
           if (!live) return;
           await rememberRentals(remote);
           if (!live) return;
           setRentals((await loadRentals()).filter((rental) => rental.vehicleId === id));
           setOlder(remote);
+          setMoreOnServer(vehicleHistoryHasMore(id));
         } catch {
           // Keep the cards already on this phone when the server cannot be reached.
         }
@@ -179,6 +181,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
     setOpenRentalId('');
     setOlder([]);
     setOlderLoaded(false);
+    setMoreOnServer(false);
   }, [id]);
 
   useEffect(() => {
@@ -213,7 +216,6 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
   const visibleRentals = newestFirst;
-  const moreOnServer = !!id && vehicleHistoryHasMore(id);
   const cardsKnown = rentals.length > 0 || olderLoaded;
   const out = cardsKnown ? machineShowsOut(vehicle, combined, id || '') : false;
   const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
@@ -459,6 +461,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
                 await rememberRentals(page);
                 setOlder((current) => mergeRentalLists(current, page));
               }
+              setMoreOnServer(vehicleHistoryHasMore(id));
             });
           }}
         >

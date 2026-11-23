@@ -1282,12 +1282,23 @@ async function loadVehicleRentalPage(vehicleId: string, fromServer: boolean, old
     ? query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId), orderBy('createdAt', 'desc'), startAfter(cursor), limit(HISTORY_ON_PHONE))
     : query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId), orderBy('createdAt', 'desc'), limit(HISTORY_ON_PHONE));
   try {
-    const snap = fromServer ? await getDocsFromServer(rentalsQuery).catch(() => getDocs(rentalsQuery)) : await getDocs(rentalsQuery);
+    const snap = await getDocsFromServer(rentalsQuery);
     const last = snap.docs[snap.docs.length - 1];
     if (last) historyCursor.set(vehicleId, last);
     historyDone.set(vehicleId, snap.docs.length < HISTORY_ON_PHONE);
     return rentalsFromSnap(snap, uid);
   } catch {
+    if (!fromServer) {
+      try {
+        const snap = await getDocs(rentalsQuery);
+        const last = snap.docs[snap.docs.length - 1];
+        if (last) historyCursor.set(vehicleId, last);
+        historyDone.set(vehicleId, snap.docs.length < HISTORY_ON_PHONE);
+        return rentalsFromSnap(snap, uid);
+      } catch {
+        // The ordered page is not on the phone. Fall through and load what is saved.
+      }
+    }
     if (older) throw new Error('Older rentals could not be loaded.');
     const snap = await getDocs(query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId)));
     historyDone.set(vehicleId, true);
