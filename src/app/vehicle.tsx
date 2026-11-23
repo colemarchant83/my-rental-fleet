@@ -69,7 +69,6 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   const [facts, setFacts] = useState<VinFacts | null>(null);
   const [factsError, setFactsError] = useState('');
   const [factsLoading, setFactsLoading] = useState(false);
-  const [shownCount, setShownCount] = useState(5);
   const [returnNote, setReturnNote] = useState('');
   const [older, setOlder] = useState<LocalRental[]>([]);
   const [olderLoaded, setOlderLoaded] = useState(false);
@@ -178,7 +177,6 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
 
   useEffect(() => {
     setOpenRentalId('');
-    setShownCount(5);
     setOlder([]);
     setOlderLoaded(false);
   }, [id]);
@@ -214,10 +212,8 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
     if (bOpen && !aOpen) return 1;
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
-  const visibleRentals = newestFirst.slice(0, shownCount);
-  const hiddenRentals = newestFirst.length - visibleRentals.length;
+  const visibleRentals = newestFirst;
   const moreOnServer = !!id && vehicleHistoryHasMore(id);
-  const showMore = hiddenRentals > 0 || moreOnServer;
   const cardsKnown = rentals.length > 0 || olderLoaded;
   const out = cardsKnown ? machineShowsOut(vehicle, combined, id || '') : false;
   const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
@@ -279,7 +275,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} removeClippedSubviews={false}>
       {desktop && display.uri ? (
         <View style={styles.photoBlock}>
           {createElement('img', {
@@ -448,26 +444,20 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
           </View>
         </Pressable>
       ))}
-      {showMore ? (
+      {moreOnServer ? (
         <Pressable
           style={styles.more}
           onPress={() => {
-            const step = hiddenRentals > 0 ? Math.min(10, hiddenRentals) : 20;
-            const need = shownCount + step;
-            if (need > newestFirst.length && id && vehicleHistoryHasMore(id)) {
-              void fetchOlderVehicleRentals(id).then(async (page) => {
-                if (page.length) {
-                  await rememberRentals(page);
-                  setOlder((current) => mergeRentalLists(current, page));
-                }
-                setShownCount(need);
-              });
-              return;
-            }
-            setShownCount(need);
+            if (!id) return;
+            void fetchOlderVehicleRentals(id).then(async (page) => {
+              if (page.length) {
+                await rememberRentals(page);
+                setOlder((current) => mergeRentalLists(current, page));
+              }
+            });
           }}
         >
-          <Text style={styles.ghostText}>{hiddenRentals > 0 ? `Show the previous ${Math.min(10, hiddenRentals)}` : 'Show the previous 20'}</Text>
+          <Text style={styles.ghostText}>Show older rentals</Text>
         </Pressable>
       ) : null}
     </ScrollView>
