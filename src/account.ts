@@ -7,7 +7,7 @@ import {
   signOut,
   type User,
 } from 'firebase/auth';
-import { collection, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from './firebase';
 
 const OWNED = ['vehicles', 'rentals', 'maintenance', 'uploadAlerts'];
@@ -88,14 +88,14 @@ export async function signOutAccount() {
   await signOut(auth);
 }
 
-/** Records saved before accounts existed have no owner. The signed-in account takes those, and only those. */
+/** Old records with no owner are claimed. This looks only for those, never every yard's history. */
 export async function claimExistingRecords(uid: string) {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
   for (const name of OWNED) {
-    const snap = await getDocs(collection(db, name)).catch(() => null);
+    const snap = await getDocs(query(collection(db, name), where('ownerId', '==', null))).catch(() => null);
     if (!snap) continue;
     for (const item of snap.docs) {
-      if (!item.get('ownerId')) await updateDoc(item.ref, { ownerId: uid }).catch(() => undefined);
+      await updateDoc(item.ref, { ownerId: uid }).catch(() => undefined);
     }
   }
 }
