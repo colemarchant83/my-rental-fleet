@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Platform } from 'react-native';
-import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, getDocsFromServer, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, deleteField, doc, getDoc, getDocs, getDocsFromServer, limit, onSnapshot, orderBy, query, serverTimestamp, startAfter, updateDoc, where, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { currentOwnerId } from './account';
 import { contentTypeFor, deleteStoredFile, fingerprint, isStoredFile, mediaByteSize, persistMedia, remoteMediaLoads } from './media';
@@ -909,16 +909,20 @@ async function cacheProfilePhotos() {
 
 export async function forgetRentalsRemovedElsewhere(vehicleId: string, remote: LocalRental[]) {
   const remoteIds = new Set<string>();
+  let oldest = Number.POSITIVE_INFINITY;
   for (const rental of remote) {
     remoteIds.add(rental.localId);
     if (rental.remoteId) remoteIds.add(rental.remoteId);
+    oldest = Math.min(oldest, rental.createdAt || 0);
   }
+  const partial = remote.length >= HISTORY_ON_PHONE;
   const local = await loadRentals();
   const next = local.filter((rental) => {
     if (rental.vehicleId !== vehicleId) return true;
     if (!rental.remoteId && rental.sync !== 'synced') return true;
     if (!rentalIsReturned(rental) && Date.now() - (rental.createdAt || 0) < 2 * 60 * 1000) return true;
-    return remoteIds.has(rental.localId) || (!!rental.remoteId && remoteIds.has(rental.remoteId));
+    if (remoteIds.has(rental.localId) || (!!rental.remoteId && remoteIds.has(rental.remoteId))) return true;
+    return partial && (rental.createdAt || 0) < oldest;
   });
   if (next.length !== local.length) await saveRentals(next);
 }
@@ -1149,7 +1153,7 @@ export function watchRemoteRentals() {
     return () => undefined;
   }
   const unsub = onSnapshot(
-    query(collection(db, 'rentals'), where('ownerId', '==', uid)),
+    query(collection(db, 'rentals'), where('ownerId', '==', uid), where('status', '==', 'Checked Out')),
     (snap) => {
       if (snap.metadata.fromCache) return;
       const remote = snap.docs.map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>));
@@ -1231,28 +1235,84 @@ export async function markVehiclesOutForRentals(openRentals: LocalRental[]) {
 
 export async function fetchOpenRentals() {
   const uid = currentOwnerId();
-  const rentalsQuery = query(collection(db, 'rentals'), where('ownerId', '==', uid));
-  const snap = await getDocsFromServer(rentalsQuery).catch(() => getDocs(rentalsQuery));
-  return snap.docs
-    .map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>))
-    .filter((item) => !rentalIsReturned(item));
+  const openQuery = query(collection(db, 'rentals'), where('ownerId', '==', uid), where('status', '==', 'Checked Out'));
+  const read = async (rentalsQuery: ReturnType<typeof query>) => {
+    const snap = await getDocsFromServer(rentalsQuery).catch(() => getDocs(rentalsQuery));
+    return snap.docs
+      .map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>))
+      .filter((item) => !rentalIsReturned(item));
+  };
+  try {
+    return await read(openQuery);
+  } catch {
+    return read(query(collection(db, 'rentals'), where('ownerId', '==', uid)));
+  }
 }
 
-export async function fetchVehicleRentals(vehicleId: string, fromServer = false) {
-  const uid = currentOwnerId();
-  const rentalsQuery = query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId));
-  const snap = fromServer ? await getDocsFromServer(rentalsQuery).catch(() => getDocs(rentalsQuery)) : await getDocs(rentalsQuery);
+const historyCursor = new Map<string, QueryDocumentSnapshot>();
+const historyDone = new Map<string, boolean>();
+
+export function vehicleHistoryHasMore(vehicleId: string) {
+  return historyDone.get(vehicleId) === false;
+}
+
+function rentalsFromSnap(snap: { docs: QueryDocumentSnapshot[] }, uid: string) {
   return snap.docs
     .map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>))
     .filter((item, index) => {
       const owner = snap.docs[index]?.get('ownerId');
       return !owner || owner === uid;
-    })
-    .sort((a, b) => b.createdAt - a.createdAt);
+    });
+}
+
+async function loadVehicleRentalPage(vehicleId: string, fromServer: boolean, older: boolean) {
+  const uid = currentOwnerId();
+  if (!older) {
+    historyCursor.delete(vehicleId);
+    historyDone.delete(vehicleId);
+  } else if (historyDone.get(vehicleId) || !historyCursor.get(vehicleId)) {
+    return [] as LocalRental[];
+  }
+  const cursor = older ? historyCursor.get(vehicleId) : undefined;
+  const rentalsQuery = cursor
+    ? query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId), orderBy('createdAt', 'desc'), startAfter(cursor), limit(HISTORY_ON_PHONE))
+    : query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId), orderBy('createdAt', 'desc'), limit(HISTORY_ON_PHONE));
+  try {
+    const snap = fromServer ? await getDocsFromServer(rentalsQuery).catch(() => getDocs(rentalsQuery)) : await getDocs(rentalsQuery);
+    const last = snap.docs[snap.docs.length - 1];
+    if (last) historyCursor.set(vehicleId, last);
+    historyDone.set(vehicleId, snap.docs.length < HISTORY_ON_PHONE);
+    return rentalsFromSnap(snap, uid);
+  } catch {
+    if (older) throw new Error('Older rentals could not be loaded.');
+    const snap = await getDocs(query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId)));
+    historyDone.set(vehicleId, true);
+    return rentalsFromSnap(snap, uid).sort((a, b) => b.createdAt - a.createdAt);
+  }
+}
+
+export async function fetchVehicleRentals(vehicleId: string, fromServer = false) {
+  return loadVehicleRentalPage(vehicleId, fromServer, false);
+}
+
+export async function fetchOlderVehicleRentals(vehicleId: string) {
+  return loadVehicleRentalPage(vehicleId, true, true);
+}
+
+export async function fetchAllVehicleRentals(vehicleId: string) {
+  const all: LocalRental[] = [];
+  let page = await fetchVehicleRentals(vehicleId, true);
+  all.push(...page);
+  while (vehicleHistoryHasMore(vehicleId)) {
+    page = await fetchOlderVehicleRentals(vehicleId);
+    if (!page.length) break;
+    all.push(...page);
+  }
+  return all;
 }
 
 export async function deleteVehicleRecord(vehicleId: string) {
-  const remote = await fetchVehicleRentals(vehicleId).catch(() => [] as LocalRental[]);
+  const remote = await fetchAllVehicleRentals(vehicleId).catch(() => [] as LocalRental[]);
   const local = (await loadRentals()).filter((rental) => rental.vehicleId === vehicleId);
   const seen = new Set<string>();
   for (const rental of [...local, ...remote]) {

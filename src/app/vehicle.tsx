@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { currentOwnerId } from '../account';
-import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, activeOpenRental, machineShowsOut, mergeRentalLists, openRentalFor, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
+import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchOlderVehicleRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, activeOpenRental, machineShowsOut, mergeRentalLists, openRentalFor, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleHistoryHasMore, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 import RentalHistory from './rental-history';
@@ -216,7 +216,8 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   });
   const visibleRentals = newestFirst.slice(0, shownCount);
   const hiddenRentals = newestFirst.length - visibleRentals.length;
-  const showMore = hiddenRentals > 0;
+  const moreOnServer = !!id && vehicleHistoryHasMore(id);
+  const showMore = hiddenRentals > 0 || moreOnServer;
   const cardsKnown = rentals.length > 0 || olderLoaded;
   const out = cardsKnown ? machineShowsOut(vehicle, combined, id || '') : false;
   const shop = !out && (vehicle?.status === 'In the shop' || vehicle?.status === 'In Shop');
@@ -451,10 +452,22 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
         <Pressable
           style={styles.more}
           onPress={() => {
-            setShownCount((count) => count + 10);
+            const step = hiddenRentals > 0 ? Math.min(10, hiddenRentals) : 20;
+            const need = shownCount + step;
+            if (need > newestFirst.length && id && vehicleHistoryHasMore(id)) {
+              void fetchOlderVehicleRentals(id).then(async (page) => {
+                if (page.length) {
+                  await rememberRentals(page);
+                  setOlder((current) => mergeRentalLists(current, page));
+                }
+                setShownCount(need);
+              });
+              return;
+            }
+            setShownCount(need);
           }}
         >
-          <Text style={styles.ghostText}>{`Show the previous ${Math.min(10, hiddenRentals)}`}</Text>
+          <Text style={styles.ghostText}>{hiddenRentals > 0 ? `Show the previous ${Math.min(10, hiddenRentals)}` : 'Show the previous 20'}</Text>
         </Pressable>
       ) : null}
     </ScrollView>
