@@ -422,7 +422,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
       ))}
 
       {!olderLoaded ? <Text style={styles.muted}>Loading rental files...</Text> : visibleRentals.length === 0 ? <Text style={styles.muted}>No rentals yet.</Text> : (
-        <View collapsable={false} style={{ minHeight: visibleRentals.length * 160 }}>
+        <View collapsable={false}>
           {visibleRentals.map((rental) => (
             <Pressable key={rental.localId} style={styles.folder} collapsable={false} onPress={() => {
               if (desktop) {
