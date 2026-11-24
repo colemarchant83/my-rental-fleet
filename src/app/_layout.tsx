@@ -1,3 +1,4 @@
+import 'react-native-gesture-handler';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, Text, useWindowDimensions, View } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';

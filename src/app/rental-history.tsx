@@ -14,6 +14,15 @@ import { theme } from '../theme';
 type RemotePhoto = string | { url?: string; addedAt?: string; serverAddedAt?: string; sha256?: string };
 type RemoteSpot = { status?: string; note?: string; notedAt?: string; photos?: RemotePhoto[] };
 
+function cardStamp(rental: LocalRental) {
+  const side = (value?: InspectionSide) => {
+    if (!value) return '';
+    const photos = SPOTS.map((spot) => (value.spots[spot.id]?.photos || []).map((photo) => photo.remoteUrl || photo.localUri).join(',')).join(';');
+    return [value.fuel, value.miles, value.hours, value.notes, value.videoUrl || value.videoUri, photos].join('|');
+  };
+  return [rental.localId, rental.remoteId, rental.status, rental.renterName, rental.sync, side(rental.checkout), side(rental.checkin)].join('~');
+}
+
 export default function RentalHistory({ localId: localIdProp, onBack }: { localId?: string; onBack?: () => void } = {}) {
   const params = useLocalSearchParams<{ localId?: string | string[]; id?: string | string[] }>();
   const paramLocalId = Array.isArray(params.localId) ? params.localId[0] : params.localId;
@@ -67,17 +76,24 @@ export default function RentalHistory({ localId: localIdProp, onBack }: { localI
 
   useEffect(() => {
     const refresh = async () => {
+      const show = (next: LocalRental | null) => {
+        setRental((current) => {
+          if (!next) return null;
+          if (current && cardStamp(current) === cardStamp(next)) return current;
+          return next;
+        });
+      };
       if (localId) {
         const found = await rentalByLocalId(localId);
         if (found) {
           openedVehicle.current = found.vehicleId;
           shown.current = found;
-          setRental(found);
+          show(found);
           const remote = await fetchRentalByLocalId(localId).catch(() => undefined);
           if (remote) {
             const merged = withRemoteMedia(found, remote);
             shown.current = merged;
-            setRental(merged);
+            show(merged);
           }
           return;
         }
@@ -87,24 +103,24 @@ export default function RentalHistory({ localId: localIdProp, onBack }: { localI
         if (stored) {
           openedVehicle.current = stored.vehicleId;
           shown.current = stored;
-          setRental(stored);
+          show(stored);
           return;
         }
         if (openedVehicle.current) {
           if (onBack) onBack();
           else router.replace({ pathname: '/vehicle', params: { id: openedVehicle.current } });
-        } else setRental(null);
+        } else show(null);
         return;
       }
       if (!remoteId) return;
       const local = (await loadRentals()).find((item) => item.remoteId === remoteId);
       if (local) {
-        setRental(local);
+        show(local);
         return;
       }
       const snap = await getDoc(doc(db, 'rentals', remoteId));
       if (!snap.exists()) return;
-      setRental(fromRemote(remoteId, snap.data() as Record<string, unknown>));
+      show(fromRemote(remoteId, snap.data() as Record<string, unknown>));
     };
     void refresh();
     return subscribeFleet(() => void refresh());
@@ -120,7 +136,7 @@ export default function RentalHistory({ localId: localIdProp, onBack }: { localI
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} removeClippedSubviews={false}>
       {onBack ? (
         <Pressable onPress={onBack} hitSlop={10}>
           <Text style={styles.back}>‹ Back</Text>
@@ -500,7 +516,7 @@ function HistoryPhoto({ photo, style, onOpen, empty, compact, boxed }: { photo: 
                 background: '#f3efe6',
               },
             })
-          : <Image source={{ uri: shown }} style={style} resizeMode="cover" onError={display.failRemote} />}
+          : <Image source={{ uri: shown }} style={style} resizeMode="cover" resizeMethod="resize" fadeDuration={0} onError={display.failRemote} />}
         {compact ? null : <Text pointerEvents="none" style={styles.enlarge}>Enlarge</Text>}
       </Pressable>
       {!compact && photo.addedAt ? <Text style={styles.photoStamp}>{formatStamp(photo.addedAt)}</Text> : null}
