@@ -8,7 +8,7 @@ import { loadCachedVehicles, loadCovers, loadRentals, cacheOpenCheckoutMedia, fe
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 import { unsavedVehicleIds } from '../../unsaved';
-import { watchPlanLimit } from '../../plan';
+import { clearPlanHold, watchPlanAccount } from '../../plan';
 import VehicleDetail from '../vehicle';
 
 type Vehicle = CachedVehicle;
@@ -30,6 +30,7 @@ export default function VehicleListScreen() {
   const [visit, setVisit] = useState(0);
   const [unsavedIds, setUnsavedIds] = useState<string[]>([]);
   const [planLimit, setPlanLimit] = useState<number | null>(null);
+  const [planHold, setPlanHold] = useState(false);
   useFocusEffect(useCallback(() => setVisit((value) => value + 1), []));
   useEffect(() => {
     let live = true;
@@ -40,7 +41,14 @@ export default function VehicleListScreen() {
       live = false;
     };
   }, [visit]);
-  useEffect(() => watchPlanLimit(setPlanLimit), []);
+  useEffect(() => watchPlanAccount((plan) => {
+    setPlanLimit(plan.limit);
+    setPlanHold(plan.hold);
+  }), []);
+  useEffect(() => {
+    if (!ready || !planHold || !planLimit || vehicles.length > planLimit) return;
+    void clearPlanHold();
+  }, [ready, planHold, planLimit, vehicles.length]);
 
   useEffect(() => {
     let live = true;
@@ -181,8 +189,8 @@ export default function VehicleListScreen() {
   }, [desktop, vehicles]);
 
   const openInspection = (vehicle: Vehicle, mode: 'checkout' | 'checkin') => {
-    if (mode === 'checkout' && planLimit && vehicles.length > planLimit) {
-      setReturnNote(`Your plan covers ${planLimit} machines and you have ${vehicles.length}. New rentals are stopped. You can still open old cards, save any you need, and check in a machine that is already out. Delete down to ${planLimit} to start new rentals again. Deleting erases that machine's cards, photos, and video.`);
+    if (mode === 'checkout' && planHold && planLimit && vehicles.length > planLimit) {
+      setReturnNote(`Your smaller plan covers ${planLimit} machines and you still have ${vehicles.length}. New rentals are stopped because this plan started before the extra machines were deleted. You can still open old cards, save any you need, and check in a machine that is already out. Delete down to ${planLimit} to start new rentals again. Deleting erases that machine's cards, photos, and video.`);
       return;
     }
     if (mode !== 'checkin') {
@@ -214,9 +222,9 @@ export default function VehicleListScreen() {
       {returnNote ? <Text style={styles.error}>{returnNote}</Text> : null}
       {!ready && !error ? <Text style={styles.intro}>Loading machines...</Text> : null}
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
-      {ready && planLimit && vehicles.length > planLimit ? (
+      {ready && planHold && planLimit && vehicles.length > planLimit ? (
         <Pressable onPress={() => router.push('/plan')}>
-          <Text style={styles.planNote}>Your plan covers {planLimit} machines and you have {vehicles.length}. New rentals are stopped. You can still open old cards, save any you need, and check in a machine that is already out. Delete down to {planLimit} to start new rentals again. Deleting erases that machine's cards, photos, and video.</Text>
+          <Text style={styles.planNote}>Your smaller plan covers {planLimit} machines and you still have {vehicles.length}. New rentals are stopped because this plan started before the extra machines were deleted. You can still open old cards, save any you need, and check in a machine that is already out. Delete down to {planLimit} to start new rentals again. Deleting erases that machine's cards, photos, and video.</Text>
         </Pressable>
       ) : null}
       {vehicles.map((vehicle) => {
