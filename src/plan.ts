@@ -4,7 +4,7 @@ import { currentOwnerId } from './account';
 
 export const PLAN_SIZES = [5, 10, 30] as const;
 
-export type PlanAccount = { limit: number | null; credits: number };
+export type PlanAccount = { limit: number | null; hold: boolean; credits: number };
 
 export function readPlanLimit(value: unknown) {
   return value === 5 || value === 10 || value === 30 ? value : null;
@@ -18,16 +18,23 @@ function accountFrom(data: Record<string, unknown> | undefined): PlanAccount {
   const credits = data?.reactivationCredits;
   return {
     limit: readPlanLimit(data?.planLimit),
+    hold: data?.planHold === true,
     credits: typeof credits === 'number' && credits > 0 ? credits : 0,
   };
 }
 
 export async function fleetOverPlan() {
-  const limit = await loadPlanLimit();
   const uid = currentOwnerId();
-  if (!limit || !uid) return false;
-  const snap = await getDocs(query(collection(db, 'vehicles'), where('ownerId', '==', uid)));
-  return snap.docs.length > limit;
+  if (!uid) return false;
+  const snap = await getDoc(doc(db, 'accounts', uid));
+  const plan = accountFrom(snap.data());
+  if (!plan.limit || !plan.hold) return false;
+  const vehicles = await getDocs(query(collection(db, 'vehicles'), where('ownerId', '==', uid)));
+  if (vehicles.size <= plan.limit) {
+    await clearPlanHold();
+    return false;
+  }
+  return true;
 }
 
 export async function loadPlanLimit() {
@@ -44,18 +51,31 @@ export function watchPlanLimit(onChange: (limit: number | null) => void) {
 export function watchPlanAccount(onChange: (plan: PlanAccount) => void) {
   const uid = currentOwnerId();
   if (!uid) {
-    onChange({ limit: null, credits: 0 });
+    onChange({ limit: null, hold: false, credits: 0 });
     return () => undefined;
   }
   return onSnapshot(doc(db, 'accounts', uid), (snap) => {
     onChange(accountFrom(snap.data()));
-  }, () => onChange({ limit: null, credits: 0 }));
+  }, () => onChange({ limit: null, hold: false, credits: 0 }));
 }
 
 export async function savePlanLimit(limit: number | null) {
   const uid = currentOwnerId();
   if (!uid) throw new Error('Sign in first.');
-  await setDoc(doc(db, 'accounts', uid), { ownerId: uid, planLimit: limit ?? 0 }, { merge: true });
+  await setDoc(doc(db, 'accounts', uid), { ownerId: uid, planLimit: limit ?? 0, planHold: false }, { merge: true });
+}
+
+/** The smaller plan has started and the extra machines are still here. New rentals stop until they are deleted. */
+export async function startDowngradeHold(limit: number) {
+  const uid = currentOwnerId();
+  if (!uid) throw new Error('Sign in first.');
+  await setDoc(doc(db, 'accounts', uid), { ownerId: uid, planLimit: limit, planHold: true }, { merge: true });
+}
+
+export async function clearPlanHold() {
+  const uid = currentOwnerId();
+  if (!uid) return;
+  await setDoc(doc(db, 'accounts', uid), { ownerId: uid, planHold: false }, { merge: true });
 }
 
 export async function savePlanChoices(items: { id: string; onPlan: boolean; planLock?: number | null }[]) {
