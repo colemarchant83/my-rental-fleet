@@ -163,6 +163,10 @@ export default function VehicleListScreen() {
   }, [desktop, vehicles]);
 
   const openInspection = (vehicle: Vehicle, mode: 'checkout' | 'checkin') => {
+    if (mode === 'checkout' && planLimit && vehicles.filter((item) => machineOnPlan(item)).length > planLimit) {
+      setReturnNote('Choose which machines to deactivate before starting a new rental. Deactivating one does not open a spot.');
+      return;
+    }
     if (mode === 'checkout' && !machineOnPlan(vehicle)) {
       setReturnNote('This machine is not on the current plan. Its old cards stay. A machine that is already out can still be checked in.');
       return;

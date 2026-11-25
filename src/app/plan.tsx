@@ -3,13 +3,14 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { currentOwnerId } from '../account';
-import { PLAN_SIZES, machineOnPlan, savePlanChoices, savePlanLimit, watchPlanLimit } from '../plan';
+import { PLAN_SIZES, machineOnPlan, savePlanChoices, savePlanLimit, useReactivationCredits, watchPlanAccount } from '../plan';
 import { theme } from '../theme';
 
-type Machine = { id: string; nickname?: string; yearMakeModel?: string; onPlan?: boolean; status?: string };
+type Machine = { id: string; nickname?: string; yearMakeModel?: string; onPlan?: boolean; status?: string; planLock?: number };
 
 export default function PlanScreen() {
   const [limit, setLimit] = useState<number | null>(null);
+  const [credits, setCredits] = useState(0);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState('');
@@ -24,7 +25,10 @@ export default function PlanScreen() {
   };
 
   useEffect(() => {
-    const stop = watchPlanLimit(setLimit);
+    const stop = watchPlanAccount((plan) => {
+      setLimit(plan.limit);
+      setCredits(plan.credits);
+    });
     void loadMachines().catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not load machines'));
     return stop;
   }, []);
@@ -38,13 +42,13 @@ export default function PlanScreen() {
     try {
       if (next === null) {
         await savePlanLimit(null);
-        setSaved('No limit. Machines that were taken off stay off. Reactivate one below, or add a new machine. Nothing comes back on by itself, and nothing is deleted.');
+        setSaved('No limit. A deactivated machine still stays off until you move to a larger plan or delete an active machine.');
       } else {
         await savePlanLimit(next);
         const onNow = machines.filter((item) => machineOnPlan(item)).length;
         setSaved(onNow > next
-          ? `This test plan covers ${next} machines. Uncheck the ones to take off, then tap Deactivate these machines. Their cards stay.`
-          : `This test plan covers ${next} machines. Open spots stay empty. Reactivate a machine below, or add a new one.`);
+          ? `This test plan covers ${next} machines. Uncheck the ones to deactivate, then tap Deactivate these machines. They stay off until you delete an active machine or move to a larger plan.`
+          : `This test plan covers ${next} machines. A machine that was deactivated stays off unless this plan is larger than the one that parked it, or you deleted an active machine.`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the plan');
@@ -53,13 +57,32 @@ export default function PlanScreen() {
     }
   };
 
+  const lockedWithoutCredit = (item: Machine) => {
+    if (!item.planLock || machineOnPlan(item)) return false;
+    if (limit != null && limit > item.planLock) return false;
+    return true;
+  };
+
   const toggle = (id: string) => {
     setSaved('');
-    setPicked((current) => {
-      if (current.includes(id)) return current.filter((item) => item !== id);
-      if (limit && current.length >= limit) return current;
-      return [...current, id];
-    });
+    setError('');
+    const item = machines.find((machine) => machine.id === id);
+    if (!item) return;
+    if (picked.includes(id)) {
+      setPicked((current) => current.filter((machineId) => machineId !== id));
+      return;
+    }
+    const needsCredit = lockedWithoutCredit(item);
+    const used = machines.filter((machine) => picked.includes(machine.id) && lockedWithoutCredit(machine) && !machineOnPlan(machine)).length;
+    if (needsCredit && used >= credits) {
+      setError('This machine stays off until you delete an active machine or move to a larger plan.');
+      return;
+    }
+    if (limit && picked.length >= limit) {
+      setError('Deactivating a machine does not open a spot. Delete an active machine or move to a larger plan.');
+      return;
+    }
+    setPicked((current) => [...current, id]);
   };
 
   const saveChoices = async () => {
@@ -71,14 +94,38 @@ export default function PlanScreen() {
     setError('');
     setSaved('');
     try {
-      await savePlanChoices(machines.map((item) => ({ id: item.id, onPlan: picked.includes(item.id) })));
-      const turningOff = machines.some((item) => machineOnPlan(item) && !picked.includes(item.id));
-      const turningOn = machines.some((item) => !machineOnPlan(item) && picked.includes(item.id));
+      const changes: { id: string; onPlan: boolean; planLock?: number | null }[] = [];
+      let used = 0;
+      for (const item of machines) {
+        const on = picked.includes(item.id);
+        const wasOn = machineOnPlan(item);
+        if (on === wasOn) continue;
+        if (!on) {
+          changes.push({ id: item.id, onPlan: false, planLock: limit ?? item.planLock ?? 30 });
+          continue;
+        }
+        const unlockedByPlan = item.planLock != null && limit != null && limit > item.planLock;
+        if (item.planLock != null && !unlockedByPlan) used += 1;
+        changes.push({ id: item.id, onPlan: true, planLock: null });
+      }
+      if (used > credits) {
+        setError('This machine stays off until you delete an active machine or move to a larger plan.');
+        return;
+      }
+      await savePlanChoices(changes);
+      if (used) await useReactivationCredits(used);
+      await loadMachines();
+      if (!changes.length) {
+        setSaved('No change.');
+        return;
+      }
+      const turningOff = changes.some((item) => !item.onPlan);
+      const turningOn = changes.some((item) => item.onPlan);
       setSaved(turningOn && turningOff
-        ? 'Updated. Machines you took off stay in your records and cannot start a new rental. Machines you turned back on can. One that is already out can still be checked in.'
+        ? 'Updated. Deactivated machines stay off. They do not open a spot for another machine.'
         : turningOn
-          ? 'Reactivated. Those machines can start a rental again. A machine you left off does not take a spot.'
-          : 'Deactivated. Those machines stay in your records. They cannot start a new rental. A machine that is already out can still be checked in.');
+          ? 'Reactivated. That used an open spot from a larger plan, or from deleting an active machine.'
+          : 'Deactivated. Those machines stay off until you delete an active machine or move to a larger plan. Their cards stay.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save those machines');
     } finally {
@@ -102,14 +149,13 @@ export default function PlanScreen() {
         </Pressable>
       </View>
       <Text style={styles.heading}>Machines on this plan</Text>
-      <Text style={styles.body}>{limit ? `${onCount} of ${limit} selected. Uncheck a machine to take it off. Tap one that is off to reactivate it if there is an open spot. Its rental cards are not deleted.` : 'Machines that were taken off stay off until you reactivate one. You can also add a new machine.'}</Text>
+      <Text style={styles.body}>{limit ? `${onCount} of ${limit} selected. Uncheck a machine to deactivate it. It stays off, and it does not open a spot, until you delete an active machine or move to a larger plan.` : 'A deactivated machine stays off. Moving to a larger plan, or deleting an active machine, is what lets it come back.'}</Text>
       {machines.map((item) => {
         const on = picked.includes(item.id);
-        const blocked = !!limit && !on && picked.length >= limit;
         return (
-          <Pressable key={item.id} style={[styles.machine, on && styles.machineOn]} disabled={blocked || !!busy} onPress={() => toggle(item.id)}>
+          <Pressable key={item.id} style={[styles.machine, on && styles.machineOn]} disabled={!!busy} onPress={() => toggle(item.id)}>
             <Text style={styles.machineName}>{item.nickname || item.yearMakeModel || 'Untitled'}</Text>
-            <Text style={styles.machineState}>{on ? 'On the plan' : 'Off the plan'}</Text>
+            <Text style={styles.machineState}>{on ? 'On the plan' : item.planLock ? 'Stays off' : 'Off the plan'}</Text>
           </Pressable>
         );
       })}

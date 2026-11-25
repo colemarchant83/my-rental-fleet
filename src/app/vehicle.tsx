@@ -9,7 +9,7 @@ import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, lo
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 import { unsavedForVehicle, type UnsavedInspection } from '../unsaved';
-import { machineOnPlan } from '../plan';
+import { fleetOverPlan, machineOnPlan } from '../plan';
 import RentalHistory from './rental-history';
 
 type Vehicle = CachedVehicle;
@@ -356,11 +356,18 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
             setReturnNote('This machine is not on the current plan. Its old cards stay. A machine that is already out can still be checked in.');
             return;
           }
-          if (!out || !id) {
-            setReturnNote('');
-            router.push({ pathname: '/inspection', params: { vehicleId: id, type: 'checkout' } });
+          if (!out) {
+            void fleetOverPlan().then((over) => {
+              if (over) {
+                setReturnNote('Choose which machines to deactivate before starting a new rental. Deactivating one does not open a spot.');
+                return;
+              }
+              setReturnNote('');
+              router.push({ pathname: '/inspection', params: { vehicleId: id, type: 'checkout' } });
+            });
             return;
           }
+          if (!id) return;
           const have = rentals.some((rental) => rental.vehicleId === id && !rentalIsReturned(rental));
           const go = (ok: boolean) => {
             if (!ok) {
