@@ -306,7 +306,7 @@ export default function AddScreen() {
         {step === 'menu' ? (
           <>
             <Text style={styles.heading}>Add or delete a vehicle</Text>
-            <Text style={styles.range}>Cars, trailers, side-by-sides, and construction machines.</Text>
+            <Text style={styles.range}>Cars, trailers, side-by-sides, construction machines, boats, etc.</Text>
             <View style={desktop ? styles.boxRow : undefined}>
               <Pressable style={desktop ? styles.addBox : styles.choice} onPress={() => { resetForm(); setStep('add'); }}>
                 <Text style={desktop ? styles.boxText : styles.choiceText}>Add vehicle</Text>
