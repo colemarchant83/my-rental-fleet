@@ -31,7 +31,7 @@ export default function PlanScreen() {
     if (next != null && machines.length > next && (limit == null || next < limit)) {
       const extra = machines.length - next;
       setPending(next);
-      setError(`This plan covers ${next} machines. You have ${machines.length}. Delete ${extra} ${extra === 1 ? 'machine' : 'machines'} before the smaller plan starts. New rentals keep working until that smaller plan starts. If it starts and the extra machines are still here, new rentals stop until you delete down to ${next}. You can still open old cards, save any you need, and check in a machine that is already out. Deleting erases that machine's cards, photos, and video.`);
+      setError(`This plan covers ${next} machines. You have ${machines.length}. Delete ${extra} ${extra === 1 ? 'machine' : 'machines'} before the smaller plan starts. New rentals keep working until that smaller plan starts. If it starts and the extra machines are still here, new rentals stop until you delete ${extra}. You can still open old cards, save any you need, and check in a machine that is already out. Deleting erases that machine's cards, photos, and video.`);
       return;
     }
     setBusy(true);
@@ -52,7 +52,8 @@ export default function PlanScreen() {
     setSaved('');
     try {
       await startDowngradeHold(pending);
-      setSaved(`The ${pending} machine plan has started. You still have ${machines.length}. New rentals are stopped until you delete down to ${pending}.`);
+      const extra = machines.length - pending;
+      setSaved(`The ${pending} machine plan has started. You still have ${machines.length}. New rentals are stopped until you delete ${extra} ${extra === 1 ? 'machine' : 'machines'}.`);
       setPending(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start the smaller plan');

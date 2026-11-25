@@ -190,7 +190,8 @@ export default function VehicleListScreen() {
 
   const openInspection = (vehicle: Vehicle, mode: 'checkout' | 'checkin') => {
     if (mode === 'checkout' && planHold && planLimit && vehicles.length > planLimit) {
-      setReturnNote(`Your smaller plan covers ${planLimit} machines and you still have ${vehicles.length}. New rentals are stopped because this plan started before the extra machines were deleted. You can still open old cards, save any you need, and check in a machine that is already out. Delete down to ${planLimit} to start new rentals again. Deleting erases that machine's cards, photos, and video.`);
+      const extra = vehicles.length - planLimit;
+      setReturnNote(`Your smaller plan covers ${planLimit} machines and you still have ${vehicles.length}. New rentals are stopped because this plan started before the extra machines were deleted. You can still open old cards, save any you need, and check in a machine that is already out. Delete ${extra} ${extra === 1 ? 'machine' : 'machines'} to start new rentals again. Deleting erases that machine's cards, photos, and video.`);
       return;
     }
     if (mode !== 'checkin') {
@@ -224,7 +225,7 @@ export default function VehicleListScreen() {
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {ready && planHold && planLimit && vehicles.length > planLimit ? (
         <Pressable onPress={() => router.push('/plan')}>
-          <Text style={styles.planNote}>Your smaller plan covers {planLimit} machines and you still have {vehicles.length}. New rentals are stopped because this plan started before the extra machines were deleted. You can still open old cards, save any you need, and check in a machine that is already out. Delete down to {planLimit} to start new rentals again. Deleting erases that machine's cards, photos, and video.</Text>
+          <Text style={styles.planNote}>Your smaller plan covers {planLimit} machines and you still have {vehicles.length}. New rentals are stopped because this plan started before the extra machines were deleted. You can still open old cards, save any you need, and check in a machine that is already out. Delete {vehicles.length - planLimit} {vehicles.length - planLimit === 1 ? 'machine' : 'machines'} to start new rentals again. Deleting erases that machine's cards, photos, and video.</Text>
         </Pressable>
       ) : null}
       {vehicles.map((vehicle) => {

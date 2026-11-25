@@ -350,7 +350,7 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
           if (!out) {
             void fleetOverPlan().then((over) => {
               if (over) {
-                setReturnNote('Your plan covers fewer machines than you have. New rentals are stopped. You can still open old cards, save any you need, and check in a machine that is already out. Delete down to the plan to start new rentals again. Deleting erases that machine\'s cards, photos, and video.');
+                setReturnNote('Your smaller plan started before the extra machines were deleted. New rentals are stopped. You can still open old cards, save any you need, and check in a machine that is already out. Delete the extra machines to start new rentals again. Deleting erases that machine\'s cards, photos, and video.');
                 return;
               }
               setReturnNote('');
