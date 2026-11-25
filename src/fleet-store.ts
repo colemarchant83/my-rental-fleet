@@ -357,7 +357,78 @@ async function storeRentalsIfChanged(current: LocalRental[], next: LocalRental[]
 export async function rememberRentals(incoming: LocalRental[]) {
   const local = await loadRentals();
   if (!incoming.length) return local;
-  return storeRentalsIfChanged(local, mergeRentalLists(local, incoming));
+  const stored = await storeRentalsIfChanged(local, mergeRentalLists(local, incoming));
+  void cacheOpenCheckoutMedia();
+  return stored;
+}
+
+async function storeSideMedia(side: InspectionSide) {
+  let changed = false;
+  const spots = { ...side.spots };
+  for (const spot of SPOTS) {
+    const current = spots[spot.id] ?? { status: '' as const, note: '', photos: [] as PhotoRef[] };
+    const photos: PhotoRef[] = [];
+    for (const photo of current.photos) {
+      if (isStoredFile(photo.localUri) || !photo.remoteUrl?.startsWith('http')) {
+        photos.push(photo);
+        continue;
+      }
+      try {
+        photos.push({ ...photo, localUri: await persistMedia(photo.remoteUrl, 'jpg') });
+        changed = true;
+      } catch {
+        photos.push(photo);
+      }
+    }
+    spots[spot.id] = { ...current, photos };
+  }
+  let videoUri = side.videoUri;
+  if (!isStoredFile(videoUri) && side.videoUrl?.startsWith('http') && !side.videoOverLimit) {
+    try {
+      videoUri = await persistMedia(side.videoUrl, 'mp4');
+      changed = true;
+    } catch {
+      // The remote video stays until the next time this phone has service.
+    }
+  }
+  return changed ? { ...side, spots, videoUri } : side;
+}
+
+let cachingMedia = false;
+let cacheAgain = false;
+
+/** Save checkout photos and video on this phone for every machine that is still out. */
+export async function cacheOpenCheckoutMedia() {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  if (cachingMedia) {
+    cacheAgain = true;
+    return;
+  }
+  cachingMedia = true;
+  try {
+    do {
+      cacheAgain = false;
+      const rentals = await loadRentals();
+      let changed = false;
+      const next: LocalRental[] = [];
+      for (const rental of rentals) {
+        if (rentalIsReturned(rental)) {
+          next.push(rental);
+          continue;
+        }
+        const checkout = await storeSideMedia(rental.checkout);
+        if (checkout !== rental.checkout) {
+          changed = true;
+          next.push({ ...rental, checkout });
+        } else {
+          next.push(rental);
+        }
+      }
+      if (changed) await saveRentals(next);
+    } while (cacheAgain);
+  } finally {
+    cachingMedia = false;
+  }
 }
 
 export function rentalIsReturned(rental: { status?: string; checkin?: unknown }) {
@@ -432,17 +503,63 @@ function coveredByReturned(rental: LocalRental, others: LocalRental[]) {
   return newestReturn > 0 && (rental.createdAt || 0) <= newestReturn;
 }
 
+function keptLocal(uri?: string) {
+  return isStoredFile(uri) ? uri : '';
+}
+
+function mergePhotos(primary: PhotoRef[] = [], secondary: PhotoRef[] = []) {
+  const count = Math.max(primary.length, secondary.length);
+  const photos: PhotoRef[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const first = primary[index];
+    const second = secondary[index];
+    const base = first ?? second;
+    if (!base) continue;
+    photos.push({
+      ...base,
+      localUri: keptLocal(first?.localUri) || keptLocal(second?.localUri) || first?.localUri || second?.localUri || '',
+      remoteUrl: first?.remoteUrl || second?.remoteUrl,
+      sha256: first?.sha256 || second?.sha256,
+      addedAt: first?.addedAt || second?.addedAt,
+      serverAddedAt: first?.serverAddedAt || second?.serverAddedAt,
+    });
+  }
+  return photos;
+}
+
+function mergeSide(primary?: InspectionSide, secondary?: InspectionSide) {
+  if (!primary) return secondary;
+  if (!secondary) return primary;
+  const spots = { ...primary.spots };
+  for (const spot of SPOTS) {
+    const first = primary.spots?.[spot.id];
+    const second = secondary.spots?.[spot.id];
+    spots[spot.id] = {
+      status: first?.status || second?.status || '',
+      note: first?.note || second?.note || '',
+      notedAt: first?.notedAt || second?.notedAt,
+      photos: mergePhotos(first?.photos, second?.photos),
+    };
+  }
+  return {
+    ...secondary,
+    ...primary,
+    spots,
+    videoUri: keptLocal(primary.videoUri) || keptLocal(secondary.videoUri) || primary.videoUri || secondary.videoUri,
+    videoUrl: primary.videoUrl || secondary.videoUrl,
+  };
+}
+
 function preferRental(a: LocalRental, b: LocalRental): LocalRental {
   const primary = rentalIsReturned(a) && !rentalIsReturned(b) ? a : rentalIsReturned(b) && !rentalIsReturned(a) ? b : a;
   const secondary = primary === a ? b : a;
-  const checkout = primary.checkout?.videoUri || primary.checkout?.videoUrl || primary.checkout?.savedAt ? primary.checkout : secondary.checkout;
   return {
     ...secondary,
     ...primary,
     status: rentalIsReturned(a) || rentalIsReturned(b) ? 'closed' : primary.status,
     remoteId: primary.remoteId || secondary.remoteId,
-    checkout,
-    checkin: primary.checkin ?? secondary.checkin,
+    checkout: mergeSide(primary.checkout, secondary.checkout) ?? primary.checkout,
+    checkin: mergeSide(primary.checkin, secondary.checkin),
     serverReceivedAt: primary.serverReceivedAt || secondary.serverReceivedAt,
     sync: primary.sync === 'pending' || secondary.sync === 'pending' ? 'pending' : primary.sync,
   };

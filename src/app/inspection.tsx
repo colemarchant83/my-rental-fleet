@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { InspectionForm } from '../components/inspection-form';
-import { emptySide, loadCachedVehicles, openRentalFor, saveCheckin, saveCheckout, type InspectionSide } from '../fleet-store';
+import { emptySide, cacheOpenCheckoutMedia, loadCachedVehicles, openRentalFor, saveCheckin, saveCheckout, type InspectionSide } from '../fleet-store';
 import { goBack } from '../components/back-link';
 import { theme } from '../theme';
 
@@ -71,12 +71,16 @@ export default function InspectionScreen() {
       if (mode === 'checkin' && data.renterName) setRenterName(String(data.renterName));
     }).catch(() => undefined);
     if (mode === 'checkin') {
-      void openRentalFor(vehicleId).then((rental) => {
+      void (async () => {
+        const rental = await openRentalFor(vehicleId);
         if (!rental) return;
         setOpenId(rental.localId);
         if (rental.renterName) setRenterName(rental.renterName);
         setCheckoutSide(rental.checkout);
-      });
+        await cacheOpenCheckoutMedia();
+        const saved = await openRentalFor(vehicleId);
+        if (saved?.checkout) setCheckoutSide(saved.checkout);
+      })();
     }
   }, [vehicleId, mode]);
 

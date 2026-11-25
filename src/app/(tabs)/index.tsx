@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { currentOwnerId } from '../../account';
-import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, openRentalFor, activeOpenRental, machineShowsOut, reconcilePhoneRentals, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
+import { loadCachedVehicles, loadCovers, loadRentals, cacheOpenCheckoutMedia, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, openRentalFor, activeOpenRental, machineShowsOut, reconcilePhoneRentals, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 import { unsavedVehicleIds } from '../../unsaved';
@@ -131,6 +131,7 @@ export default function VehicleListScreen() {
         const local = mergeRentalLists(await loadRentals(), await savedOpenRentals());
         setRentals(local);
         if (local.length) setRentalsReady(true);
+        void cacheOpenCheckoutMedia();
         try {
           const remote = await Promise.race([
             fetchOpenRentals(),
@@ -154,6 +155,7 @@ export default function VehicleListScreen() {
           // Keep the rentals already on this phone when the server cannot be reached.
         } finally {
           setRentalsReady(true);
+          void cacheOpenCheckoutMedia();
         }
       })();
       void loadCovers().then(async (next) => {

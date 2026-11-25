@@ -374,6 +374,12 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       })}
 
       <Text style={styles.section}>Walk-around video (optional)</Text>
+      {checkout?.videoUri || checkout?.videoUrl ? (
+        <View>
+          <Text style={styles.compareLabel}>Checkout video</Text>
+          <VideoPreview uri={checkout.videoUri || checkout.videoUrl} />
+        </View>
+      ) : null}
       <Text style={styles.help}>Record a slow lap in the app. It is saved at 1080p, 30 fps. Videos already on the phone cannot be added.</Text>
       <Pressable style={styles.videoBtn} onPress={() => { primeWalkaroundCamera(); setVideoOpen(true); }}>
         <Text style={styles.videoBtnText}>{side.videoUri ? 'Replace Walk-around Video' : 'Record Walk-around Video'}</Text>
