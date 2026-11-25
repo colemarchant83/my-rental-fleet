@@ -216,6 +216,11 @@ export function InspectionForm({ mode, renterName, renterLocked, onRenterName, s
       <View style={styles.warnBox}>
         <Text style={styles.warnText}>Save this inspection before you close the app. If you close it first, this inspection may not be saved.</Text>
       </View>
+      <Pressable style={styles.save} onPress={onSave} disabled={saving}>
+        <Text style={styles.saveText}>
+          {saving ? 'Saving...' : isOut ? 'Save & send out on rent' : 'Save & mark returned'}
+        </Text>
+      </Pressable>
 
       <Text style={styles.label}>Renter Name</Text>
       <TextInput
