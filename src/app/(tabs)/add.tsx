@@ -148,7 +148,7 @@ export default function AddScreen() {
     try {
       const limit = await loadPlanLimit();
       if (limit && vehicles.length >= limit) {
-        setError(`This plan covers ${limit} machines. Delete one before adding another. Deleting erases that machine's rental cards, photos, and video. Save any card you still need first.`);
+        setError(`This plan is full at ${limit} machines. Move to a larger plan before adding another. You can also delete one if you want to stay on this plan. Deleting erases that machine's rental cards, photos, and video.`);
         return;
       }
       const ref = await addDoc(collection(db, 'vehicles'), {
