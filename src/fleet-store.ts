@@ -1345,14 +1345,9 @@ export async function deleteVehicleRecord(vehicleId: string) {
   }
   await saveCovers(covers.filter((item) => item.vehicleId !== vehicleId));
   const snap = await getDoc(doc(db, 'vehicles', vehicleId)).catch(() => null);
-  const wasActive = !!snap?.exists() && snap.get('onPlan') !== false;
   const photoUrl = snap?.exists() ? String(snap.get('photoUrl') || '') : '';
   if (photoUrl) await deleteStoredObject(photoUrl);
   await deleteDoc(doc(db, 'vehicles', vehicleId));
-  if (wasActive) {
-    const { noteActiveMachineDeleted } = await import('./plan');
-    await noteActiveMachineDeleted().catch(() => undefined);
-  }
   const cached = (await loadCachedVehicles()).filter((item) => item.id !== vehicleId);
   await saveCachedVehicles(cached, true);
 }

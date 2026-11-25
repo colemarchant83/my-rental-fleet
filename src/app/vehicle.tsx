@@ -9,7 +9,7 @@ import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, lo
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 import { unsavedForVehicle, type UnsavedInspection } from '../unsaved';
-import { fleetOverPlan, machineOnPlan } from '../plan';
+import { fleetOverPlan } from '../plan';
 import RentalHistory from './rental-history';
 
 type Vehicle = CachedVehicle;
@@ -278,11 +278,6 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
             <Text style={styles.badgeUnsavedText}>Not saved</Text>
           </View>
         ) : null}
-        {!machineOnPlan(vehicle) ? (
-          <View style={styles.badgeOff}>
-            <Text style={styles.badgeOffText}>Not on this plan</Text>
-          </View>
-        ) : null}
       </View>
 
       <View style={styles.statusRow}>
@@ -352,14 +347,10 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
       <Pressable
         style={styles.save}
         onPress={() => {
-          if (!out && !machineOnPlan(vehicle)) {
-            setReturnNote('This machine is not on the current plan. Its old cards stay. A machine that is already out can still be checked in.');
-            return;
-          }
           if (!out) {
             void fleetOverPlan().then((over) => {
               if (over) {
-                setReturnNote('Choose which machines to deactivate before starting a new rental. Deactivating one does not open a spot.');
+                setReturnNote('This plan covers fewer machines than you have. Delete the extra machines before starting a new rental. Deleting erases that machine\'s cards, photos, and video.');
                 return;
               }
               setReturnNote('');

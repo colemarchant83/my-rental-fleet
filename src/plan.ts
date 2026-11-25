@@ -27,7 +27,7 @@ export async function fleetOverPlan() {
   const uid = currentOwnerId();
   if (!limit || !uid) return false;
   const snap = await getDocs(query(collection(db, 'vehicles'), where('ownerId', '==', uid)));
-  return snap.docs.filter((item) => item.get('onPlan') !== false).length > limit;
+  return snap.docs.length > limit;
 }
 
 export async function loadPlanLimit() {
