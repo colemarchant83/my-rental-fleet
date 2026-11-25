@@ -164,7 +164,7 @@ export default function VehicleListScreen() {
 
   const openInspection = (vehicle: Vehicle, mode: 'checkout' | 'checkin') => {
     if (mode === 'checkout' && planLimit && vehicles.length > planLimit) {
-      setReturnNote('This plan covers fewer machines than you have. Delete the extra machines before starting a new rental. Deleting erases that machine\'s cards, photos, and video.');
+      setReturnNote(`Your plan covers ${planLimit} machines and you have ${vehicles.length}. New rentals are stopped. You can still open old cards, save any you need, and check in a machine that is already out. Delete down to ${planLimit} to start new rentals again. Deleting erases that machine's cards, photos, and video.`);
       return;
     }
     if (mode !== 'checkin') {
@@ -198,7 +198,7 @@ export default function VehicleListScreen() {
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
       {ready && planLimit && vehicles.length > planLimit ? (
         <Pressable onPress={() => router.push('/plan')}>
-          <Text style={styles.planNote}>This plan covers {planLimit} machines. You have {vehicles.length}. Delete the extra ones before starting a new rental. Deleting erases that machine's cards, photos, and video.</Text>
+          <Text style={styles.planNote}>Your plan covers {planLimit} machines and you have {vehicles.length}. New rentals are stopped. You can still open old cards, save any you need, and check in a machine that is already out. Delete down to {planLimit} to start new rentals again. Deleting erases that machine's cards, photos, and video.</Text>
         </Pressable>
       ) : null}
       {vehicles.map((vehicle) => {

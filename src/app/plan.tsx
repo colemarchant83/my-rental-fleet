@@ -28,7 +28,7 @@ export default function PlanScreen() {
     setSaved('');
     if (next != null && machines.length > next) {
       const extra = machines.length - next;
-      setError(`This plan covers ${next} machines. You have ${machines.length}. Delete ${extra} ${extra === 1 ? 'machine' : 'machines'} first. Deleting erases that machine's rental cards, photos, and video. Save any card you still need before you delete it.`);
+      setError(`This plan covers ${next} machines. You have ${machines.length}. Delete ${extra} ${extra === 1 ? 'machine' : 'machines'} before this smaller plan can start. If it starts anyway at the end of the month, new rentals stop until you delete down to ${next}. You can still open old cards, save any you need, and check in a machine that is already out. Deleting erases that machine's cards, photos, and video.`);
       return;
     }
     setBusy(true);
