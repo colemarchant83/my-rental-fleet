@@ -306,6 +306,7 @@ export default function AddScreen() {
         {step === 'menu' ? (
           <>
             <Text style={styles.heading}>Add or delete a vehicle</Text>
+            <Text style={styles.range}>Cars, trailers, side-by-sides, and construction machines.</Text>
             <View style={desktop ? styles.boxRow : undefined}>
               <Pressable style={desktop ? styles.addBox : styles.choice} onPress={() => { resetForm(); setStep('add'); }}>
                 <Text style={desktop ? styles.boxText : styles.choiceText}>Add vehicle</Text>
@@ -447,6 +448,7 @@ const styles = StyleSheet.create({
   scanScreen: { flex: 1, backgroundColor: theme.bg, padding: 16 },
   content: { padding: 16, paddingBottom: 48 },
   heading: { fontSize: 32, fontWeight: '800', color: theme.text, marginBottom: 8 },
+  range: { color: theme.muted, fontSize: 16, lineHeight: 22, marginBottom: 14 },
   back: { color: theme.accent, fontWeight: '800', fontSize: 16 },
   pageBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   pageSlot: { flex: 1 },
