@@ -79,6 +79,15 @@ export function BrandMenu() {
               style={styles.item}
               onPress={() => {
                 setOpen(false);
+                router.push('/plan');
+              }}
+            >
+              <Text style={styles.itemText}>Plan test</Text>
+            </Pressable>
+            <Pressable
+              style={styles.item}
+              onPress={() => {
+                setOpen(false);
                 void Linking.openURL('https://my-rental-fleet.web.app/privacy');
               }}
             >

@@ -8,6 +8,7 @@ import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVeh
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
 import { unsavedVehicleIds } from '../../unsaved';
+import { machineOnPlan, watchPlanLimit } from '../../plan';
 import VehicleDetail from '../vehicle';
 
 type Vehicle = CachedVehicle;
@@ -28,6 +29,7 @@ export default function VehicleListScreen() {
   const [selectedId, setSelectedId] = useState('');
   const [visit, setVisit] = useState(0);
   const [unsavedIds, setUnsavedIds] = useState<string[]>([]);
+  const [planLimit, setPlanLimit] = useState<number | null>(null);
   useFocusEffect(useCallback(() => setVisit((value) => value + 1), []));
   useEffect(() => {
     let live = true;
@@ -38,6 +40,7 @@ export default function VehicleListScreen() {
       live = false;
     };
   }, [visit]);
+  useEffect(() => watchPlanLimit(setPlanLimit), []);
 
   useEffect(() => {
     let live = true;
@@ -160,6 +163,10 @@ export default function VehicleListScreen() {
   }, [desktop, vehicles]);
 
   const openInspection = (vehicle: Vehicle, mode: 'checkout' | 'checkin') => {
+    if (mode === 'checkout' && !machineOnPlan(vehicle)) {
+      setReturnNote('This machine is not on the current plan. Its old cards stay. A machine that is already out can still be checked in.');
+      return;
+    }
     if (mode !== 'checkin') {
       setReturnNote('');
       router.push({ pathname: '/inspection', params: { vehicleId: vehicle.id, type: mode } });
@@ -189,6 +196,11 @@ export default function VehicleListScreen() {
       {returnNote ? <Text style={styles.error}>{returnNote}</Text> : null}
       {!ready && !error ? <Text style={styles.intro}>Loading machines...</Text> : null}
       {ready && vehicles.length === 0 && !error ? <Text style={styles.intro}>No machines yet. Add one to start the fleet.</Text> : null}
+      {ready && planLimit && vehicles.filter((item) => machineOnPlan(item)).length > planLimit ? (
+        <Pressable onPress={() => router.push('/plan')}>
+          <Text style={styles.planNote}>This plan covers {planLimit} machines. Choose which ones stay. Nothing is deleted.</Text>
+        </Pressable>
+      ) : null}
       {vehicles.map((vehicle) => {
         const open = activeOpenRental(rentals, vehicle.id);
         const out = !rentalsReady ? false : cardsChecked ? !!open : machineShowsOut(vehicle, rentals, vehicle.id);
@@ -196,6 +208,7 @@ export default function VehicleListScreen() {
         const renter = open?.renterName;
         const cover = covers.find((item) => item.vehicleId === vehicle.id);
         const waiting = !!open && open.sync !== 'synced';
+        const offPlan = !machineOnPlan(vehicle);
         return (
           <Pressable
             key={vehicle.id}
@@ -221,6 +234,11 @@ export default function VehicleListScreen() {
                       <Text style={styles.badgeUnsavedText}>Not saved</Text>
                     </View>
                   ) : null}
+                  {offPlan ? (
+                    <View style={styles.badgeOff}>
+                      <Text style={styles.badgeOffText}>Not on this plan</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
               {vehicle.nickname || vehicle.yearMakeModel || (out && renter) ? (
@@ -233,15 +251,15 @@ export default function VehicleListScreen() {
               {savedIds.includes(vehicle.id) && !desktop ? <Text style={styles.offline}>Saved on this phone for offline use.</Text> : null}
               {desktop ? null : (
               <Pressable
-                style={[styles.action, !rentalsReady && !out && styles.actionWait]}
-                disabled={!rentalsReady && !out}
+                style={[styles.action, ((!rentalsReady && !out) || (offPlan && !out)) && styles.actionWait]}
+                disabled={(!rentalsReady && !out) || (offPlan && !out)}
                 onPress={(event) => {
                   event.stopPropagation();
-                  if (!rentalsReady && !out) return;
+                  if ((!rentalsReady && !out) || (offPlan && !out)) return;
                   openInspection(vehicle, out ? 'checkin' : 'checkout');
                 }}
               >
-                <Text style={styles.actionText}>{!rentalsReady && !out ? 'Checking rental...' : out ? 'Check in — return inspection' : 'Check out — pre-rental inspection'}</Text>
+                <Text style={styles.actionText}>{offPlan && !out ? 'Not on this plan' : !rentalsReady && !out ? 'Checking rental...' : out ? 'Check in — return inspection' : 'Check out — pre-rental inspection'}</Text>
               </Pressable>
               )}
               {waiting && !desktop ? <Text style={styles.waiting}>Files are saved on this phone. This notice goes away when the photos and video are uploaded to storage. If this was done offline, the upload happens when the internet connection is back.</Text> : null}
@@ -302,6 +320,9 @@ const styles = StyleSheet.create({
   badges: { alignItems: 'flex-end', gap: 6 },
   badgeUnsaved: { backgroundColor: '#f6d36b', borderWidth: 2, borderColor: '#c2410c', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
   badgeUnsavedText: { color: '#9a3412', fontWeight: '800', fontSize: 12 },
+  badgeOff: { backgroundColor: theme.card, borderWidth: 2, borderColor: '#9a3412', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeOffText: { color: '#9a3412', fontWeight: '800', fontSize: 12 },
+  planNote: { color: theme.ink, backgroundColor: '#f4e7d6', borderRadius: 12, padding: 12, marginBottom: 12, fontWeight: '700', lineHeight: 20 },
   badgeIn: { backgroundColor: theme.green },
   badgeShop: { backgroundColor: '#eab308' },
   badgeOut: { backgroundColor: theme.rent },

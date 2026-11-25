@@ -15,6 +15,7 @@ import { OfflineGate } from '../../components/offline-gate';
 import { useDisplayUri } from '../../media';
 import { WebVinScanner, extractVin } from '../../components/vin-scanner';
 import { theme } from '../../theme';
+import { loadPlanLimit, machineOnPlan } from '../../plan';
 
 function PageBar({ onBack }: { onBack?: () => void }) {
   return (
@@ -145,6 +146,11 @@ export default function AddScreen() {
     setSaving(true);
     setError('');
     try {
+      const limit = await loadPlanLimit();
+      if (limit && vehicles.filter((item) => machineOnPlan(item)).length >= limit) {
+        setError(`This plan covers ${limit} machines. Take one off the plan before adding another.`);
+        return;
+      }
       const ref = await addDoc(collection(db, 'vehicles'), {
         nickname: nickname.trim(),
         yearMakeModel: yearMakeModel.trim(),

@@ -97,6 +97,7 @@ export type CachedVehicle = {
   renterName?: string;
   photoUrl?: string;
   photoAddedAt?: string;
+  onPlan?: boolean;
 };
 
 export function vehicleIdLine(value?: string) {

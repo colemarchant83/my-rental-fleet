@@ -279,6 +279,7 @@ export default function RootLayout() {
       <Stack.Screen name="privacy" options={{ headerShown: false }} />
       <Stack.Screen name="terms" options={{ headerShown: false }} />
       <Stack.Screen name="problems" options={{ header: () => <ScreenHeader /> }} />
+      <Stack.Screen name="plan" options={{ title: 'Plan test', header: () => <ScreenHeader /> }} />
     </Stack>
     <OfflineWall />
     </View>

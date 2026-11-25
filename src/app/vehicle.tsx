@@ -9,6 +9,7 @@ import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, lo
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
 import { unsavedForVehicle, type UnsavedInspection } from '../unsaved';
+import { machineOnPlan } from '../plan';
 import RentalHistory from './rental-history';
 
 type Vehicle = CachedVehicle;
@@ -277,6 +278,11 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
             <Text style={styles.badgeUnsavedText}>Not saved</Text>
           </View>
         ) : null}
+        {!machineOnPlan(vehicle) ? (
+          <View style={styles.badgeOff}>
+            <Text style={styles.badgeOffText}>Not on this plan</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.statusRow}>
@@ -346,6 +352,10 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
       <Pressable
         style={styles.save}
         onPress={() => {
+          if (!out && !machineOnPlan(vehicle)) {
+            setReturnNote('This machine is not on the current plan. Its old cards stay. A machine that is already out can still be checked in.');
+            return;
+          }
           if (!out || !id) {
             setReturnNote('');
             router.push({ pathname: '/inspection', params: { vehicleId: id, type: 'checkout' } });
@@ -460,6 +470,8 @@ const styles = StyleSheet.create({
   badge: { alignSelf: 'flex-start', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
   badgeUnsaved: { alignSelf: 'flex-start', backgroundColor: '#f6d36b', borderWidth: 2, borderColor: '#c2410c', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
   badgeUnsavedText: { color: '#9a3412', fontWeight: '800' },
+  badgeOff: { alignSelf: 'flex-start', backgroundColor: theme.card, borderWidth: 2, borderColor: '#9a3412', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
+  badgeOffText: { color: '#9a3412', fontWeight: '800' },
   markRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, alignSelf: 'flex-start' },
   badgeIn: { backgroundColor: theme.green },
   badgeShop: { backgroundColor: '#eab308' },
