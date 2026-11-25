@@ -147,9 +147,20 @@ export default function AddScreen() {
     setError('');
     try {
       const limit = await loadPlanLimit();
-      if (limit && vehicles.length >= limit) {
-        setError(`This plan is full at ${limit} machines. Move to a larger plan before adding another. You can also delete one if you want to stay on this plan. Deleting erases that machine's rental cards, photos, and video.`);
-        return;
+      if (limit) {
+        const uid = currentOwnerId();
+        const cached = (await loadCachedVehicles()).filter((item) => item.ownerId === uid).length;
+        let count = Math.max(cached, vehicles.length);
+        try {
+          const snap = await getDocs(query(collection(db, 'vehicles'), where('ownerId', '==', uid)));
+          count = Math.max(count, snap.size);
+        } catch {
+          // Use the machines already on this phone when the server cannot be reached.
+        }
+        if (count >= limit) {
+          setError(`This plan is full at ${limit} machines. Move to a larger plan before adding another. You can also delete one if you want to stay on this plan. Deleting erases that machine's rental cards, photos, and video.`);
+          return;
+        }
       }
       const ref = await addDoc(collection(db, 'vehicles'), {
         nickname: nickname.trim(),
