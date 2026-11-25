@@ -138,6 +138,12 @@ export function SignInScreen() {
       <Pressable onPress={() => void Linking.openURL('https://my-rental-fleet.web.app/terms')} hitSlop={8}>
         <Text style={styles.switch}>Terms</Text>
       </Pressable>
+      <Text style={styles.agree}>
+        Creating an account or using the app means you agree to the{' '}
+        <Text style={styles.agreeLink} onPress={() => void Linking.openURL('https://my-rental-fleet.web.app/privacy')}>Privacy policy</Text>
+        {' '}and the{' '}
+        <Text style={styles.agreeLink} onPress={() => void Linking.openURL('https://my-rental-fleet.web.app/terms')}>Terms</Text>.
+      </Text>
     </View>
   );
 }
@@ -228,6 +234,8 @@ const styles = StyleSheet.create({
   ghost: { borderRadius: 16, minHeight: 54, alignItems: 'center', justifyContent: 'center', marginTop: 10, borderWidth: 1, borderColor: theme.line, backgroundColor: theme.card },
   ghostText: { color: theme.text, fontWeight: '800', fontSize: 17 },
   switch: { color: theme.accent, fontWeight: '800', fontSize: 16, marginTop: 18 },
+  agree: { color: theme.muted, fontSize: 13, lineHeight: 18, marginTop: 16, textAlign: 'center' },
+  agreeLink: { color: theme.accent, fontWeight: '700' },
   error: { color: theme.danger, marginBottom: 8, lineHeight: 20 },
   notice: { color: theme.text, marginBottom: 8, lineHeight: 22 },
 });
