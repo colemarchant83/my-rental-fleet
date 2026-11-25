@@ -501,7 +501,7 @@ export async function openRentalFor(vehicleId: string) {
   const pull = async () => {
     const [byVehicle, open] = await Promise.all([
       fetchVehicleRentals(vehicleId).catch(() => [] as LocalRental[]),
-      fetchOpenRentals().catch(() => [] as LocalRental[]),
+      fetchOpenRentals().then((open) => open ?? []).catch(() => [] as LocalRental[]),
     ]);
     return pick([...byVehicle, ...open]);
   };
@@ -565,6 +565,7 @@ export async function saveCheckout(vehicleId: string, renterName: string, checko
   };
   const rentals = await loadRentals();
   await saveRentals([rental, ...rentals]);
+  await markVehiclesOutForRentals([rental]);
   void syncAll();
   return rental;
 }
@@ -1242,7 +1243,7 @@ export async function fetchOpenRentals() {
   const uid = currentOwnerId();
   const openQuery = query(collection(db, 'rentals'), where('ownerId', '==', uid), where('status', '==', 'Checked Out'));
   const read = async (rentalsQuery: ReturnType<typeof query>) => {
-    const snap = await getDocsFromServer(rentalsQuery).catch(() => getDocs(rentalsQuery));
+    const snap = await getDocsFromServer(rentalsQuery);
     return snap.docs
       .map((item) => rentalFromDoc(item.id, item.data() as Record<string, unknown>))
       .filter((item) => !rentalIsReturned(item));
@@ -1250,7 +1251,11 @@ export async function fetchOpenRentals() {
   try {
     return await read(openQuery);
   } catch {
-    return read(query(collection(db, 'rentals'), where('ownerId', '==', uid)));
+    try {
+      return await read(query(collection(db, 'rentals'), where('ownerId', '==', uid)));
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -1301,6 +1306,7 @@ async function loadVehicleRentalPage(vehicleId: string, fromServer: boolean, old
       }
     }
     if (older) throw new Error('Older rentals could not be loaded.');
+    if (fromServer) throw new Error('Rentals could not be loaded.');
     const snap = await getDocs(query(collection(db, 'rentals'), where('vehicleId', '==', vehicleId)));
     historyDone.set(vehicleId, true);
     return rentalsFromSnap(snap, uid).sort((a, b) => b.createdAt - a.createdAt);

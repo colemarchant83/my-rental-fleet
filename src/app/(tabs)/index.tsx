@@ -52,14 +52,30 @@ export default function VehicleListScreen() {
       setReady(true);
     });
     const show = (snapshot: { metadata?: { fromCache?: boolean }; docs: { id: string; data: () => Omit<Vehicle, 'id'> }[] }) => {
-      const next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      if (!next.length && snapshot.metadata?.fromCache) return;
-      setVehicles(next);
-      setError('');
-      setReady(true);
-      void saveCachedVehicles(next, !snapshot.metadata?.fromCache).then(() => {
-        if (next.length) setSavedIds(next.map((item) => item.id));
-      });
+      void (async () => {
+        let next = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+        if (!next.length && snapshot.metadata?.fromCache) return;
+        if (snapshot.metadata?.fromCache) {
+          const saved = await loadCachedVehicles();
+          const savedById = new Map(saved.map((item) => [item.id, item]));
+          next = next.map((item) => {
+            const local = savedById.get(item.id);
+            if (!local?.status) return item;
+            return { ...item, status: local.status, renterName: local.renterName };
+          });
+        }
+        if (!live) return;
+        setVehicles(next);
+        setError('');
+        setReady(true);
+        if (snapshot.metadata?.fromCache) {
+          if (next.length) setSavedIds(next.map((item) => item.id));
+          return;
+        }
+        void saveCachedVehicles(next, true).then(() => {
+          if (next.length) setSavedIds(next.map((item) => item.id));
+        });
+      })();
     };
     const owned = query(collection(db, 'vehicles'), where('ownerId', '==', currentOwnerId()));
     void getDocs(owned).then(show).catch((err: unknown) => {
