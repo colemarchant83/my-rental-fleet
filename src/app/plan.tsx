@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { currentOwnerId } from '../account';
-import { PLAN_SIZES, savePlanLimit, watchPlanLimit } from '../plan';
+import { PLAN_SIZES, savePlanLimit, startDowngradeHold, watchPlanLimit } from '../plan';
 import { theme } from '../theme';
 
 type Machine = { id: string; nickname?: string; yearMakeModel?: string };
@@ -14,6 +14,7 @@ export default function PlanScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState('');
+  const [pending, setPending] = useState<number | null>(null);
 
   useEffect(() => {
     const stop = watchPlanLimit(setLimit);
@@ -26,9 +27,11 @@ export default function PlanScreen() {
   const chooseLimit = async (next: number | null) => {
     setError('');
     setSaved('');
-    if (next != null && machines.length > next) {
+    setPending(null);
+    if (next != null && machines.length > next && (limit == null || next < limit)) {
       const extra = machines.length - next;
-      setError(`This plan covers ${next} machines. You have ${machines.length}. Delete ${extra} ${extra === 1 ? 'machine' : 'machines'} before this smaller plan can start. If it starts anyway at the end of the month, new rentals stop until you delete down to ${next}. You can still open old cards, save any you need, and check in a machine that is already out. Deleting erases that machine's cards, photos, and video.`);
+      setPending(next);
+      setError(`This plan covers ${next} machines. You have ${machines.length}. Delete ${extra} ${extra === 1 ? 'machine' : 'machines'} before the smaller plan starts. New rentals keep working until that smaller plan starts. If it starts and the extra machines are still here, new rentals stop until you delete down to ${next}. You can still open old cards, save any you need, and check in a machine that is already out. Deleting erases that machine's cards, photos, and video.`);
       return;
     }
     setBusy(true);
@@ -42,10 +45,26 @@ export default function PlanScreen() {
     }
   };
 
+  const startSmaller = async () => {
+    if (!pending) return;
+    setBusy(true);
+    setError('');
+    setSaved('');
+    try {
+      await startDowngradeHold(pending);
+      setSaved(`The ${pending} machine plan has started. You still have ${machines.length}. New rentals are stopped until you delete down to ${pending}.`);
+      setPending(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start the smaller plan');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Plan test</Text>
-      <Text style={styles.body}>Billing is not on. These buttons do not charge anyone. A plan covers that many machines. Five means five. A lower plan does not turn on until the extra machines are deleted.</Text>
+      <Text style={styles.body}>Billing is not on. These buttons do not charge anyone. A plan covers that many machines. Adding one more than the plan is blocked, and the other rentals keep working. New rentals stop only after a smaller plan starts and the extra machines are still there.</Text>
       <Text style={styles.current}>{limit ? `Test plan: up to ${limit} machines` : 'Test plan: no limit'} · You have {machines.length}</Text>
       <View style={styles.row}>
         {PLAN_SIZES.map((size) => (
@@ -58,6 +77,11 @@ export default function PlanScreen() {
         </Pressable>
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {pending ? (
+        <Pressable style={styles.hold} disabled={busy} onPress={() => void startSmaller()}>
+          <Text style={styles.holdText}>Test: smaller plan has started</Text>
+        </Pressable>
+      ) : null}
       {saved ? <Text style={styles.saved}>{saved}</Text> : null}
       <Text style={styles.heading}>Your machines</Text>
       <Text style={styles.body}>Delete extra machines from Add/Delete Vehicle. The delete step warns you that the cards, photos, and video are erased.</Text>
@@ -84,5 +108,7 @@ const styles = StyleSheet.create({
   machine: { marginTop: 10, backgroundColor: theme.card, borderRadius: 14, borderWidth: 1, borderColor: theme.line, padding: 14 },
   machineName: { color: theme.text, fontWeight: '800' },
   error: { color: theme.danger, marginTop: 14, lineHeight: 20 },
+  hold: { marginTop: 12, backgroundColor: theme.accent, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, alignSelf: 'flex-start' },
+  holdText: { color: '#fff', fontWeight: '800' },
   saved: { color: theme.text, marginTop: 14, lineHeight: 20 },
 });
