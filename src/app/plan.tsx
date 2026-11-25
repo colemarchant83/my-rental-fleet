@@ -37,15 +37,14 @@ export default function PlanScreen() {
     setBusy('limit');
     try {
       if (next === null) {
-        await savePlanChoices(machines.map((item) => ({ id: item.id, onPlan: true })));
         await savePlanLimit(null);
-        setPicked(machines.map((item) => item.id));
-        setSaved('No limit. Every machine is back on the plan. Nothing was deleted.');
+        setSaved('No limit. Machines that were taken off stay off. Reactivate one below, or add a new machine. Nothing comes back on by itself, and nothing is deleted.');
       } else {
         await savePlanLimit(next);
-        setSaved(machines.filter((item) => machineOnPlan(item)).length > next
-          ? `This test plan covers ${next} machines. Uncheck the ones that should come off. Their cards stay.`
-          : `This test plan covers ${next} machines.`);
+        const onNow = machines.filter((item) => machineOnPlan(item)).length;
+        setSaved(onNow > next
+          ? `This test plan covers ${next} machines. Uncheck the ones to take off, then tap Deactivate these machines. Their cards stay.`
+          : `This test plan covers ${next} machines. Open spots stay empty. Reactivate a machine below, or add a new one.`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the plan');
@@ -73,7 +72,13 @@ export default function PlanScreen() {
     setSaved('');
     try {
       await savePlanChoices(machines.map((item) => ({ id: item.id, onPlan: picked.includes(item.id) })));
-      setSaved('Saved. Machines that are off the plan cannot start a new rental. A machine that is already out can still be checked in. Old cards stay.');
+      const turningOff = machines.some((item) => machineOnPlan(item) && !picked.includes(item.id));
+      const turningOn = machines.some((item) => !machineOnPlan(item) && picked.includes(item.id));
+      setSaved(turningOn && turningOff
+        ? 'Updated. Machines you took off stay in your records and cannot start a new rental. Machines you turned back on can. One that is already out can still be checked in.'
+        : turningOn
+          ? 'Reactivated. Those machines can start a rental again. A machine you left off does not take a spot.'
+          : 'Deactivated. Those machines stay in your records. They cannot start a new rental. A machine that is already out can still be checked in.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save those machines');
     } finally {
@@ -97,7 +102,7 @@ export default function PlanScreen() {
         </Pressable>
       </View>
       <Text style={styles.heading}>Machines on this plan</Text>
-      <Text style={styles.body}>{limit ? `${onCount} of ${limit} selected. Uncheck a machine to take it off. Its rental cards are not deleted.` : 'With no limit, every machine can start a rental.'}</Text>
+      <Text style={styles.body}>{limit ? `${onCount} of ${limit} selected. Uncheck a machine to take it off. Tap one that is off to reactivate it if there is an open spot. Its rental cards are not deleted.` : 'Machines that were taken off stay off until you reactivate one. You can also add a new machine.'}</Text>
       {machines.map((item) => {
         const on = picked.includes(item.id);
         const blocked = !!limit && !on && picked.length >= limit;
@@ -111,7 +116,7 @@ export default function PlanScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {saved ? <Text style={styles.saved}>{saved}</Text> : null}
       <Pressable style={styles.save} disabled={!!busy} onPress={() => void saveChoices()}>
-        {busy === 'save' ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.saveText}>Save these machines</Text>}
+        {busy === 'save' ? <ActivityIndicator color={theme.ink} /> : <Text style={styles.saveText}>{machines.some((item) => machineOnPlan(item) && !picked.includes(item.id)) ? 'Deactivate these machines' : 'Reactivate these machines'}</Text>}
       </Pressable>
     </ScrollView>
   );
