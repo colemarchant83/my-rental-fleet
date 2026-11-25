@@ -135,6 +135,9 @@ export function SignInScreen() {
       <Pressable onPress={() => void Linking.openURL('https://my-rental-fleet.web.app/privacy')} hitSlop={8}>
         <Text style={styles.switch}>Privacy</Text>
       </Pressable>
+      <Pressable onPress={() => void Linking.openURL('https://my-rental-fleet.web.app/terms')} hitSlop={8}>
+        <Text style={styles.switch}>Terms</Text>
+      </Pressable>
     </View>
   );
 }

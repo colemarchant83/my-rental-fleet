@@ -80,7 +80,7 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Pro
 
 function playOpeningSplash() {
   if (typeof sessionStorage === 'undefined') return true;
-  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/privacy')) return false;
+  if (typeof window !== 'undefined' && (window.location.pathname.startsWith('/privacy') || window.location.pathname.startsWith('/terms'))) return false;
   return sessionStorage.getItem('fleet-opened') !== '1';
 }
 
@@ -92,7 +92,7 @@ export default function RootLayout() {
   const [signedIn, setSignedIn] = useState(false);
   const [verified, setVerified] = useState(false);
   const sharing = path.startsWith('/share');
-  const privacy = path.startsWith('/privacy');
+  const legal = path.startsWith('/privacy') || path.startsWith('/terms');
   const { width } = useWindowDimensions();
   const claimed = useRef('');
   useEffect(() => {
@@ -253,7 +253,7 @@ export default function RootLayout() {
     };
   }, [router]);
 
-  const showApp = sharing || privacy || (accountReady && signedIn && verified);
+  const showApp = sharing || legal || (accountReady && signedIn && verified);
   const desktopColumn = Platform.OS === 'web' && !sharing && width >= 900 && !showApp;
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -277,6 +277,7 @@ export default function RootLayout() {
       <Stack.Screen name="maintenance-entry" options={{ header: () => <ScreenHeader /> }} />
       <Stack.Screen name="share" options={{ title: 'Rental card', headerBackVisible: false }} />
       <Stack.Screen name="privacy" options={{ headerShown: false }} />
+      <Stack.Screen name="terms" options={{ headerShown: false }} />
       <Stack.Screen name="problems" options={{ header: () => <ScreenHeader /> }} />
     </Stack>
     <OfflineWall />

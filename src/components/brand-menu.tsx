@@ -79,6 +79,24 @@ export function BrandMenu() {
               style={styles.item}
               onPress={() => {
                 setOpen(false);
+                void Linking.openURL('https://my-rental-fleet.web.app/privacy');
+              }}
+            >
+              <Text style={styles.itemText}>Privacy</Text>
+            </Pressable>
+            <Pressable
+              style={styles.item}
+              onPress={() => {
+                setOpen(false);
+                void Linking.openURL('https://my-rental-fleet.web.app/terms');
+              }}
+            >
+              <Text style={styles.itemText}>Terms</Text>
+            </Pressable>
+            <Pressable
+              style={styles.item}
+              onPress={() => {
+                setOpen(false);
                 void signOutAccount();
               }}
             >
