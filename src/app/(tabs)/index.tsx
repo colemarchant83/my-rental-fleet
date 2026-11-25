@@ -7,6 +7,7 @@ import { currentOwnerId } from '../../account';
 import { loadCachedVehicles, loadCovers, loadRentals, fetchOpenRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, isOutStatus, mergeRentalLists, openRentalFor, activeOpenRental, machineShowsOut, reconcilePhoneRentals, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../../media';
 import { theme } from '../../theme';
+import { unsavedVehicleIds } from '../../unsaved';
 import VehicleDetail from '../vehicle';
 
 type Vehicle = CachedVehicle;
@@ -26,7 +27,17 @@ export default function VehicleListScreen() {
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [visit, setVisit] = useState(0);
+  const [unsavedIds, setUnsavedIds] = useState<string[]>([]);
   useFocusEffect(useCallback(() => setVisit((value) => value + 1), []));
+  useEffect(() => {
+    let live = true;
+    void unsavedVehicleIds().then((ids) => {
+      if (live) setUnsavedIds(ids);
+    });
+    return () => {
+      live = false;
+    };
+  }, [visit]);
 
   useEffect(() => {
     let live = true;
@@ -201,8 +212,15 @@ export default function VehicleListScreen() {
             <View style={[styles.cardBody, desktop && styles.cardBodyDesktop]}>
               <View style={styles.titleRow}>
                 <Text style={styles.nickname}>{vehicle.nickname && vehicle.yearMakeModel ? vehicle.yearMakeModel : ''}</Text>
-                <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>
-                  <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{!rentalsReady && !out ? 'Checking' : out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
+                <View style={styles.badges}>
+                  <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>
+                    <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{!rentalsReady && !out ? 'Checking' : out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
+                  </View>
+                  {unsavedIds.includes(vehicle.id) ? (
+                    <View style={styles.badgeUnsaved}>
+                      <Text style={styles.badgeUnsavedText}>Not saved</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
               {vehicle.nickname || vehicle.yearMakeModel || (out && renter) ? (
@@ -281,6 +299,9 @@ const styles = StyleSheet.create({
   actionText: { color: theme.ink, fontWeight: '800', fontSize: 15, textAlign: 'center' },
   waiting: { color: theme.rent, marginTop: 8, fontSize: 13 },
   badge: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
+  badges: { alignItems: 'flex-end', gap: 6 },
+  badgeUnsaved: { backgroundColor: '#f6d36b', borderWidth: 2, borderColor: '#c2410c', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeUnsavedText: { color: '#9a3412', fontWeight: '800', fontSize: 12 },
   badgeIn: { backgroundColor: theme.green },
   badgeShop: { backgroundColor: '#eab308' },
   badgeOut: { backgroundColor: theme.rent },

@@ -1,6 +1,5 @@
 import { createElement, useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
@@ -9,46 +8,10 @@ import { currentOwnerId } from '../account';
 import { formatDay, formatStamp, isOutStatus, loadCachedVehicles, loadCovers, loadRentals, fetchOlderVehicleRentals, fetchVehicleRentals, forgetRentalsRemovedElsewhere, activeOpenRental, machineShowsOut, mergeRentalLists, openRentalFor, rememberCover, rememberRentals, rentalIsReturned, saveCachedVehicles, savedOpenRentals, settleVehicleRentalStatus, subscribeFleet, vehicleHistoryHasMore, vehicleIdLine, type CachedVehicle, type CoverPhoto, type LocalRental } from '../fleet-store';
 import { useDisplayUri, warmDisplayUri } from '../media';
 import { theme } from '../theme';
+import { unsavedForVehicle, type UnsavedInspection } from '../unsaved';
 import RentalHistory from './rental-history';
 
 type Vehicle = CachedVehicle;
-
-type UnsavedInspection = { mode: 'checkout' | 'checkin'; renterName: string };
-
-function startedDraft(raw: string | null, mode: 'checkout' | 'checkin'): UnsavedInspection | null {
-  if (!raw) return null;
-  try {
-    const saved = JSON.parse(raw) as {
-      renterName?: string;
-      side?: {
-        fuel?: string;
-        miles?: string;
-        hours?: string;
-        notes?: string;
-        videoUri?: string;
-        videoUrl?: string;
-        spots?: Record<string, { status?: string; note?: string; photos?: { localUri?: string; remoteUrl?: string }[] }>;
-      };
-    };
-    const side = saved.side;
-    const name = saved.renterName?.trim() || '';
-    const spots = Object.values(side?.spots || {});
-    const started = !!(
-      name ||
-      side?.miles?.trim() ||
-      side?.hours?.trim() ||
-      side?.notes?.trim() ||
-      side?.videoUri ||
-      side?.videoUrl ||
-      (side?.fuel && side.fuel !== 'Not recorded') ||
-      spots.some((spot) => spot.status === 'issue' || spot.note?.trim() || spot.photos?.some((photo) => photo.localUri || photo.remoteUrl))
-    );
-    return started ? { mode, renterName: name } : null;
-  } catch {
-    return null;
-  }
-}
-
 
 export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}) {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -79,16 +42,9 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
   useFocusEffect(useCallback(() => {
     if (!id) return undefined;
     let live = true;
-    void (async () => {
-      const next: UnsavedInspection[] = [];
-      for (const mode of ['checkout', 'checkin'] as const) {
-        const key = `fleet-inspection-draft:${id}:${mode}`;
-        const raw = Platform.OS === 'web' ? (typeof localStorage === 'undefined' ? null : localStorage.getItem(key)) : await AsyncStorage.getItem(key);
-        const found = startedDraft(raw, mode);
-        if (found) next.push(found);
-      }
+    void unsavedForVehicle(id).then((next) => {
       if (live) setUnsaved(next);
-    })();
+    });
     return () => {
       live = false;
     };
@@ -312,8 +268,15 @@ export default function VehicleDetail({ vehicleId }: { vehicleId?: string } = {}
       <Text style={styles.model}>{vehicle.nickname || vehicle.yearMakeModel || 'Untitled'}</Text>
       {vehicle.vin ? <Text style={styles.vin}>{vehicleIdLine(vehicle.vin)}</Text> : null}
 
-      <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>
-        <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
+      <View style={styles.markRow}>
+        <View style={[styles.badge, out ? styles.badgeOut : shop ? styles.badgeShop : styles.badgeIn]}>
+          <Text style={[styles.badgeText, shop && !out && styles.badgeShopText]}>{out ? 'Out on rent' : shop ? 'In the shop' : 'Available'}</Text>
+        </View>
+        {unsaved.length ? (
+          <View style={styles.badgeUnsaved}>
+            <Text style={styles.badgeUnsavedText}>Not saved</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.statusRow}>
@@ -494,7 +457,10 @@ const styles = StyleSheet.create({
   muted: { color: theme.muted, marginTop: 12 },
   keepNotice: { backgroundColor: '#f4e7d6', borderRadius: 12, padding: 12, marginTop: 10 },
   keepNoticeText: { color: theme.ink, fontWeight: '700', lineHeight: 20 },
-  badge: { alignSelf: 'flex-start', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, marginTop: 12 },
+  badge: { alignSelf: 'flex-start', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6 },
+  badgeUnsaved: { alignSelf: 'flex-start', backgroundColor: '#f6d36b', borderWidth: 2, borderColor: '#c2410c', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 4 },
+  badgeUnsavedText: { color: '#9a3412', fontWeight: '800' },
+  markRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, alignSelf: 'flex-start' },
   badgeIn: { backgroundColor: theme.green },
   badgeShop: { backgroundColor: '#eab308' },
   badgeOut: { backgroundColor: theme.rent },
