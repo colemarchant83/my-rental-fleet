@@ -25,6 +25,25 @@ jobs:
       - name: Export Expo web
         run: npx expo export --platform web --output-dir dist
 
+      - name: Add Search Console verification
+        run: |
+          python3 - << 'PY'
+          import pathlib
+          tag = '<meta name="google-site-verification" content="bcJCQu8evHX9op2zNnmIjL4jr4l1Q69mtyYv_5sTe7g"/>'
+          files = list(pathlib.Path('dist').rglob('index.html'))
+          if not files:
+              raise SystemExit('no index.html to tag')
+          for path in files:
+              text = path.read_text()
+              if 'google-site-verification' in text:
+                  print('already tagged', path)
+                  continue
+              if '<head>' not in text:
+                  raise SystemExit(f'no head tag in {path}')
+              path.write_text(text.replace('<head>', '<head>' + tag, 1))
+              print('tagged', path)
+          PY
+
       - name: Require an index.html before deploy
         run: |
           find dist -name index.html -maxdepth 3
